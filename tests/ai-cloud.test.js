@@ -137,8 +137,11 @@ test('cliente: rede, tempo esgotado, resposta que não é de chat, queda no meio
 test('redact: tira a chave, "Bearer …" e trechos com cara de chave', () => {
   assert.equal(redact(`falhou ${F.KEY} fim`, F.KEY), 'falhou ••• fim');
   assert.equal(redact('Authorization: Bearer abcdefghijklmnop123', null), 'Authorization: Bearer •••');
-  assert.ok(!redact('chave gsk_abcdefghijklmnopqrstuvwxyz123456 aqui', null).includes('gsk_abc'));
-  assert.ok(!redact('AIzaSyAbcdefghijklmnopqrstuvwxyz0123456', null).includes('AIza'));
+  // chaves FALSAS montadas por partes: escritas inteiras, o alerta de segredos do GitHub as confunde com chaves de verdade
+  const fakeGroq = ['gsk', '_', 'x'.repeat(32)].join('');
+  const fakeGoogle = ['AIza', 'Sy', 'x'.repeat(33)].join('');
+  assert.ok(!redact(`chave ${fakeGroq} aqui`, null).includes('gsk_'));
+  assert.ok(!redact(fakeGoogle, null).includes('AIza'));
   assert.equal(redact('texto normal', 'curta'), 'texto normal');
   assert.equal(redact(null, F.KEY), '');
 });
