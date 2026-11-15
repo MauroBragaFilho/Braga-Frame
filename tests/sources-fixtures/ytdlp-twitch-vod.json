@@ -1,0 +1,31 @@
+{
+  "_fixture_note": "Montado a mao seguindo os campos que o extrator twitch:vod do yt-dlp devolve (id com prefixo v, uploader, chapters de troca de jogo, formatos HLS combinados). Nao foi capturado de um VOD real: nao ha VOD da Twitch publico e estavel para isso.",
+  "id": "v2345678901",
+  "title": "Live de teste - maratona",
+  "uploader": "Canal de Teste",
+  "uploader_id": "canaldeteste",
+  "timestamp": 1792526400,
+  "upload_date": "20261020",
+  "duration": 7200,
+  "view_count": 321,
+  "extractor": "twitch:vod",
+  "extractor_key": "TwitchVod",
+  "webpage_url": "https://www.twitch.tv/videos/2345678901",
+  "live_status": "not_live",
+  "is_live": false,
+  "thumbnail": "https://static-cdn.jtvnw.net/cf_vods/example/thumb.jpg",
+  "chapters": [
+    { "start_time": 0, "end_time": 3600, "title": "Minecraft" },
+    { "start_time": 3600, "end_time": 5400, "title": "Just Chatting" },
+    { "start_time": 5400, "end_time": 7200, "title": "Minecraft" }
+  ],
+  "formats": [
+    { "format_id": "Audio_Only", "ext": "mp4", "protocol": "m3u8_native", "vcodec": "none", "acodec": "mp4a.40.2", "abr": 160, "tbr": 160, "format_note": "Audio only" },
+    { "format_id": "160p30", "ext": "mp4", "protocol": "m3u8_native", "vcodec": "avc1.4D000C", "acodec": "mp4a.40.2", "height": 160, "width": 284, "fps": 30, "tbr": 230 },
+    { "format_id": "360p30", "ext": "mp4", "protocol": "m3u8_native", "vcodec": "avc1.4D001E", "acodec": "mp4a.40.2", "height": 360, "width": 640, "fps": 30, "tbr": 630 },
+    { "format_id": "480p30", "ext": "mp4", "protocol": "m3u8_native", "vcodec": "avc1.4D001F", "acodec": "mp4a.40.2", "height": 480, "width": 852, "fps": 30, "tbr": 1400 },
+    { "format_id": "720p30", "ext": "mp4", "protocol": "m3u8_native", "vcodec": "avc1.4D0020", "acodec": "mp4a.40.2", "height": 720, "width": 1280, "fps": 30, "tbr": 2300 },
+    { "format_id": "720p60", "ext": "mp4", "protocol": "m3u8_native", "vcodec": "avc1.4D0020", "acodec": "mp4a.40.2", "height": 720, "width": 1280, "fps": 60, "tbr": 3400 },
+    { "format_id": "1080p60", "ext": "mp4", "protocol": "m3u8_native", "vcodec": "avc1.64002A", "acodec": "mp4a.40.2", "height": 1080, "width": 1920, "fps": 60, "tbr": 6000 }
+  ]
+}

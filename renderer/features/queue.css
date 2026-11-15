@@ -1,0 +1,152 @@
+/* Estilos: tela Exportações (aba `queue`, dono: queue). Só tokens e componentes de app.css (.panel, .bds-tabs, .bds-chip, .icon-btn, .empty-state, progress). */
+.q { display: flex; flex-direction: column; gap: 20px; }
+.q p { margin: 0; }
+.q-intro { color: var(--muted); }
+
+/* avisos no topo (recuperação, conflitos pendentes, executor ausente…): cartão com ícone, texto e ações */
+.q-notices { display: flex; flex-direction: column; gap: 12px; }
+.q-notices:empty { display: none; }
+.q-notice { display: flex; align-items: flex-start; gap: 12px; padding: 14px 20px; border-radius: var(--radius-md); background: var(--accent-light); overflow-wrap: anywhere; }
+.q-notice > .material-symbols-rounded { flex: none; font-size: 22px; color: var(--accent-text); }
+.q-notice.q-info { background: color-mix(in srgb, var(--status-info) 12%, var(--card)); }
+.q-notice.q-info > .material-symbols-rounded { color: var(--status-info); }
+.q-notice.q-warn { background: color-mix(in srgb, var(--status-warn) 12%, var(--card)); }
+.q-notice.q-warn > .material-symbols-rounded { color: var(--status-warn); }
+.q-notice.q-error { background: var(--danger-bg); }
+.q-notice.q-error > .material-symbols-rounded { color: var(--danger-fg); }
+.q-notice-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.q-notice-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* pílulas Fila | Concluídos | Falhas (com a contagem) e, à direita, as ações da tela */
+.q-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.q-bar[hidden] { display: none; }
+.q-pill { font-variant-numeric: tabular-nums; }
+.q-pill.q-pill-bad:not([aria-pressed="true"]) { color: var(--danger-fg); }
+.q-bar-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-left: auto; }
+.q-bar-actions > button { min-height: 36px; padding: 0 18px; }
+.q-bar-actions > button[hidden] { display: none; }
+/* o ícone do botão de pausa vem do estado (o texto do botão fica só com o rótulo) */
+#q-pause::before { content: 'pause'; font-family: 'Material Symbols Rounded'; font-size: 18px; font-weight: normal; letter-spacing: normal; font-feature-settings: 'liga'; }
+#q-pause[aria-pressed="true"]::before { content: 'play_arrow'; }
+.q-summary { color: var(--muted); font-size: var(--fs-label); }
+.q-summary:empty { display: none; }
+
+.q-paused { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 10px 16px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--status-info) 12%, var(--card-2)); font-size: 13px; }
+.q-paused[hidden] { display: none; }
+.q-paused::before { content: 'pause_circle'; font-family: 'Material Symbols Rounded'; font-size: 20px; line-height: 1; color: var(--status-info); font-feature-settings: 'liga'; }
+.q-paused .link { font-size: 13px; }
+
+/* estado vazio da pílula mostrada, dentro do cartão */
+.q-empty { background: transparent; }
+
+/* a lista da pílula mostrada */
+.q-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.q-list[hidden] { display: none; }
+
+/* um trabalho = um cartão interno (--card-2): ícone do estado, título e perfil, selo, ações e a alça de reordenar */
+.q-job { position: relative; display: flex; flex-direction: column; gap: 12px; padding: 14px 20px; background: var(--card-2); border: 1px solid transparent; border-radius: var(--radius-md); transition: border-color var(--dur-base) var(--ease); }
+.q-job:hover { border-color: var(--line); }
+.q-job.q-live { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.q-job[data-state="failed"] { border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+.q-job[data-state="needsAction"], .q-job[data-state="interrupted"] { border-color: color-mix(in srgb, var(--status-warn) 45%, transparent); }
+.q-job[draggable="true"] { cursor: grab; }
+.q-job.q-dragging { opacity: .45; }
+.q-job.q-drop-before::before, .q-job.q-drop-after::after { content: ""; position: absolute; left: 12px; right: 12px; height: 2px; background: var(--accent); border-radius: 2px; }
+.q-job.q-drop-before::before { top: -7px; }
+.q-job.q-drop-after::after { bottom: -7px; }
+
+.q-main { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; }
+/* ícone do estado: o selo ao lado sempre diz o estado em texto; o ícone e a cor só reforçam */
+.q-lead { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radius-sm); background: var(--card); color: var(--muted); }
+.q-lead .material-symbols-rounded { font-size: 22px; }
+.q-job[data-state="running"] .q-lead { background: var(--accent-light); color: var(--accent-text); }
+.q-job[data-state="done"] .q-lead { background: color-mix(in srgb, var(--status-ok) 14%, transparent); color: var(--status-ok); }
+.q-job[data-state="failed"] .q-lead { background: var(--danger-bg); color: var(--danger-fg); }
+.q-job[data-state="needsAction"] .q-lead, .q-job[data-state="interrupted"] .q-lead { background: color-mix(in srgb, var(--status-warn) 14%, transparent); color: var(--status-warn); }
+.q-title { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.q-name { overflow-wrap: anywhere; font-weight: 600; }
+.q-sub { color: var(--muted); font-size: var(--fs-label); overflow-wrap: anywhere; }
+.q-chip { flex: none; white-space: nowrap; }
+.q-actions { display: flex; align-items: center; gap: 4px; flex: none; margin-left: auto; }
+.q-actions:empty { display: none; }
+.q-actions .sm { margin-right: 4px; }
+/* alça de reordenar à direita; subir/descer a substituem quando o mouse ou o teclado chega perto (o teclado sempre alcança os botões) */
+.q-reorder { position: relative; flex: none; align-self: stretch; width: 24px; min-height: 40px; margin-right: -6px; }
+.q-grip { position: absolute; inset: 0; display: grid; place-items: center; font-size: 22px; color: var(--muted); user-select: none; transition: opacity var(--dur-fast) var(--ease); }
+.q-move { position: absolute; left: 0; width: 24px; min-height: 18px; height: 18px; border-radius: 6px; opacity: 0; }
+.q-move[data-act="up"] { top: 2px; }
+.q-move[data-act="down"] { bottom: 2px; }
+.q-move .material-symbols-rounded { font-size: 20px; }
+.q-job:hover .q-move, .q-job:focus-within .q-move { opacity: 1; }
+.q-job:hover .q-grip, .q-job:focus-within .q-grip { opacity: 0; }
+.q-move:disabled { opacity: 0; }
+.q-job:hover .q-move:disabled, .q-job:focus-within .q-move:disabled { opacity: .3; }
+
+/* selo neutro: dentro do cartão interno (--card-2) ele ganha o fundo do cartão externo para não sumir */
+.q-chip:not([class*="bds-chip-"]) { background: var(--card); }
+
+/* barra de progresso (a nativa, no estilo do BDS) com % e tempo restante */
+.q-prog { display: flex; flex-direction: column; gap: 6px; }
+.q-prog progress { background: var(--card); }
+.q-prog progress::-webkit-progress-bar { background: var(--card); }
+.q-prog progress:indeterminate { background: linear-gradient(90deg, var(--card) 0 35%, var(--accent) 35% 65%, var(--card) 65%) 0 0 / 300% 100%; }
+.q-prog-text { color: var(--muted); font-size: var(--fs-label); font-variant-numeric: tabular-nums; }
+.q-note { color: var(--muted); font-size: var(--fs-label); overflow-wrap: anywhere; }
+
+.q-error { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px; background: var(--danger-bg); border-radius: var(--radius-sm); font-size: 13px; overflow-wrap: anywhere; }
+.q-error > .material-symbols-rounded { flex: none; font-size: 20px; color: var(--danger-fg); }
+.q-error-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.q-error-msg { color: var(--danger-fg); font-weight: 600; }
+.q-error-fix { color: var(--text); }
+.q-tech { font-size: var(--fs-label); }
+.q-tech pre { margin: 4px 0 0; white-space: pre-wrap; color: var(--muted); font-size: 11px; max-height: 120px; overflow: auto; }
+.q-warns { font-size: var(--fs-label); }
+.q-warns ul { margin: 4px 0 0; padding-left: 28px; color: var(--status-warn); display: flex; flex-direction: column; gap: 2px; }
+
+/* carregando: duas linhas fantasma */
+.q-loading { display: flex; flex-direction: column; gap: 12px; }
+.q-loading[hidden] { display: none; }
+.q-skel { height: 72px; border-radius: var(--radius-md); background: linear-gradient(90deg, var(--card-2) 0%, color-mix(in srgb, var(--text) 8%, var(--card-2)) 50%, var(--card-2) 100%) 0 0 / 200% 100%; animation: q-shimmer 1.6s ease-in-out infinite; }
+@keyframes q-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+
+/* barra de saída: perfil e destino do projeto aberto (os da aba Exportar) e o limite de exportações ao mesmo tempo */
+.q-out { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+.q-out-item { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 12px 16px; background: var(--card-2); border-radius: var(--radius-md); }
+.q-out-item[hidden] { display: none; }
+.q-out-icon { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--radius-sm); background: var(--card); color: var(--muted); font-size: 20px; }
+.q-out-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.q-out-label { color: var(--muted); font-size: var(--fs-label); font-weight: 600; }
+.q-out select { width: 100%; min-height: 32px; padding-left: 12px; background-color: var(--card); }
+.q-out-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+/* o caminho é cortado pelo COMEÇO (a pasta de destino está no fim): o bloco corre da direita para a esquerda, e o texto (um <bdo dir="ltr">) segue na ordem normal */
+.q-out-dir { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; font-size: 13px; color: var(--text); }
+
+/* Ajustes recolhidos: cartão com linhas título+descrição / controle, como as Configurações do BDS */
+.q-settings { padding: 16px 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-md); }
+.q-settings > summary { font-size: 14px; }
+.q-settings-body { display: flex; flex-direction: column; margin-top: 8px; }
+.q-field { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 14px 0; color: var(--text); }
+.q-field + .q-field { border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
+.q-field-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.q-field-label { font-size: 13px; font-weight: 600; }
+.q-hint { color: var(--muted); font-size: var(--fs-label); line-height: 1.45; }
+.q-field select { flex: none; width: 240px; max-width: 100%; }
+
+/* diálogo de conflito de nome */
+.q-conflict-head { display: flex; align-items: center; gap: 12px; }
+.q-conflict-icon { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--status-warn) 16%, transparent); color: var(--status-warn); font-size: 24px; }
+.q-conflict { width: min(560px, 100%); }
+.q-conflict-actions { flex-wrap: wrap; }
+.q-check { display: flex; align-items: center; gap: 8px; color: var(--text); }
+.q-conflict-hint { margin: 0; }
+
+@media (max-width: 700px) {
+  .q-bar-actions { width: 100%; justify-content: flex-start; margin-left: 0; }
+  /* a alça de reordenar fica na primeira linha (depois do título); o selo e as ações descem para a segunda */
+  .q-title { order: 1; flex: 1 1 calc(100% - 120px); }
+  .q-reorder { order: 2; }
+  .q-chip { order: 3; }
+  .q-actions { order: 4; }
+  .q-field { flex-wrap: wrap; }
+  .q-field select { width: 100%; }
+}

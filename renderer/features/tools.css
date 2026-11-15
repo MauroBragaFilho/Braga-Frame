@@ -1,0 +1,64 @@
+/* Estilos: aba Ferramentas (dono: base). Só tokens e componentes de app.css (.panel, .bds-chip, .icon-btn, .empty-state, progress). */
+.tools { display: flex; flex-direction: column; gap: 20px; }
+.tools p { margin: 0; }
+.tools-intro { color: var(--muted); }
+
+/* cartão de seção: ícone vermelho + título de 18px + ação à direita */
+.tools-head { display: flex; align-items: center; gap: 12px; min-height: 34px; }
+.tools-head h2 { flex: 1; min-width: 0; margin: 0; font-size: var(--fs-section); }
+.tools-head-icon { display: grid; place-items: center; color: var(--accent); }
+.tools-head-icon .material-symbols-rounded { font-size: 24px; }
+
+.tool-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.tool-list + .tool-help { margin-top: 0; }
+
+/* uma ferramenta = um cartão interno (--card-2); a busy ganha o contorno de destaque */
+.tool { display: flex; flex-direction: column; padding: 16px 20px; background: var(--card-2); border: 1px solid transparent; border-radius: var(--radius-md); transition: border-color var(--dur-base) var(--ease); }
+.tool:hover { border-color: var(--line); }
+.tool[data-state="busy"] { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.tool-top { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 16px; }
+.tool-icon { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: var(--radius-sm); background: var(--card); color: var(--muted); }
+.tool-icon .material-symbols-rounded { font-size: 24px; }
+.tool[data-state="busy"] .tool-icon { color: var(--accent); }
+.tool[data-state="installed"] .tool-icon, .tool[data-state="found"] .tool-icon { color: var(--status-ok); }
+.tool[data-state="absent"] .tool-icon, .tool[data-state="outdated"] .tool-icon, .tool[data-state="unavailable"] .tool-icon { color: var(--status-warn); }
+.tool-main { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tool-head { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
+.tool-name { font-weight: 600; }
+.tool-meta { color: var(--muted); font-size: var(--fs-label); overflow-wrap: anywhere; }
+.tool-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
+.tool-origin { display: flex; align-items: center; gap: 4px; }
+.tool-origin .material-symbols-rounded { font-size: 14px; color: var(--status-ok); }
+.tool-status { flex: none; white-space: nowrap; }
+.tool-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+.tool-actions:empty { display: none; }
+
+/* o estado também está escrito no selo; a cor só reforça */
+.tool-progress { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.tool-progress-text { font-variant-numeric: tabular-nums; }
+/* a trilha da barra precisa se destacar do cartão interno (--card-2) */
+.tool-progress progress:not(:indeterminate) { background: var(--card); }
+.tool-progress progress:indeterminate { background: linear-gradient(90deg, var(--card) 0 35%, var(--accent) 35% 65%, var(--card) 65%) 0 0 / 300% 100%; }
+.tool-progress progress::-webkit-progress-bar { background: var(--card); }
+.tool-error { display: flex; align-items: flex-start; gap: 8px; margin-top: 12px; padding: 8px 12px; background: var(--danger-bg); color: var(--danger-fg); border-radius: var(--radius-sm); font-size: var(--fs-label); overflow-wrap: anywhere; }
+.tool-error .material-symbols-rounded { flex: none; font-size: 18px; }
+.tool > .tool-meta { margin-top: 8px; }
+.tool-details { margin-top: 8px; font-size: var(--fs-label); }
+.tool-details > summary { font-size: var(--fs-label); }
+.tool-details > div { margin-top: 4px; padding-left: 26px; color: var(--muted); overflow-wrap: anywhere; }
+
+/* FFmpeg ausente: instrução de instalação num cartão de aviso */
+.tool-help { display: flex; align-items: flex-start; gap: 12px; padding: 16px 20px; background: color-mix(in srgb, var(--status-warn) 10%, var(--card-2)); border-radius: var(--radius-md); font-size: 13px; }
+.tool-help > .material-symbols-rounded { flex: none; font-size: 22px; color: var(--status-warn); }
+.tool-help-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tool-help strong { font-family: var(--font-title); font-size: 15px; letter-spacing: -0.01em; }
+.tool-help p { color: var(--muted); }
+.tool-help ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; color: var(--muted); }
+
+/* carregando: duas linhas fantasma, discretas */
+.tools-skeleton { display: flex; flex-direction: column; gap: 12px; }
+.tool-skel { height: 76px; border-radius: var(--radius-md); background: linear-gradient(90deg, var(--card-2) 0%, color-mix(in srgb, var(--text) 8%, var(--card-2)) 50%, var(--card-2) 100%) 0 0 / 200% 100%; animation: tools-shimmer 1.6s ease-in-out infinite; }
+@keyframes tools-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+
+.tools-error { align-items: flex-start; }
+.tools-error-actions { margin-top: 12px; }

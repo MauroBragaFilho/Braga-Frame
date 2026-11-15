@@ -1,0 +1,42 @@
+/* Tela Geral (primeira aba de Configurações, tela larga): aparência, pasta de projetos e o cartão Sobre. Só tokens e componentes do app.css. */
+.gen { display: flex; flex-direction: column; gap: 20px; }
+.gen p { margin: 0; }
+.gen-grid { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 20px; align-items: start; }
+.gen-main { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.gen-card { display: flex; flex-direction: column; gap: 14px; }
+.gen-card[hidden] { display: none; }
+.gen-card h3 { margin: 0; font-size: var(--fs-section); }
+.gen-note[hidden] { display: none; }
+
+/* aparência: cada opção mostra uma janelinha no tema dela (o data-theme do próprio elemento troca os tokens) */
+.gen-themes { display: flex; flex-wrap: wrap; gap: 12px; }
+.gen-theme { display: flex; flex-direction: column; align-items: stretch; gap: 8px; min-height: 0; padding: 10px; background: var(--card-2); border: 2px solid transparent; border-radius: var(--radius-md); color: var(--text); font-weight: 600; }
+.gen-theme:hover:not(:disabled) { background: var(--card-2); border: 2px solid color-mix(in srgb, var(--text) 25%, transparent); }
+.gen-theme[aria-checked="true"], .gen-theme[aria-checked="true"]:hover:not(:disabled) { border: 2px solid var(--accent); }
+.gen-theme:disabled { opacity: 0.5; }
+.gen-theme:focus-visible { outline: var(--focus-ring); outline-offset: 2px; }
+.gen-theme-name { text-align: center; font-size: 13px; }
+.gen-swatch { display: flex; width: 112px; height: 68px; overflow: hidden; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.gen-sw-side { flex: none; width: 26px; background: var(--card); border-right: 1px solid var(--line); }
+.gen-sw-body { position: relative; flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 10px 8px; }
+.gen-sw-line { display: block; height: 6px; width: 55%; border-radius: 3px; background: var(--card-2); border: 1px solid var(--line); }
+.gen-sw-line.wide { width: 80%; background: var(--text); border-color: transparent; opacity: 0.8; }
+.gen-sw-dot { position: absolute; right: 8px; bottom: 8px; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); }
+
+/* pasta de projetos */
+.gen-folder { display: flex; align-items: center; gap: 10px; }
+.gen-path { flex: 1; min-width: 0; min-height: 40px; color: var(--muted); }
+.gen-folder button { flex: none; display: inline-flex; align-items: center; gap: 6px; }
+.gen-folder .material-symbols-rounded { font-size: 18px; }
+
+/* sobre */
+.gen-about { align-items: center; text-align: center; }
+.gen-about h3 { align-self: flex-start; }
+.gen-mark { display: grid; place-items: center; width: 64px; height: 64px; border-radius: var(--radius-md); background: var(--accent-light); color: var(--accent-text); font-family: var(--font-title); font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+.gen-about-name { font-family: var(--font-title); font-size: var(--fs-section); letter-spacing: 0.02em; text-transform: uppercase; }
+.gen-about-tagline { font-size: 13px; }
+.gen-credit { padding-top: 6px; border-top: 1px solid var(--line); align-self: stretch; }
+
+@media (max-width: 900px) {
+  .gen-grid { grid-template-columns: minmax(0, 1fr); }
+}

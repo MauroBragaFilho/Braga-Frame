@@ -1,0 +1,1 @@
+ERROR: [generic] watch?v=jNQXAC9IVRw: Unable to download webpage: HTTPSConnection(host='www.youtube.invalid', port=443): Failed to resolve 'www.youtube.invalid' ([Errno 11001] getaddrinfo failed) (caused by TransportError("HTTPSConnection(host='www.youtube.invalid', port=443): Failed to resolve 'www.youtube.invalid' ([Errno 11001] getaddrinfo failed)"))

@@ -1,0 +1,139 @@
+/* Casca do app (dono: base): cabeçalho global, controles da janela, aviso de ferramentas, player, barra de marcação e
+   barra de estado. A estrutura do menu lateral e as telas largas/de trabalho ficam em app.css. */
+
+/* ---------- Cabeçalho global (64px): título da tela, vídeo aberto e ações. É a região de arrasto da janela. ---------- */
+.global-header {
+  -webkit-app-region: drag;
+  flex: none;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 16px 0 32px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+.header-left { display: flex; align-items: center; gap: 16px; min-width: 0; flex: 1 1 0; }
+.page-title {
+  margin: 0;
+  font-family: var(--font-title);
+  font-size: var(--fs-title);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  white-space: nowrap;
+  color: var(--text);
+}
+.header-divider { flex: none; width: 1px; height: 16px; background: var(--line); }
+/* o caminho do vídeo aberto: discreto; quando não cabe, corta o começo e mostra o nome do arquivo */
+.source-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; font-size: 12px; color: var(--muted); }
+.source-name bdi { direction: ltr; unicode-bidi: isolate; }
+.header-actions { -webkit-app-region: no-drag; display: flex; align-items: center; gap: 8px; flex: none; }
+.header-actions .primary, .header-actions .secondary { min-height: 40px; }
+.header-actions [hidden] { display: none; }
+
+/* no editor: "Projetos › nome do projeto" e o estado, no lugar do título da tela e do caminho do arquivo (o título continua no leitor de tela) */
+.crumbs { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 14px; }
+.crumbs[hidden] { display: none; }
+.crumb-back { flex: none; display: inline-flex; align-items: center; gap: 2px; min-height: 32px; padding: 0 10px 0 4px; background: transparent; border: 0; color: var(--muted); font-weight: 600; }
+.crumb-back:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--text); border: 0; }
+.crumb-back .material-symbols-rounded { font-size: 20px; }
+.crumb-sep { flex: none; color: var(--muted); font-size: 18px; }
+.crumb-name { min-width: 6ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-title); font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+.crumb-state { flex: none; }
+.has-crumbs .page-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.has-crumbs .header-divider, .has-crumbs .source-name { display: none; }
+/* o nome do projeto tem prioridade sobre a mensagem de estado (que é passageira): quem encolhe primeiro é a pílula */
+.has-crumbs .header-left { flex: 1 1 auto; min-width: 260px; }
+.has-crumbs .log { flex-shrink: 8; }
+
+/* Controles da janela (minimizar, maximizar, tela cheia, fechar) */
+.window-controls { display: flex; align-items: center; gap: 4px; margin-left: 8px; }
+.win-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  min-height: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  border: 0;
+  border-radius: 6px;
+  -webkit-app-region: no-drag;
+}
+.win-btn .material-symbols-rounded { font-size: 16px; }
+#win-max .material-symbols-rounded { font-size: 14px; }
+.win-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 10%, transparent); color: var(--text); border: 0; }
+.win-btn:active:not(:disabled) { background: color-mix(in srgb, var(--text) 16%, transparent); }
+.win-btn.win-close-btn:hover:not(:disabled) { background: #e81123; color: #fff; } /* vermelho padrão do botão fechar do Windows */
+.win-btn.win-close-btn:active:not(:disabled) { background: color-mix(in srgb, #e81123 80%, #000); color: #fff; }
+.win-btn:focus-visible { outline: var(--focus-ring); outline-offset: 2px; }
+
+/* modo embutido: o app não é dono da janela, então sem controles de janela nem arrasto */
+.embedded .window-controls { display: none; }
+.embedded .global-header { -webkit-app-region: no-drag; padding-left: 24px; }
+
+@media (max-width: 1000px) {
+  .crumb-back-text { display: none; } /* janela pequena: só a seta (o nome acessível é "Projetos"), para o nome do projeto caber */
+}
+@media (max-width: 980px) {
+  .global-header { padding: 0 12px 0 20px; gap: 12px; }
+}
+@media (max-width: 700px) {
+  .page-title { font-size: 18px; }
+  .crumb-state { display: none; }
+  .header-divider, .source-name { display: none; }
+}
+
+/* ---------- Aviso de ferramentas ausentes ---------- */
+.banner { flex: none; display: flex; align-items: center; gap: 12px; padding: 10px 32px; }
+.banner.warn { background: var(--warn-bg); color: var(--status-warn); border-bottom: 1px solid color-mix(in srgb, var(--status-warn) 40%, transparent); }
+.banner span { flex: 1; font-size: 13px; }
+.banner button { flex: none; }
+
+/* ---------- Player e barra de marcação (telas de trabalho) ---------- */
+.player { padding: 20px 24px; display: flex; flex-direction: column; gap: 10px; min-height: 0; min-width: 0; }
+.player video { width: 100%; flex: 1; min-height: 120px; background: #000; border: 1px solid var(--line); border-radius: var(--radius-md); object-fit: contain; }
+.player p { margin: 0; }
+.markbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 10px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-md); }
+.mark-group { display: flex; align-items: center; gap: 4px; }
+.markbar label { color: var(--muted); display: flex; gap: 4px; align-items: center; font-size: 12px; font-weight: 600; }
+.markbar input { min-height: 32px; width: 68px; padding: 0 8px; font-variant-numeric: tabular-nums; }
+.markbar .icon-btn { flex: none; width: 32px; min-height: 32px; background: var(--card-2); border: 1px solid var(--line); color: var(--text); }
+.markbar .icon-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 9%, var(--card-2)); border-color: color-mix(in srgb, var(--text) 30%, var(--line)); }
+.markbar #btnAddCut { margin-left: auto; }
+#rangeInfo { font-size: 12px; }
+#timelineSlot:empty { display: none; }
+
+/* ---------- Estado (#log): a última mensagem de BF.ui.log, em pílula no cabeçalho ----------
+   Fica no cabeçalho (fora da área de conteúdo) para nunca cobrir a timeline nem deslocar a tela no meio de um clique.
+   Informativa: some sozinha depois de alguns segundos (classe .idle). Erro fica até a próxima mensagem; clique descarta. */
+.log {
+  -webkit-app-region: no-drag;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 460px;
+  padding: 7px 16px;
+  background: var(--card);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+}
+.log::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 10px; border-radius: 50%; background: var(--muted); vertical-align: middle; }
+.log:empty, .log.idle { display: none; }
+.log.ok::before { background: var(--status-ok); }
+.log.warn { color: var(--status-warn); }
+.log.warn::before { background: var(--status-warn); }
+.log.error { color: var(--danger-fg); background: color-mix(in srgb, var(--danger) 12%, var(--card)); border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); cursor: pointer; }
+.log.error::before { background: var(--danger); }
+@media (max-width: 1100px) { .log { max-width: 300px; } }
+@media (max-width: 860px) { .log { max-width: 200px; } }

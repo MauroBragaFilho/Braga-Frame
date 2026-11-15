@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; media-src file: blob:; img-src 'self' data: blob: file:; style-src 'self'; font-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Braga Frame</title>
+  <!-- escolhe o tema (escuro por padrão) antes da primeira pintura, para não piscar -->
+  <script src="theme-init.js"></script>
+  <link rel="stylesheet" href="material-symbols.css">
+  <link rel="stylesheet" href="fonts.css">
+  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="features/shell.css">
+  <link rel="stylesheet" href="features/cuts.css">
+  <link rel="stylesheet" href="features/export.css">
+  <link rel="stylesheet" href="features/queue.css">
+  <link rel="stylesheet" href="features/subtitles.css">
+  <link rel="stylesheet" href="features/audio.css">
+  <link rel="stylesheet" href="features/aiOpenrouter.css">
+  <link rel="stylesheet" href="features/analysis.css">
+  <link rel="stylesheet" href="features/projects.css">
+  <link rel="stylesheet" href="features/home.css">
+  <link rel="stylesheet" href="features/sources.css">
+  <link rel="stylesheet" href="features/general.css">
+  <link rel="stylesheet" href="features/prefs.css">
+  <link rel="stylesheet" href="features/timeline.css">
+  <link rel="stylesheet" href="features/tools.css">
+</head>
+<body>
+  <!-- Mesma estrutura do Braga Digital Studio: menu lateral (marca, abas, estado) + coluna principal (cabeçalho e conteúdo).
+       data-view-kind="work" (duas colunas: player e painel da aba) ou "wide" (painel em largura total) é definido pela aba ativa. -->
+  <div id="app" class="app app-shell no-project" data-view-kind="wide">
+    <aside class="sidebar" id="sidebar" aria-label="Menu lateral">
+      <div class="brand" id="brand">
+        <div class="brand-mark" aria-hidden="true">BF</div>
+        <div class="brand-text">
+          <strong id="appName">Braga Frame</strong>
+        </div>
+        <button id="sidebarToggleBtn" class="sidebar-toggle-btn" type="button" title="Recolher menu" aria-label="Recolher menu" aria-expanded="true">
+          <span class="material-symbols-rounded" aria-hidden="true">menu_open</span>
+        </button>
+      </div>
+
+      <!-- os botões das abas (BF.ui.registerTab) entram aqui -->
+      <nav class="tabs" aria-label="Recursos">
+        <div id="tabBar" class="tab-list" role="tablist" aria-label="Recursos" aria-orientation="vertical"></div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <section class="tool-state" id="toolState" data-kind="ok">
+          <span class="state-dot" id="stateDot" aria-hidden="true"></span>
+          <span id="stateText">Pronto</span>
+        </section>
+        <button type="button" id="btnTheme" class="sidebar-link" title="Alternar entre tema claro e escuro" aria-label="Usar tema claro">
+          <span class="material-symbols-rounded" aria-hidden="true">light_mode</span><span class="sidebar-link-label">Tema claro</span>
+        </button>
+        <p class="sidebar-credit">Desenvolvido por <strong>Braga Dev</strong></p>
+      </div>
+    </aside>
+
+    <div class="main-column">
+      <header class="global-header" id="globalHeader">
+        <div class="header-left">
+          <h1 class="page-title" id="pageTitle">Início</h1>
+          <div class="header-divider" id="headerDivider" hidden></div>
+          <span id="sourceName" class="source-name"></span>
+          <!-- no editor (item Cortes do menu) o cabeçalho mostra de onde se veio, o projeto aberto e o estado dele -->
+          <nav id="crumbs" class="crumbs" aria-label="Projeto aberto" hidden>
+            <button id="crumbBack" class="crumb-back" type="button" title="Voltar à lista de projetos" aria-label="Projetos"><span class="material-symbols-rounded" aria-hidden="true">chevron_left</span><span class="crumb-back-text">Projetos</span></button>
+            <span class="material-symbols-rounded crumb-sep" aria-hidden="true">chevron_right</span>
+            <strong id="crumbName" class="crumb-name"></strong>
+            <span id="crumbState" class="bds-chip crumb-state" hidden></span>
+          </nav>
+        </div>
+
+        <!-- estado do app: a última mensagem de BF.ui.log (some sozinha quando é só informativa; erro fica até a próxima; clique descarta) -->
+        <div id="log" class="log" role="status" aria-live="polite"></div>
+
+        <div class="header-actions">
+          <button id="btnExport" class="primary" type="button" title="Abrir a aba Exportar" hidden>
+            <span class="material-symbols-rounded" aria-hidden="true">ios_share</span>Exportar
+          </button>
+          <button id="btnOpen" class="primary" type="button">
+            <span class="material-symbols-rounded" aria-hidden="true">video_file</span>Abrir vídeo
+          </button>
+          <div class="window-controls" id="windowControls">
+            <button id="win-full" class="win-btn" type="button" title="Tela cheia" aria-label="Tela cheia"><span class="material-symbols-rounded" aria-hidden="true">fullscreen</span></button>
+            <button id="win-min" class="win-btn" type="button" title="Minimizar" aria-label="Minimizar"><span class="material-symbols-rounded" aria-hidden="true">remove</span></button>
+            <button id="win-max" class="win-btn" type="button" title="Maximizar" aria-label="Maximizar"><span class="material-symbols-rounded" aria-hidden="true">check_box_outline_blank</span></button>
+            <button id="win-close" class="win-btn win-close-btn" type="button" title="Fechar" aria-label="Fechar"><span class="material-symbols-rounded" aria-hidden="true">close</span></button>
+          </div>
+        </div>
+      </header>
+
+      <div id="toolsWarn" class="banner warn" role="alert" hidden></div>
+
+      <main id="workspace" class="workspace">
+        <section class="player" aria-label="Player">
+          <video id="video" controls preload="metadata"></video>
+          <div class="markbar">
+            <div class="mark-group">
+              <label>Início <input id="inInput" type="text" value="0:00.0" size="8"></label>
+              <button id="btnMarkIn" class="icon-btn" type="button" title="Marcar o início no ponto atual do vídeo (I)" aria-label="Marcar início"><span class="material-symbols-rounded" aria-hidden="true">first_page</span></button>
+            </div>
+            <div class="mark-group">
+              <label>Fim <input id="outInput" type="text" value="0:00.0" size="8"></label>
+              <button id="btnMarkOut" class="icon-btn" type="button" title="Marcar o fim no ponto atual do vídeo (O)" aria-label="Marcar fim"><span class="material-symbols-rounded" aria-hidden="true">last_page</span></button>
+            </div>
+            <button id="btnPreview" class="sm" type="button"><span class="material-symbols-rounded" aria-hidden="true">play_arrow</span>Ver trecho</button>
+            <button id="btnAddCut" class="primary sm" type="button"><span class="material-symbols-rounded" aria-hidden="true">content_cut</span>Salvar corte</button>
+          </div>
+          <p id="rangeInfo" class="muted"></p>
+          <div id="timelineSlot"></div>
+        </section>
+
+        <aside class="side" aria-label="Recursos">
+          <!-- abas internas do item do menu aberto (Cortes, Configurações): BF.ui.registerTab + src/core/ui/menuLayout.js -->
+          <div id="subTabs" class="subtabs-host"></div>
+          <div id="tabPanels" class="tabpanels"></div>
+        </aside>
+      </main>
+    </div>
+  </div>
+
+  <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+  <div id="modalRoot"></div>
+
+  <!-- modelo de dados compartilhado com o processo principal (window.BFModel) -->
+  <script src="../src/core/projects/model.js"></script>
+  <!-- tempos legíveis (window.BFTime: fmt, parseTime, secs), usados por app.js -->
+  <script src="../src/core/projects/timecode.js"></script>
+  <!-- o menu lateral: quais telas cada item abriga (window.BFMenu), usado por app.js -->
+  <script src="../src/core/ui/menuLayout.js"></script>
+  <!-- dentro de um iframe do Braga Digital Studio não há preload: a ponte cria o window.bf por mensagens (em janela própria não faz nada) -->
+  <script src="bridge.js"></script>
+  <script src="app.js"></script>
+  <!-- barras deslizantes: preenchimento até o botão (--slider-value), igual ao BDS -->
+  <script src="slider-sync.js"></script>
+  <script src="features/shell.js"></script>
+  <script src="features/cuts.js"></script>
+  <!-- regras do enquadramento e dos layouts do canal: as MESMAS do processo principal (window.BFFraming e window.BFLayouts) -->
+  <script src="../src/core/export/framing.js"></script>
+  <script src="../src/core/export/layouts.js"></script>
+  <script src="features/export.js"></script>
+  <script src="features/queue.js"></script>
+  <!-- regras "universais" (CommonJS no main, window.BF* no renderer); as abas as carregariam sozinhas, mas assim já vêm prontas e a CSP (script-src 'self') continua valendo -->
+  <script src="../src/core/subtitles/shared.js"></script>
+  <script src="features/subtitles.js"></script>
+  <script src="../src/core/audio/audioFilter.js"></script>
+  <script src="../src/core/audio/audioHistory.js"></script>
+  <script src="features/audio.js"></script>
+  <!-- OpenRouter só com modelos gratuitos: seletor de modelos e selo de pedidos restantes (sem aba; antes da Análise, que os usa) -->
+  <script src="features/aiOpenrouter.js"></script>
+  <!-- perfil de humor do canal (window.BFHumor): as MESMAS regras do processo principal para limpar e limitar o que o usuário escreve; antes da Análise, que o usa -->
+  <script src="../src/core/analysis/humor.js"></script>
+  <script src="features/analysis.js"></script>
+  <script src="features/projects.js"></script>
+  <script src="features/home.js"></script>
+  <script src="features/sources.js"></script>
+  <script src="features/general.js"></script>
+  <script src="features/prefs.js"></script>
+  <script src="features/timeline.js"></script>
+  <script src="features/tools.js"></script>
+</body>
+</html>

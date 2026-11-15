@@ -1,0 +1,5 @@
+html, body { margin: 0; height: 100%; background: #111; color: #eee; font-family: sans-serif; }
+body { display: flex; }
+.host-side { width: 180px; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: #1b1b1b; box-sizing: border-box; }
+.host-main { flex: 1; min-width: 0; height: 100%; }
+[data-theme="light"] body { background: #eee; color: #111; }

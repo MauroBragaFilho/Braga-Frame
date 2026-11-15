@@ -1,0 +1,22 @@
+{
+  "name": "braga-frame",
+  "version": "0.1.0",
+  "description": "Analisa gameplays e lives, ajuda a revisar cortes e exporta em vertical com controle de qualidade.",
+  "main": "main.js",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test --test-concurrency=2 \"tests/**/*.test.js\"",
+    "test:e2e": "node scripts/run-e2e.js",
+    "test:network": "node scripts/run-network-tests.js",
+    "test:perf": "node scripts/run-perf-tests.js",
+    "lint": "eslint . --ignore-pattern \".tmp/**\""
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "electron": "^43.7.7",
+    "eslint": "^9.39.5",
+    "globals": "^17.13.0"
+  }
+}

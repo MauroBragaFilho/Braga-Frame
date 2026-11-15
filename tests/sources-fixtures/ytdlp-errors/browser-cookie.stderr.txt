@@ -1,0 +1,4 @@
+
+Usage: yt-dlp.exe [OPTIONS] URL [URL...]
+
+yt-dlp.exe: error: unsupported browser specified for cookies: "nonexistentbrowser". Supported browsers are: brave, chrome, chromium, edge, firefox, opera, safari, vivaldi, whale

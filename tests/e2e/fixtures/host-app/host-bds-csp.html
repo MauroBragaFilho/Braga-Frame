@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <!-- CSP EXATAMENTE como a do BDS hoje (renderer/index.html), sem frame-src: serve para provar o que o BDS precisa mudar -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: file: bds-thumb: https:; media-src 'self' blob: file: data: bds-thumb:; connect-src 'self' file: bds-thumb:; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <title>Hospedeiro de teste (CSP do BDS)</title>
+  <link rel="stylesheet" href="host.css">
+</head>
+<body>
+  <aside class="host-side" aria-label="Menu do hospedeiro">
+    <strong>HOSPEDEIRO</strong>
+    <button id="hostTheme" type="button">Alternar tema do hospedeiro</button>
+    <button id="hostFocus" type="button">Focar o Braga Frame</button>
+  </aside>
+  <main id="frameHost" class="host-main"></main>
+  <!-- módulo ES, como o BDS carrega as telas: importa o bfEmbedHost.js direto da pasta do Braga Frame -->
+  <script type="module" src="host-module.mjs"></script>
+</body>
+</html>

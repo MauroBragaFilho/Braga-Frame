@@ -1,0 +1,102 @@
+/* OpenRouter só com modelos gratuitos (renderer/features/aiOpenrouter.js): seletor de modelos e selo de pedidos gratuitos restantes.
+   Só tokens e componentes de app.css (.bds-switch, .bds-chip, .empty-state, details/summary, botões .sm, progress). Vive dentro de um
+   cartão (o painel de trabalho tem 440 a 520 px): coluna única, sem rolagem horizontal, itens secundários em --card-2. */
+.bfor-picker { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.bfor-picker p { margin: 0; }
+
+/* cabeçalho: interruptor, data da lista e "Atualizar lista" */
+.bfor-head { display: flex; flex-direction: column; gap: 10px; }
+.bfor-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; cursor: pointer; }
+/* o interruptor não depende de regra de "input" da tela que hospeda o seletor (ex.: .an-field input { width: 100% } esticava a trilha) */
+.bfor-switch-row .bds-switch { flex: none; width: 40px; }
+.bfor-switch-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bfor-switch-text strong { color: var(--text); font-size: 14px; font-weight: 600; }
+.bfor-switch-hint { color: var(--muted); }
+.bfor-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.bfor-status { display: flex; align-items: center; gap: 6px; flex: 1 1 200px; min-width: 0; color: var(--muted); overflow-wrap: anywhere; }
+.bfor-status .material-symbols-rounded { flex: none; font-size: 16px; }
+.bfor-status.is-warn { color: var(--status-warn); }
+.bfor-status.is-bad { color: var(--status-bad); }
+.bfor-refresh { flex: none; }
+.bfor-refresh.is-loading .material-symbols-rounded { animation: bfor-spin 1s linear infinite; }
+@keyframes bfor-spin { to { transform: rotate(360deg); } }
+
+/* avisos com ícone (custo, modelo guardado que sumiu, dica do roteador) */
+.bfor-note { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--card-2); color: var(--muted); line-height: 1.45; overflow-wrap: anywhere; }
+.bfor-note::before {
+  content: 'info';
+  flex: none;
+  margin-top: 1px;
+  font-family: 'Material Symbols Rounded';
+  font-size: 18px;
+  line-height: 1;
+  font-weight: normal;
+  letter-spacing: normal;
+  text-transform: none;
+  -webkit-font-feature-settings: 'liga';
+  color: var(--status-info);
+}
+.bfor-note-warn { background: var(--warn-bg); color: var(--text); }
+.bfor-note-warn::before { content: 'warning'; color: var(--status-warn); }
+
+.bfor-search { width: 100%; min-width: 0; }
+
+/* listas (listbox): cada modelo é uma linha selecionável */
+.bfor-listbox { display: flex; flex-direction: column; gap: 6px; margin: 0 -4px; padding: 2px 4px; border-radius: var(--radius-sm); outline: none; }
+.bfor-listbox:focus-visible { outline: none; } /* o foco aparece na linha ativa (aria-activedescendant), abaixo */
+.bfor-group { display: flex; flex-direction: column; gap: 6px; }
+.bfor-group-title { padding: 10px 2px 2px; color: var(--muted); font: 700 11px/1 var(--font-body); letter-spacing: .06em; text-transform: uppercase; }
+
+.bfor-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--card-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease);
+}
+.bfor-opt:hover { background: color-mix(in srgb, var(--text) 8%, var(--card-2)); }
+.bfor-opt[aria-selected="true"] { background: var(--accent-light); border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.bfor-listbox:focus-visible .bfor-opt.is-active { outline: var(--focus-ring); outline-offset: -2px; }
+.bfor-mark { flex: none; display: grid; place-items: center; width: 18px; height: 18px; margin-top: 2px; border: 2px solid color-mix(in srgb, var(--text) 35%, transparent); border-radius: 50%; }
+.bfor-opt[aria-selected="true"] .bfor-mark { border-color: var(--accent); }
+.bfor-opt[aria-selected="true"] .bfor-mark::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.bfor-opt-body { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.bfor-opt-top { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.bfor-name { color: var(--text); font-size: 14px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.bfor-sub { color: var(--muted); overflow-wrap: anywhere; }
+.bfor-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.bfor-badges .bds-chip { padding: 2px 9px; font-size: 11px; }
+/* o selo neutro precisa de um fundo próprio: --card-2 é a cor da linha */
+.bfor-badges .bds-chip:not(.bds-chip-accent):not(.bds-chip-info):not(.bds-chip-warn):not(.bds-chip-ok):not(.bds-chip-bad) { background: color-mix(in srgb, var(--text) 12%, transparent); }
+.bfor-reasons { color: var(--muted); overflow-wrap: anywhere; }
+.bfor-price { color: var(--text); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; } /* o custo é o que importa nos pagos: não esmaece */
+.bfor-opt.is-dim { opacity: .75; }
+.bfor-opt.is-dim .bfor-name { font-weight: 500; }
+.bfor-opt.is-disabled { opacity: .45; cursor: not-allowed; }
+.bfor-opt.is-disabled:hover { background: var(--card-2); }
+
+/* "Outros gratuitos" e "Pagos": seções recolhíveis */
+.bfor-fold { min-width: 0; padding-top: 12px; border-top: 1px solid var(--line); }
+.bfor-fold[open] { display: flex; flex-direction: column; gap: 10px; }
+.bfor-fold > summary { width: 100%; color: var(--text); font-size: 14px; }
+.bfor-fold-note { overflow-wrap: anywhere; }
+.bfor-fold .bfor-listbox { max-height: 360px; overflow-y: auto; }
+
+/* carregando e sem lista */
+.bfor-loading { display: flex; flex-direction: column; gap: 8px; padding: 10px 2px; }
+.bfor-empty { padding: 14px 16px; gap: 14px; }
+.bfor-empty .empty-state-icon { width: 40px; height: 40px; font-size: 24px; }
+.bfor-empty .empty-state-text strong { font-size: 14px; }
+.bfor-empty .empty-state-text p { font-size: 12px; overflow-wrap: anywhere; }
+
+/* selo de pedidos gratuitos restantes */
+.bfor-limits { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.bfor-limits .bds-chip { gap: 6px; max-width: 100%; padding: 4px 12px; line-height: 1.3; text-wrap: balance; }
+.bfor-limits .material-symbols-rounded { flex: none; font-size: 16px; }
+
+/* travado enquanto uma análise usa o provedor */
+.bfor-picker.is-disabled { opacity: .6; }

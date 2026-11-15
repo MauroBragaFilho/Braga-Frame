@@ -1,0 +1,23 @@
+/* Fontes empacotadas (offline, só arquivos locais; origem e licenças em assets/fonts/FONTES_ORIGEM.md).
+   Montserrat para títulos, Inter para texto e interface: as mesmas do Braga Digital Studio. */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./assets/fonts/Inter-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600 700;
+  font-display: swap;
+  src: url('./assets/fonts/Inter-SemiBold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./assets/fonts/Montserrat-Bold.woff2') format('woff2');
+}

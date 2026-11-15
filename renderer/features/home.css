@@ -1,0 +1,31 @@
+/* Tela Início (tela larga): boas-vindas com busca e atalhos, e os projetos recentes. Só tokens e componentes do app.css; os cartões são os .prj-* da aba Projetos (projects.css). */
+.home { display: flex; flex-direction: column; gap: 28px; }
+.home p { margin: 0; }
+
+/* boas-vindas: cartão grande com um brilho vermelho no canto (só CSS: nada de foto nem de botão que não faz nada) */
+.home-hero { --home-glow: 32%; position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 20px; padding: 32px; background: radial-gradient(110% 170% at 100% 0%, color-mix(in srgb, var(--accent) var(--home-glow), transparent) 0%, transparent 62%), var(--card); border: 1px solid var(--line); border-radius: var(--radius-lg); }
+:root[data-theme="light"] .home-hero { --home-glow: 16%; }
+.home-hero-text { display: flex; flex-direction: column; gap: 6px; }
+.home-title { margin: 0; font-size: var(--fs-title); }
+.home-lead { color: var(--muted); }
+.home-search { display: flex; align-items: center; gap: 10px; max-width: 640px; padding: 5px 18px; background: var(--card-2); border: 1px solid var(--line); border-radius: var(--radius-pill); }
+.home-search:hover { border-color: color-mix(in srgb, var(--text) 25%, var(--line)); }
+.home-search:has(.home-search-input:focus-visible) { outline: var(--focus-ring); outline-offset: 2px; }
+.home-search-icon { flex: none; font-size: 22px; color: var(--muted); }
+.home-search-input { flex: 1; min-width: 0; min-height: 40px; padding: 0 4px; border: 0; background: transparent; }
+.home-search-input:focus-visible { outline: none; }
+.home-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.home-actions button[hidden] { display: none; }
+
+/* projetos recentes (ou os resultados da busca) */
+.home-recent { display: flex; flex-direction: column; gap: 14px; }
+.home-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.home-section-head h3 { margin: 0; font-size: var(--fs-section); }
+.home-all { display: inline-flex; align-items: center; gap: 4px; }
+.home-all[hidden] { display: none; }
+.home-all .material-symbols-rounded { font-size: 18px; }
+.home-note { list-style: none; }
+.home-note.muted { padding: 8px 0; }
+.home-empty { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-md); }
+
+@media (max-width: 700px) { .home-hero { padding: 22px 18px; } .home-title { font-size: 22px; } }
