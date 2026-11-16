@@ -587,3 +587,42 @@ Pedido do dono: analisar shorts publicados e dizer à IA como procurar. Foram me
 **O que entrou no guia padrão:** a seção "O que os shorts publicados mostram", com seis itens e 786 caracteres. A mensagem de sistema padrão ficou em 2.597 tokens estimados (o teste `ai-skill` exige menos de 2.600), então a seção precisou ser curta.
 
 **Limites:** nenhum short dos três canais de jogos casou com as 30 lives mais recentes do próprio canal (vêm de vídeos gravados ou de lives antigas); visualização depende do canal e da plataforma, não só do corte; a leitura é de quem escreveu o guia. **O efeito no resultado da IA não foi medido.**
+
+### 17.10 A IA confere as sugestões do algoritmo (16/11/2026)
+
+Pedido do dono: o motor trazia dezenas de sugestões que não seriam usadas. Na live de gameplay medida, das 80 sugestões do modo Algoritmo + IA, 49 não batiam com um corte forte ou bom, e quase todas vinham **só do algoritmo** (16 boas em 63), enquanto o que a IA sugeria era bom em 15 de 17. O algoritmo não distingue um corte bom de um ruim além da nota; quem distingue é a IA. A conferência põe a IA para ler o que só o algoritmo achou.
+
+**Como funciona** (só no modo Algoritmo + IA, ligado por padrão):
+
+1. O algoritmo roda e a IA faz as duas passadas dela, como antes.
+2. As sugestões do algoritmo que a IA **não** tinha sugerido por conta própria (mesma regra de "mesmo momento" da junção) vão para ela em lotes de até 40 trechos, respeitando o teto de tokens de entrada.
+3. De cada trecho vão só o horário, a fala (com 6 s antes e 4 s depois, para ela ver se a premissa ou o desfecho ficaram de fora) e até 10 mensagens do chat do período. **Nenhuma pista do algoritmo vai junto**: nem os motivos, nem a nota, nem o volume, nem o id interno (`buildReviewMessage`; teste). A mensagem de sistema é a mesma, com o guia de cortes.
+4. Ela responde, para cada trecho, se fica (`keep`), a nota, um título e o motivo (`parseReviews`).
+5. A junção (`merge.js`) tira da lista o que ela recusou e guarda em `review.droppedList` (horário, nota do algoritmo e o motivo dela). O que ela aprovou fica com `review: 'ai'`, o título dela e o motivo dela antes dos do algoritmo. **A nota continua a do algoritmo.**
+
+**Nunca apaga por falha.** Trecho sem resposta, resposta cortada (pede uma vez só os que faltaram, com mais espaço), provedor que falha ou limite de chamadas atingido: a sugestão **fica na lista** e a análise termina normalmente, com o aviso `AI_REVIEW_PARTIAL` ou `AI_REVIEW_FAILED`. A conferência usa o mesmo limite de chamadas da análise ("Chamadas por análise"); quando é ele que acaba, o aviso diz isso e pede para aumentar o limite.
+
+**Custo.** Estimado com a transcrição da live medida: 63 trechos, em média 150 tokens cada, em **2 chamadas** e cerca de 14 mil tokens de entrada, contra uns 85 mil da análise inteira. A estimativa mostrada antes de rodar ainda não inclui essas chamadas.
+
+**Na tela.** Interruptor "IA confere o algoritmo" (`#anAiReview`, `ext.analysis.settings.aiReview`, visível só em Algoritmo + IA); o pedido leva `review: true|false`. O resumo ganha "a IA conferiu N sugestões do algoritmo e tirou M"; a sugestão aprovada mostra o selo "Algoritmo · IA conferiu"; e há a seção recolhida "Sugestões do algoritmo que a IA tirou", com o horário, o motivo e a nota que o algoritmo tinha dado. No projeto fica `ext.analysis.review = { sent, kept, dropped, unanswered, list }`.
+
+**Arquivos.** `ai/prompt.js` (`buildReviewMessage`, `REVIEW_SCHEMA`), `ai/parse.js` (`parseReviews`), `ai/analyze.js` (a passada, `request.review`, resultado `review` e `ai.review`), `ai/manager.js` e `combo.js` (levam a lista: só id e horários), `merge.js` (aplica o veredito), `renderer/features/analysis.js`. Testes: `analysis-ai-core`, `analysis-ai-run`, `analysis-merge` e `analysis-ui`.
+
+**Não medido.** Nenhuma análise com provedor de verdade foi feita com a conferência. Um teste anterior com modelos pequenos rodando no computador, usados como juiz, piorou o resultado (aprovavam tudo). O que se espera de um modelo bom é o que ele já mostrou ao sugerir; só uma rodada vai dizer quantas das sugestões fracas ele tira e quantas boas leva junto.
+
+### 17.11 A conferência também acerta o início e o fim (16/11/2026)
+
+Pedido do dono, depois de assistir aos cortes exportados: eles pareciam começar depois do ocorrido, e alguns ficavam sem contexto. Medido na mesma live (as 80 sugestões contra a seleção feita à mão): dos 27 cortes só do algoritmo que tocavam um momento bom, **13 terminavam mais de 5 s antes do fim dele** e 4 começavam de 9 a 62 s depois do começo; dos 12 que os dois motores acharam, 3 começavam de 4 a 15 s depois. O algoritmo acha a reação (volume, exclamação) e monta a janela em volta dela: a premissa e o desfecho ficam de fora.
+
+**Como funciona agora** (substitui a janela de 6 s antes e 4 s depois da 17.10):
+
+1. Cada trecho vai com a fala de até **40 s antes** do corte sugerido, a do corte e a de até **15 s depois**, em três partes ("antes do corte", "no corte", "depois do corte"). Continua sem nenhuma pista do algoritmo.
+2. A IA devolve, além do `keep`, `start` e `end` (m:ss): onde o corte deve começar (a primeira fala necessária para entender o momento) e terminar (depois do desfecho e da reação). Se o sugerido já está certo, ela repete os horários.
+3. O app confere (`reviewBounds`, em `ai/analyze.js`): só valem horários dentro da fala mostrada (folga de 2 s), levados ao começo e ao fim de uma fala, dentro da duração mínima e máxima, e que continuem sendo o mesmo momento (`sameMoment`). Fora disso, a sugestão fica com as bordas do algoritmo (contagem em `review.boundsRefused`).
+4. A junção (`applyReviewBounds`, em `merge.js`) aplica em ordem de tempo, sem invadir a sugestão vizinha (a de antes e a de depois, já ajustadas) e sem ficar abaixo da duração mínima. As bordas do algoritmo ficam em `reviewFrom` e um motivo diz o que mudou ("a IA ajustou o corte: começa 25 s antes e termina 4 s depois").
+
+**Na tela.** O resumo diz "…, tirou M e ajustou o início ou o fim de K"; a sugestão ajustada tem o selo "Algoritmo · IA ajustou", com as bordas antigas no texto de ajuda. No projeto: `ext.analysis.review.adjusted` e `reviewFrom` em cada sugestão ajustada. O `ALGO_VERSION` da IA passou para 4.
+
+**Custo.** Na live medida, a fala dos 63 trechos sobe de ~8 mil para ~12 mil tokens, em 2 chamadas (até 35 trechos por chamada).
+
+**Limites.** A IA lê só o texto: quando o lance aparece na tela antes de alguém falar dele, ela não sabe, e o início fica no começo da primeira fala relevante. Só vale para as sugestões que só o algoritmo achou: as que os dois motores acharam e as da IA mantêm as bordas de antes. **Não medido** com provedor de verdade. Testes: `analysis-ai-core`, `analysis-ai-run`, `analysis-merge` e `analysis-ui`.

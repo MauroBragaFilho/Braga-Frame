@@ -132,7 +132,7 @@ test('combo: roda o algoritmo, depois a IA, e entrega a junção com o próprio 
   assert.deepEqual([half.phase, half.stage, half.stageP], ['algorithm', 'audio', 0.3], 'a etapa do motor da vez segue para a tela (o tempo restante é por ela)');
   algo.emit('done', { jobId: 'a1', result: algoResult([A(100, 130, 0.7)]) });
   assert.equal(ai.starts.length, 1, 'a IA começa quando o algoritmo termina');
-  assert.deepEqual(ai.starts[0], { projectId: 'p1', path: 'C:/v.mp4', size: 10, duration: 600, params: { perHour: 6 }, chatPath: null, meta: { title: 'x' }, existingCuts: [{ start: 1, end: 2 }], profile: { criteria: 'c' } });
+  assert.deepEqual(ai.starts[0], { projectId: 'p1', path: 'C:/v.mp4', size: 10, duration: 600, params: { perHour: 6 }, chatPath: null, meta: { title: 'x' }, existingCuts: [{ start: 1, end: 2 }], profile: { criteria: 'c' }, review: [{ id: '1000_1300', start: 100, end: 130 }] }, 'a IA recebe as sugestões do algoritmo para conferir: só id e horários');
   assert.equal(combo.owns('i1'), true);
   ai.emit('progress', { jobId: 'i1', p: 1, stage: 'ai2', message: 'Escolhendo…' });
   assert.equal(events.filter(([t]) => t === 'progress').pop()[1].message, 'IA: Escolhendo…');
@@ -211,4 +211,68 @@ test('combo: a data e a duração são as desta execução, mesmo com o algoritm
   two.ai.emit('done', { jobId: 'i1', result: aiResult([I(98, 128, 0.8)]) });
   const ok = two.events.find(([t]) => t === 'done')[1].result;
   assert.ok(Date.parse(ok.at) >= before && ok.tookMs < 4000, 'vale também quando os dois dão certo');
+});
+
+test('conferência: o veredito da IA tira da lista o que só o algoritmo achou e ela recusou; o aprovado ganha título e motivo dela, com a nota do algoritmo', () => {
+  const algo = algoResult([A(100, 130, 0.7), A(300, 330, 0.9), A(500, 530, 0.8), A(700, 730, 0.6)]);
+  const ai = aiResult([I(98, 128, 0.8)], { review: { sent: 3, kept: 1, dropped: 1, unanswered: 1, verdicts: [
+    { id: '3000_3300', keep: false, relevance: 0.2, title: '', category: '', reasons: ['conversa técnica, sem desfecho'] },
+    { id: '5000_5300', keep: true, relevance: 0.7, title: 'Título dado pela IA', category: 'Humor', reasons: ['história com começo e fim'] },
+    { id: '1000_1300', keep: false, relevance: 0.1, title: '', category: '', reasons: ['não vale'] } // este é o que os dois acharam: o veredito não se aplica a ele
+  ] } });
+  const r = mergeResults(algo, ai);
+  assert.deepEqual(r.suggestions.map((s) => [s.start, s.engines.join('+'), s.review || '']), [[98, 'algorithm+ai', ''], [500, 'algorithm', 'ai'], [700, 'algorithm', '']]);
+  const kept = r.suggestions.find((s) => s.start === 500);
+  assert.equal(kept.title, 'Título dado pela IA');
+  assert.equal(kept.category, 'Humor');
+  assert.deepEqual(kept.reasons, ['história com começo e fim', 'volume acima do normal'], 'o motivo da IA vem antes dos do algoritmo');
+  assert.equal(kept.relevance, 0.8, 'a nota continua a do algoritmo');
+  assert.equal(r.suggestions.find((s) => s.start === 700).review, undefined, 'sem veredito: fica como estava');
+  assert.deepEqual(r.merge, { algorithm: 2, ai: 0, both: 1 });
+  assert.deepEqual(r.review, { sent: 3, kept: 1, dropped: 1, unanswered: 1, adjusted: 0, droppedList: [{ start: 300, end: 330, relevance: 0.9, why: 'conversa técnica, sem desfecho' }] });
+  // sem conferência (ou com a IA falhando) nada muda
+  assert.equal(mergeResults(algo, aiResult([I(98, 128, 0.8)])).review, undefined);
+  assert.equal(mergeResults(algo, aiResult([I(98, 128, 0.8)])).suggestions.length, 4);
+  assert.equal(mergeResults(algo, null, { aiError: { code: 'QUOTA', message: 'cota' } }).suggestions.length, 4);
+});
+
+test('combo: a conferência vai ligada por padrão; `review: false` no pedido desliga; sem resultado do algoritmo não há o que conferir', () => {
+  const off = setup();
+  off.combo.start({ ...PAYLOAD, review: false });
+  off.algo.emit('done', { jobId: 'a1', result: algoResult([A(100, 130, 0.7)]) });
+  assert.equal('review' in off.ai.starts[0], false);
+  const none = setup();
+  none.combo.start(PAYLOAD);
+  none.algo.emit('done', { jobId: 'a1', result: algoResult([]) });
+  assert.equal('review' in none.ai.starts[0], false, 'algoritmo sem sugestões');
+  const failed = setup();
+  failed.combo.start(PAYLOAD);
+  failed.algo.emit('failed', { jobId: 'a1', code: 'NO_SIGNALS', message: 'Nenhum sinal.' });
+  assert.equal('review' in failed.ai.starts[0], false, 'algoritmo falhou');
+});
+
+test('conferência com bordas: a aprovada passa a ter o início e o fim da IA, sem invadir a vizinha nem ficar curta; o algoritmo fica em reviewFrom', () => {
+  const algo = algoResult([A(300, 330, 0.9), A(400, 430, 0.8), A(600, 630, 0.7), A(800, 830, 0.6)], { params: { minDurationSec: 15, maxDurationSec: 60 } });
+  const ai = aiResult([I(355, 385, 0.8)], { review: { sent: 4, kept: 4, dropped: 0, unanswered: 0, adjusted: 4, verdicts: [
+    { id: '3000_3300', keep: true, reasons: ['tem a pergunta antes'], start: 275, end: 334 },   // cresce para os dois lados
+    { id: '4000_4300', keep: true, reasons: ['bom'], start: 372, end: 432 },                   // a da IA termina em 385: começa ali
+    { id: '6000_6300', keep: true, reasons: ['bom'], start: 598, end: 640 },
+    { id: '8000_8300', keep: true, reasons: ['bom'], start: 825, end: 860 }                    // sobra pouco do original: não é o mesmo momento
+  ] } });
+  const r = mergeResults(algo, ai);
+  const at = (x) => r.suggestions.find((s) => s.reviewFrom ? s.reviewFrom.start === x : s.start === x);
+  assert.deepEqual([at(300).start, at(300).end], [275, 334]);
+  assert.deepEqual(at(300).reviewFrom, { start: 300, end: 330 });
+  assert.deepEqual(at(300).reasons, ['tem a pergunta antes', 'a IA ajustou o corte: começa 25 s antes e termina 4 s depois', 'volume acima do normal']);
+  assert.ok(at(300).peak >= 275 && at(300).peak <= 334);
+  assert.deepEqual([at(400).start, at(400).end], [385, 432], 'não invade a sugestão da IA que vem antes');
+  assert.deepEqual([at(600).start, at(600).end], [598, 640]);
+  assert.deepEqual([at(800).start, at(800).end, at(800).reviewFrom], [800, 830, undefined], 'outro momento: fica como estava');
+  assert.equal(r.review.adjusted, 3);
+  // a vizinha corta o começo pedido e o que sobra fica abaixo da duração mínima: nada muda
+  const tight = mergeResults(algoResult([A(300, 330, 0.9)], { params: { minDurationSec: 30, maxDurationSec: 60 } }),
+    aiResult([I(250, 290, 0.8)], { review: { sent: 1, kept: 1, dropped: 0, unanswered: 0, verdicts: [{ id: '3000_3300', keep: true, reasons: ['bom'], start: 280, end: 312 }] } }));
+  const t300 = tight.suggestions.find((s) => s.engines.join() === 'algorithm');
+  assert.deepEqual([t300.start, t300.end, t300.reviewFrom], [300, 330, undefined]);
+  assert.equal(tight.review.adjusted, 0);
 });

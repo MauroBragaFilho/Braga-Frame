@@ -147,7 +147,7 @@ class AiAnalysisManager extends EventEmitter {
   }
 
   /** Valida e começa em segundo plano. Lança AnalysisError/AiError se não puder começar. */
-  start({ projectId, path: file, size, duration, params, chatPath, meta, existingCuts, profile } = {}) {
+  start({ projectId, path: file, size, duration, params, chatPath, meta, existingCuts, profile, review } = {}) {
     if (this.job) throw new AnalysisError('BUSY', 'Já existe uma análise em andamento. Espere terminar ou cancele-a.');
     const { current, source, doc } = this.check({ projectId, path: file, size, duration });
 
@@ -160,7 +160,11 @@ class AiAnalysisManager extends EventEmitter {
     const cuts = Array.isArray(existingCuts)
       ? existingCuts.filter((c) => c && Number.isFinite(c.start) && Number.isFinite(c.end)).slice(0, 2000).map((c) => ({ start: Number(c.start), end: Number(c.end) }))
       : [];
-    this._run(job, { doc, source, params, chatPath, meta: meta && typeof meta === 'object' ? meta : {}, existingCuts: cuts, provider: current, projectId, profile }).catch((err) => {
+    // modo Algoritmo + IA: as sugestões do algoritmo que a IA vai conferir (só id e horários; nenhuma pista do algoritmo sai daqui)
+    const toReview = Array.isArray(review)
+      ? review.filter((c) => c && c.id != null && Number.isFinite(c.start) && Number.isFinite(c.end)).slice(0, 600).map((c) => ({ id: String(c.id), start: Number(c.start), end: Number(c.end) }))
+      : [];
+    this._run(job, { doc, source, params, chatPath, meta: meta && typeof meta === 'object' ? meta : {}, existingCuts: cuts, provider: current, projectId, profile, review: toReview }).catch((err) => {
       this.job = null;
       this.emit('failed', { jobId: job.id, code: 'ERROR', message: err && err.message ? err.message : 'Erro inesperado na análise.' });
     });
@@ -176,7 +180,7 @@ class AiAnalysisManager extends EventEmitter {
     this.emit('progress', { jobId: job.id, p: ev.p, stage: ev.stage, message: ev.message, ...(typeof ev.stageP === 'number' ? { stageP: ev.stageP } : {}) });
   }
 
-  async _run(job, { doc, source, params, chatPath, meta, existingCuts, provider, projectId, profile }) {
+  async _run(job, { doc, source, params, chatPath, meta, existingCuts, provider, projectId, profile, review }) {
     const progress = (ev) => this._progress(job, ev);
     try {
       progress({ p: 0, stage: 'prepare', message: 'Preparando…' });
@@ -213,7 +217,7 @@ class AiAnalysisManager extends EventEmitter {
       // pedido pago ANTES de sair; se mesmo assim vier custo (ex.: um modelo que passou a ser pago depois da lista), a análise avisa.
       let reportedCost = 0;
       const result = await analyzeWithAi(
-        { duration, hasAudio, params, transcript: doc, chat, meta, existingCuts, profile: humorProfile.profile, examples: humorProfile.examples, skill: this._skill().body },
+        { duration, hasAudio, params, transcript: doc, chat, meta, existingCuts, profile: humorProfile.profile, examples: humorProfile.examples, skill: this._skill().body, review },
         {
           chat: async (p) => {
             const out = await this.deps.runtime.chat({ ...p, onSwitch });

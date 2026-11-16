@@ -97,4 +97,4 @@ function describeEstimate(est) {
   return `~${est.calls} chamada${est.calls === 1 ? '' : 's'}, ~${mil.toLocaleString('pt-BR')} mil tokens`;
 }
 
-module.exports = { buildWindows, estimate, describeEstimate, chatLinesFor, OVERLAP_SEC, DEFAULT_WINDOW_SEC, OVERHEAD_TOKENS, MAX_CHAT_LINES };
+module.exports = { buildWindows, estimate, describeEstimate, chatLinesFor, cueLine, OVERLAP_SEC, DEFAULT_WINDOW_SEC, OVERHEAD_TOKENS, MAX_CHAT_LINES };

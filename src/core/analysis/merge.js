@@ -10,6 +10,11 @@
  * cortes começando no lance e mais do momento coberto que as bordas só da IA ou só do algoritmo), 'ai' ou 'algorithm'.
  * Ordem: veja orderMerged.
  * Se um dos motores falhou, o resultado é o do outro com um aviso (`aiError` / `algorithmError`).
+ * CONFERÊNCIA: se a IA devolveu vereditos (`ai.review.verdicts`, ai/analyze.js) sobre as sugestões que só o algoritmo achou, as
+ * recusadas saem da lista e vão para `review.droppedList` (com o motivo dela); as aprovadas ficam com `review: 'ai'`, o título dela e o
+ * motivo na frente dos do algoritmo. A nota continua a do algoritmo. Sugestão sem veredito fica como estava.
+ * Se o veredito traz início e fim novos (já conferidos em ai/analyze.js, reviewBounds), a aprovada passa a usá-los, sem invadir a
+ * sugestão vizinha e sem ficar abaixo da duração mínima; as bordas do algoritmo ficam em `reviewFrom` e um motivo diz o que mudou.
  */
 const { episodeAt } = require('./segments');
 
@@ -77,6 +82,45 @@ function together(a, b, mode, maxSec) {
   return out;
 }
 
+/** "a IA ajustou o corte: começa 12 s antes e termina 6 s depois". */
+function adjustText(from, to) {
+  const parts = [];
+  const ds = Math.round(from.start - to.start);
+  if (ds >= 1) parts.push(`começa ${ds} s antes`); else if (ds <= -1) parts.push(`começa ${-ds} s depois`);
+  const de = Math.round(to.end - from.end);
+  if (de >= 1) parts.push(`termina ${de} s depois`); else if (de <= -1) parts.push(`termina ${-de} s antes`);
+  return `a IA ajustou o corte: ${parts.join(' e ')}`;
+}
+
+/**
+ * Bordas que a IA acertou na conferência. Em ordem de tempo, cada uma só cresce até a sugestão vizinha (a de antes e a de depois, já com as
+ * bordas novas): nunca invade espaço de outra (se já havia sobreposição, ela não aumenta). Se o que sobra fica abaixo da duração mínima ou
+ * deixa de ser o mesmo momento, a sugestão fica como o algoritmo deixou. Devolve quantas mudaram.
+ */
+function applyReviewBounds(suggestions, pending, minSec) {
+  let adjusted = 0;
+  for (const [s, b] of [...pending].sort((x, y) => x[0].start - y[0].start)) {
+    let lo = 0;
+    let hi = Infinity;
+    for (const o of suggestions) {
+      if (o === s) continue;
+      if (o.start < s.start) lo = Math.max(lo, o.end); else hi = Math.min(hi, o.start);
+    }
+    const start = round3(Math.max(b.start, Math.min(lo, s.start)));
+    const end = round3(Math.min(b.end, Math.max(hi, s.end)));
+    if (end - start < minSec - 0.01 || end <= start) continue;
+    if (!sameMoment({ start, end }, s)) continue;
+    if (Math.abs(start - s.start) < 1 && Math.abs(end - s.end) < 1) continue;
+    const from = { start: s.start, end: s.end };
+    const reasons = s.reasons.slice();
+    reasons.splice(b.at, 0, adjustText(from, { start, end }));
+    Object.assign(s, { start, end, reviewFrom: from, reasons });
+    if (Number.isFinite(s.peak)) s.peak = Math.min(end, Math.max(start, s.peak));
+    adjusted += 1;
+  }
+  return adjusted;
+}
+
 /**
  * Ordem da lista ("mais relevantes primeiro"): o que os DOIS acharam vem primeiro; depois alterna um da IA e um do algoritmo, cada motor na
  * própria ordem de relevância. As relevâncias dos dois motores não estão na mesma escala (a do algoritmo encosta em 100% nos picos fortes),
@@ -111,9 +155,29 @@ function mergeResults(algo, ai, { bounds = MERGE_BOUNDS, aiError = null, algorit
   const episodes = algo && Array.isArray(algo.episodes) ? algo.episodes : [];
   const maxSec = Number((algo && algo.params && algo.params.maxDurationSec) || (ai && ai.params && ai.params.maxDurationSec)) || 0;
   const suggestions = [];
+  const verdicts = new Map(((ai && ai.review && Array.isArray(ai.review.verdicts)) ? ai.review.verdicts : []).map((v) => [String(v.id), v]));
+  const droppedList = [];
+  const pending = new Map(); // sugestão aprovada -> { start, end, at } (bordas novas da IA; at = onde entra o motivo do ajuste)
   A.forEach((a, i) => {
-    if (pairedA.has(i)) suggestions.push(together(a, B[pairedA.get(i)], bounds, maxSec));
-    else suggestions.push({ ...a, engines: ['algorithm'] });
+    if (pairedA.has(i)) { suggestions.push(together(a, B[pairedA.get(i)], bounds, maxSec)); return; }
+    const v = verdicts.get(String(a.id));
+    if (v && v.keep === false) {
+      droppedList.push({ start: a.start, end: a.end, relevance: a.relevance, why: (v.reasons && v.reasons[0]) || '' });
+      return;
+    }
+    const s = { ...a, engines: ['algorithm'] };
+    if (v && v.keep === true) {
+      s.review = 'ai';
+      if (v.title) s.title = v.title;
+      if (v.category) s.category = v.category;
+      const reasons = [];
+      for (const r of [...(v.reasons || []), ...(a.reasons || [])]) if (r && !reasons.includes(r)) reasons.push(r);
+      s.reasons = reasons;
+      if (Number.isFinite(v.start) && Number.isFinite(v.end) && v.end > v.start) {
+        pending.set(s, { start: v.start, end: v.end, at: (v.reasons || []).filter(Boolean).length });
+      }
+    }
+    suggestions.push(s);
   });
   B.forEach((b, j) => {
     if (pairedB.has(j)) return;
@@ -124,6 +188,8 @@ function mergeResults(algo, ai, { bounds = MERGE_BOUNDS, aiError = null, algorit
     }
     suggestions.push(s);
   });
+  const minSec = Number((algo && algo.params && algo.params.minDurationSec) || (ai && ai.params && ai.params.minDurationSec)) || 0;
+  const adjusted = pending.size ? applyReviewBounds(suggestions, pending, minSec) : 0;
   // ids únicos (o da IA e o do algoritmo têm o mesmo formato "início_fim" e podem coincidir)
   const seen = new Set();
   for (const s of suggestions) {
@@ -149,6 +215,7 @@ function mergeResults(algo, ai, { bounds = MERGE_BOUNDS, aiError = null, algorit
     warnings,
     suggestions: ordered.slice(0, MAX_MERGED),
     ...(ai && ai.ai ? { ai: ai.ai } : {}),
+    ...(ai && ai.review ? { review: { sent: ai.review.sent || 0, kept: ai.review.kept || 0, dropped: droppedList.length, unanswered: ai.review.unanswered || 0, adjusted, droppedList } } : {}),
     merge: {
       algorithm: suggestions.filter((s) => s.engines.length === 1 && s.engines[0] === 'algorithm').length,
       ai: suggestions.filter((s) => s.engines.length === 1 && s.engines[0] === 'ai').length,

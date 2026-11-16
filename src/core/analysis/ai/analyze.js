@@ -10,18 +10,55 @@
  * pede de novo); erro de chave/modelo/aceite/cota para na hora; um bloco que esgota as tentativas é pulado (até 2 blocos) e a análise
  * segue com os outros, avisando; sem nenhum bloco, falha com mensagem clara (a interface oferece usar o algoritmo).
  * Cancelamento por AbortSignal em qualquer ponto (inclusive durante a espera entre tentativas).
+ *
+ * CONFERÊNCIA (modo Algoritmo + IA, `request.review`): depois das duas passadas, as sugestões do ALGORITMO que a IA não tinha sugerido
+ * vão para ela em lotes, só com o horário e a fala de cada trecho (com a de antes e a de depois), e ela diz se cada uma vale um corte e
+ * onde ele deve começar e terminar (o detector pega a reação e perde a premissa). Os horários novos são conferidos aqui (reviewBounds) e
+ * saem no veredito, em `review`; quem tira da lista e aplica as bordas é a junção (merge.js). Falha, resposta cortada ou limite de chamadas nunca derrubam a análise nem apagam
+ * sugestão: o que ficou sem resposta continua na lista, com aviso.
  */
 
 const { AiError, cancelled, classify } = require('../../ai/errors');
 const { normalizeParams, suggestionLimit } = require('../params');
-const { SYSTEM_PROMPT, systemPrompt, buildBlockMessage, buildPickMessage, profileBlock, profileSummary, JSON_NUDGE, estimateTokens, clock } = require('./prompt');
+const { SYSTEM_PROMPT, systemPrompt, buildBlockMessage, buildPickMessage, buildReviewMessage, profileBlock, profileSummary, JSON_NUDGE, estimateTokens, clock } = require('./prompt');
 const { normalizeProfile, isEmpty: isEmptyProfile, fold } = require('../humor');
 const { normalizeExamples } = require('./humorExamples');
-const { buildWindows, estimate } = require('./chunking');
-const { parseCandidates, parsePicks } = require('./parse');
-const { verifyCandidate, dedupe, REASONS } = require('./verify');
+const { buildWindows, estimate, chatLinesFor, cueLine } = require('./chunking');
+const { parseCandidates, parsePicks, parseReviews } = require('./parse');
+const { cuesInRange, round3 } = require('../transcript/format');
+const { sameMoment } = require('../merge');
+const { verifyCandidate, dedupe, REASONS, snapStart, snapEnd } = require('./verify');
 
-const ALGO_VERSION = 3; // versão do método de IA (prompt + conferência); mude quando mudarem (2: sem dicas de volume no pedido; 3: guia de cortes na mensagem de sistema)
+/**
+ * Início e fim que a IA devolveu na conferência -> as bordas novas, conferidas aqui, ou o motivo de não usá-las (`refused`).
+ * Valem só horários dentro da fala que ela viu (com a folga de REVIEW_EDGE_TOLERANCE_SEC), levados ao começo e ao fim de uma fala, dentro
+ * da duração mínima e máxima e que continuem sendo o MESMO momento (sameMoment, a regra da junção). Sem horário, ou com o horário igual
+ * (menos de 1 s de diferença): nada muda. `it` = { start, end, from, to, cues } (o trecho mostrado e a fala dele).
+ */
+function reviewBounds(v, it, { duration, prefs }) {
+  const hasStart = Number.isFinite(v.start);
+  const hasEnd = Number.isFinite(v.end);
+  if (!hasStart && !hasEnd) return {};
+  const tol = REVIEW_EDGE_TOLERANCE_SEC;
+  const s0 = hasStart ? v.start : it.start;
+  const e0 = hasEnd ? v.end : it.end;
+  if (Math.abs(s0 - it.start) < 1 && Math.abs(e0 - it.end) < 1) return {}; // repetiu os horários sugeridos
+  if (!(e0 > s0) || s0 < it.from - tol || e0 > it.to + tol) return { refused: 'fora do trecho mostrado' };
+  const s1 = Math.max(0, s0);
+  const e1 = Math.min(duration, e0);
+  const fits = (s, e) => e - s >= prefs.minDurationSec - 0.01 && e - s <= prefs.maxDurationSec + 0.01;
+  const ss = hasStart ? Math.max(0, snapStart(s1, it.cues)) : s1;
+  const se = hasEnd ? Math.min(duration, snapEnd(e1, it.cues)) : e1;
+  const pick = [[ss, se], [ss, e1], [s1, se], [s1, e1]].find(([s, e]) => fits(s, e));
+  if (!pick) return { refused: 'duração' };
+  const start = round3(pick[0]);
+  const end = round3(pick[1]);
+  if (!sameMoment({ start, end }, it)) return { refused: 'outro momento' };
+  if (Math.abs(start - it.start) < 1 && Math.abs(end - it.end) < 1) return {};
+  return { bounds: { start, end } };
+}
+
+const ALGO_VERSION = 4; // versão do método de IA (prompt + conferência); mude quando mudarem (2: sem dicas de volume no pedido; 3: guia de cortes na mensagem de sistema; 4: a conferência acerta início e fim)
 const MAX_CANDIDATES_PER_BLOCK = 8;
 // QUANTIDADE AUTOMÁTICA (params.autoQuantity): a IA pode devolver mais candidatos por bloco e a escolha final olha mais deles. Numa gameplay
 // de 4h18 a seleção feita à mão tem ~9 momentos a cada 35 min (5 fortes ou bons), e os blocos mais ricos passam de 8. O guia de cortes
@@ -32,6 +69,17 @@ const MAX_FAILED_WINDOWS = 2;
 const MAX_PICK_CANDIDATES = 40;
 const MAX_DROPPED_LISTED = 40;
 const MAX_UNPICKED_LISTED = 40; // candidatos que a escolha final deixou de fora e ficam listados no resultado
+// conferência das sugestões do algoritmo (modo Algoritmo + IA)
+const MAX_REVIEW = 240;              // quantas sugestões do algoritmo vão para a conferência, no máximo
+const REVIEW_PER_CALL = 35;          // por chamada (cada veredito, com início e fim, custa ~80 tokens de saída; 63 trechos de uma live de 4 h cabem em 2)
+// fala mostrada antes e depois do corte: o detector pega a reação e perde a premissa. Na gameplay medida (16/11/2026), dos cortes do
+// algoritmo que tocavam um momento bom, 4 de 27 começavam de 9 a 62 s depois dele e 13 de 27 terminavam mais de 5 s antes do fim dele.
+const REVIEW_BEFORE_SEC = 40;
+const REVIEW_AFTER_SEC = 15;
+const REVIEW_EDGE_TOLERANCE_SEC = 2; // o horário devolvido pode passar esse tanto da fala mostrada
+const REVIEW_CHAT_AFTER_SEC = 30;    // o chat reage com atraso
+const REVIEW_MAX_CHAT_LINES = 10;    // por trecho
+const OUTPUT_MAX_TOKENS_REVIEW = 6000;
 // Modelos que "pensam" (ex.: Gemini 2.5) gastam parte do limite de saída raciocinando: o teto é folgado (só se paga o que é gerado)
 // e, se a resposta vier cortada sem JSON, a tentativa seguinte pede mais espaço (até MAX_OUTPUT_TOKENS). Medido em rede real
 // (23/10/2026, Nemotron 3 Ultra gratuito): 3 de 5 blocos gastaram de 3 a 3,4 mil dos 6000 tokens só raciocinando e um bloco e a escolha final
@@ -366,6 +414,88 @@ async function analyzeWithAi(request, deps) {
     if (c.keywords && c.keywords.length) out.keywords = c.keywords;
     return out;
   });
+  // ---- conferência das sugestões do algoritmo: só as que a IA não sugeriu por conta própria ----
+  const reviewList = (Array.isArray(request.review) ? request.review : [])
+    .filter((c) => c && c.id != null && Number.isFinite(c.start) && Number.isFinite(c.end) && c.end > c.start)
+    .map((c) => ({ id: String(c.id), start: Number(c.start), end: Number(c.end) }))
+    .filter((c) => !suggestions.some((s) => sameMoment(s, c)))
+    .slice(0, MAX_REVIEW);
+  const review = { sent: reviewList.length, kept: 0, dropped: 0, unanswered: 0, adjusted: 0, boundsRefused: 0, calls: 0, verdicts: [] };
+  if (reviewList.length) {
+    const items = reviewList.map((c, k) => {
+      const from = Math.max(0, c.start - REVIEW_BEFORE_SEC);
+      const to = Math.min(duration, c.end + REVIEW_AFTER_SEC);
+      const cues = cuesInRange(transcript.cues, from, to);
+      return {
+        rid: `a${k + 1}`, id: c.id, start: c.start, end: c.end, from, to, cues,
+        before: cues.filter((q) => q.start < c.start - 0.5).map(cueLine),
+        lines: cues.filter((q) => q.start >= c.start - 0.5 && q.start < c.end).map(cueLine),
+        after: cues.filter((q) => q.start >= c.end).map(cueLine),
+        chatLines: chatLinesFor(request.chat, c.start, c.end + REVIEW_CHAT_AFTER_SEC).slice(0, REVIEW_MAX_CHAT_LINES)
+      };
+    });
+    // lotes: cabem no teto de tokens de entrada de uma chamada e têm no máximo REVIEW_PER_CALL trechos
+    const room = Math.max(2000, limits.maxInputTokens - estimateTokens(system) - estimateTokens(pickProfile) - 400);
+    const batches = [];
+    let cur = [];
+    let used = 0;
+    for (const it of items) {
+      const cost = estimateTokens([...it.before, ...it.lines, ...it.after].join('\n')) + estimateTokens(it.chatLines.join('\n')) + 40;
+      if (cur.length && (used + cost > room || cur.length >= REVIEW_PER_CALL)) { batches.push(cur); cur = []; used = 0; }
+      cur.push(it); used += cost;
+    }
+    if (cur.length) batches.push(cur);
+    const answered = new Map(); // rid -> veredito
+    const askReview = (batch, maxTokens, k) => callWithRetry({
+      chat: deps.chat, system,
+      userContent: buildReviewMessage({ items: batch, meta: request.meta, duration, prefs, profile: pickProfile }),
+      maxTokens, parse: (text) => parseReviews(text), signal, sleepFn, attempts: limits.attempts, retry: deps.retry, stats,
+      onRetry: ({ attempt, waitMs }) => report(0.9, 'ai3', `Nova tentativa da conferência em ${Math.max(1, Math.round(waitMs / 1000))} s (${attempt + 1} de ${limits.attempts})…`, k / batches.length)
+    });
+    let failed = false;
+    let capped = false; // o limite de chamadas da análise acabou antes de a conferência terminar
+    for (let k = 0; k < batches.length && !failed; k += 1) {
+      check();
+      if (stats.calls >= limits.maxCalls) { capped = true; break; } // sem chamadas sobrando: o resto fica sem resposta (e na lista)
+      report(0.9 + 0.09 * (k / batches.length), 'ai3', `Conferindo ${reviewList.length} sugestões do algoritmo (${k + 1} de ${batches.length})…`, k / batches.length);
+      let pending = batches[k];
+      // se a resposta vier cortada, pede UMA vez só os que faltaram, com mais espaço
+      for (let round = 0; round < 2 && pending.length; round += 1) {
+        if (stats.calls >= limits.maxCalls) { capped = true; break; }
+        try {
+          const out = await askReview(pending, round === 0 ? OUTPUT_MAX_TOKENS_REVIEW : growOutput(OUTPUT_MAX_TOKENS_REVIEW), k);
+          review.calls += 1;
+          const known = new Set(pending.map((it) => it.rid));
+          for (const v of out.parsed.reviews) if (known.has(v.id) && !answered.has(v.id)) answered.set(v.id, v);
+          const truncated = out.res && out.res.finishReason === 'length';
+          pending = pending.filter((it) => !answered.has(it.rid));
+          if (!truncated) break;
+        } catch (err) {
+          if (err && err.code === 'CANCELLED') throw err;
+          failed = true; // a análise já tem resultado: a conferência que falha só deixa de tirar sugestões
+          warnings.push({ code: 'AI_REVIEW_FAILED', message: `A conferência das sugestões do algoritmo pela IA falhou (${failureMessage(err)}). As que ficaram sem resposta continuam na lista.` });
+          break;
+        }
+      }
+    }
+    for (const it of items) {
+      const v = answered.get(it.rid);
+      if (!v) { review.unanswered += 1; continue; }
+      if (v.keep) review.kept += 1; else review.dropped += 1;
+      const verdict = { id: it.id, keep: v.keep, relevance: v.relevance, title: v.title, category: v.category, reasons: v.reasons };
+      if (v.keep) {
+        const b = reviewBounds(v, it, { duration, prefs });
+        if (b.bounds) { verdict.start = b.bounds.start; verdict.end = b.bounds.end; review.adjusted += 1; } else if (b.refused) review.boundsRefused += 1;
+      }
+      review.verdicts.push(verdict);
+    }
+    if (review.unanswered && !failed) {
+      warnings.push({ code: 'AI_REVIEW_PARTIAL', message: capped
+        ? `A conferência das sugestões do algoritmo não coube no limite de ${limits.maxCalls} chamadas desta análise: ${review.unanswered} das ${review.sent} ficaram sem resposta e continuam na lista. Para conferir todas, aumente o limite de chamadas nas configurações da IA.`
+        : `A IA não respondeu sobre ${review.unanswered} das ${review.sent} sugestões do algoritmo enviadas para conferência; elas continuam na lista.` });
+    }
+  }
+
   const droppedTotal = Object.values(dropCount).reduce((n, v) => n + v, 0);
   if (!suggestions.length) warnings.push({ code: 'AI_NO_RESULT', message: droppedTotal ? 'A IA não sugeriu nenhum momento que passasse na conferência local (veja os descartes abaixo).' : 'A IA não encontrou momentos que valessem um corte.' });
 
@@ -386,6 +516,8 @@ async function analyzeWithAi(request, deps) {
     limit,
     warnings,
     suggestions,
+    // veredito da IA sobre as sugestões do algoritmo (modo Algoritmo + IA); a junção (merge.js) é quem tira as recusadas
+    ...(review.sent ? { review } : {}),
     ai: {
       provider: deps.provider ? deps.provider.label : '', model: deps.provider ? deps.provider.model : '',
       blocks: windows.length, failedBlocks: failedWindows.length, ...(stats.recoveredBlocks ? { recoveredBlocks: stats.recoveredBlocks } : {}), pickUsed, calls: stats.calls, retries: stats.retries,
@@ -399,6 +531,7 @@ async function analyzeWithAi(request, deps) {
       },
       unpicked: unpicked.slice(0, MAX_UNPICKED_LISTED).map((c) => ({ start: c.start, end: c.end, title: c.title || '', relevance: c.relevance })),
       models: stats.models, // { <modelo que respondeu>: <chamadas> } (campo `model` da resposta; vazio se o provedor não informou)
+      ...(review.sent ? { review: { sent: review.sent, kept: review.kept, dropped: review.dropped, unanswered: review.unanswered, adjusted: review.adjusted, calls: review.calls } } : {}),
       skill: { custom: Boolean(skillBody) }, // o guia de cortes usado: o do usuário ou o padrão do app (o texto não é guardado no resultado)
       // perfil de humor do canal que foi enviado (só contagens; o texto do perfil e dos exemplos não é guardado no resultado)
       profile: useProfile

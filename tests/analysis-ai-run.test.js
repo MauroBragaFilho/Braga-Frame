@@ -586,3 +586,121 @@ test('caminho dos candidatos: o resultado diz quantos o modelo devolveu por bloc
   assert.deepEqual(counts(b.done.ai.funnel), { returned: 4, verified: 3, unique: 3, offered: 3, picked: null, final: 3 });
   assert.deepEqual(b.done.ai.unpicked, []);
 });
+
+test('conferência das sugestões do algoritmo: a IA julga só as que ela não sugeriu; o que fica sem resposta continua na lista, com aviso', async (t) => {
+  const s = setup(t, { moments: [{ at: 600, punch: 'o bicho nem dropou couro' }, { at: 2500, punch: 'obrigado jogo eu morri afogado' }] });
+  const [m1, m2] = s.tr.moments;
+  let reviewMsg = '';
+  const mock = await F.startMockAi((call) => {
+    const text = userText(call.body);
+    if (text.includes('=== TRECHOS')) {
+      reviewMsg = text;
+      const ids = [...text.matchAll(/id=(a\d+)/g)].map((x) => x[1]);
+      return { json: F.chatBody(JSON.stringify({ reviews: [
+        { id: ids[0], keep: true, relevance: 0.75, title: 'Aprovado pela IA', category: 'Humor', reasons: ['história com desfecho'] },
+        { id: ids[1], keep: false, relevance: 0.2, reasons: ['conversa sem desfecho'] }
+        // ids[2] fica sem resposta
+      ] })) };
+    }
+    if (isPick(call.body)) return { json: F.chatBody('{"picks":[]}') };
+    return { json: F.chatBody(F.cutsJson(blockIndex(call.body) === 0 ? [{ start: m1.start + 2, end: m1.end - 1, punchline: m1.punch }] : [])) };
+  });
+  t.after(() => mock.close());
+  const review = [
+    { id: 'x1', start: m1.start, end: m1.end },   // a IA também sugeriu: não vai para a conferência
+    { id: 'x2', start: m2.start, end: m2.end },
+    { id: 'x3', start: 1000, end: 1030 },
+    { id: 'x4', start: 1500, end: 1530 },
+    { id: 'ruim', start: 50, end: 40 }            // intervalo inválido: ignorado
+  ];
+  const { done, failed } = await run(s.make(mock).manager, { review }, s.tr);
+  assert.equal(failed, undefined, failed && failed.message);
+  assert.equal(done.suggestions.length, 1, 'as sugestões da própria IA não mudam');
+  assert.deepEqual([done.review.sent, done.review.kept, done.review.dropped, done.review.unanswered], [3, 1, 1, 1]);
+  assert.deepEqual(done.review.verdicts.map((v) => [v.id, v.keep]), [['x2', true], ['x3', false]]);
+  assert.equal(done.review.verdicts[0].title, 'Aprovado pela IA');
+  assert.deepEqual(done.review.verdicts[1].reasons, ['conversa sem desfecho']);
+  assert.deepEqual(done.ai.review, { sent: 3, kept: 1, dropped: 1, unanswered: 1, adjusted: 0, calls: 1 });
+  assert.ok(done.warnings.some((w) => w.code === 'AI_REVIEW_PARTIAL' && /1 das 3/.test(w.message)));
+  // o pedido leva a fala do trecho e ids curtos próprios; os ids do algoritmo não saem
+  assert.ok(reviewMsg.includes(m2.punch), 'a fala do trecho vai no pedido');
+  assert.ok(!/x2|x3|x4/.test(reviewMsg));
+  assert.equal(mock.calls.filter((c) => userText(c.body).includes('=== TRECHOS')).length, 1, 'uma chamada de conferência (a resposta não veio cortada)');
+});
+
+test('conferência que falha ou não cabe no limite de chamadas: a análise termina igual e nenhuma sugestão é tirada', async (t) => {
+  const moments = [{ at: 600, punch: 'o bicho nem dropou couro' }];
+  const review = [{ id: 'x2', start: 1000, end: 1030 }, { id: 'x3', start: 1500, end: 1530 }];
+  // 1) o provedor falha na conferência
+  const s = setup(t, { minutes: 30, moments });
+  const mock = await F.startMockAi((call) => {
+    if (userText(call.body).includes('=== TRECHOS')) return { status: 500, json: { error: { message: 'erro interno' } } };
+    return { json: F.chatBody(F.cutsJson([{ start: s.tr.moments[0].start + 2, end: s.tr.moments[0].end - 1, punchline: s.tr.moments[0].punch }])) };
+  });
+  t.after(() => mock.close());
+  const a = await run(s.make(mock).manager, { review }, s.tr);
+  assert.equal(a.failed, undefined, a.failed && a.failed.message);
+  assert.equal(a.done.suggestions.length, 1);
+  assert.deepEqual([a.done.review.sent, a.done.review.kept, a.done.review.dropped, a.done.review.unanswered], [2, 0, 0, 2]);
+  assert.deepEqual(a.done.review.verdicts, []);
+  assert.ok(a.done.warnings.some((w) => w.code === 'AI_REVIEW_FAILED'));
+  // 2) sem chamadas sobrando: limite de 2, e o bloco gasta as duas (a primeira tentativa falha)
+  const s2 = setup(t, { minutes: 30, moments, limits: { maxCalls: 2 } });
+  let reviewCalls = 0;
+  let blockCalls = 0;
+  const mock2 = await F.startMockAi((call) => {
+    if (userText(call.body).includes('=== TRECHOS')) { reviewCalls += 1; return { json: F.chatBody('{"reviews":[]}') }; }
+    blockCalls += 1;
+    if (blockCalls === 1) return { status: 500, json: { error: { message: 'erro interno' } } };
+    return { json: F.chatBody(F.cutsJson([{ start: s2.tr.moments[0].start + 2, end: s2.tr.moments[0].end - 1, punchline: s2.tr.moments[0].punch }])) };
+  });
+  t.after(() => mock2.close());
+  const b = await run(s2.make(mock2).manager, { review }, s2.tr);
+  assert.equal(b.failed, undefined, b.failed && b.failed.message);
+  assert.equal(reviewCalls, 0, 'o limite de chamadas da análise vale também para a conferência');
+  assert.deepEqual([b.done.review.sent, b.done.review.dropped, b.done.review.unanswered], [2, 0, 2], 'sem resposta, nada sai da lista');
+  assert.ok(b.done.warnings.some((w) => w.code === 'AI_REVIEW_PARTIAL' && /limite de 2 chamadas/.test(w.message) && /aumente o limite/i.test(w.message)));
+});
+
+test('conferência com bordas: a IA dá início e fim; o app leva às falas e só aceita dentro do trecho mostrado, da duração e do mesmo momento', async (t) => {
+  const s = setup(t, { moments: [{ at: 600, punch: 'o bicho nem dropou couro' }, { at: 2500, punch: 'obrigado jogo eu morri afogado' }] });
+  const [m1, m2] = s.tr.moments;
+  const T = m2.start; // falas: premissa em T, T+5, desfecho em T+10, risada até T+18; depois uma fala a cada 5 s (T+20, T+25…)
+  const clk = (x) => `${Math.floor(x / 60)}:${String(Math.round(x % 60)).padStart(2, '0')}`;
+  let reviewMsg = '';
+  const mock = await F.startMockAi((call) => {
+    const text = userText(call.body);
+    if (text.includes('=== TRECHOS')) {
+      reviewMsg = text;
+      const ids = [...text.matchAll(/id=(a\d+)/g)].map((x) => x[1]);
+      return { json: F.chatBody(JSON.stringify({ reviews: [
+        { id: ids[0], keep: true, start: clk(T + 1), end: clk(T + 33), title: 'Com a premissa', reasons: ['história com começo e fim'] },
+        { id: ids[1], keep: true, start: '15:00', end: '17:10', reasons: ['bom'] },    // antes do que ela viu: recusado
+        { id: ids[2], keep: true, start: clk(1500), end: clk(1530), reasons: ['bom'] }, // igual ao sugerido: nada muda
+        { id: ids[3], keep: true, start: clk(1960), end: clk(2045), reasons: ['bom'] }, // 85 s: passa da duração máxima
+        { id: ids[4], keep: true, start: clk(2970), end: clk(2995), reasons: ['bom'] }, // outro momento (nem encosta no sugerido)
+        { id: ids[5], keep: false, start: clk(3460), end: clk(3500), reasons: ['não vale'] } // recusado: as bordas não importam
+      ] })) };
+    }
+    if (isPick(call.body)) return { json: F.chatBody('{"picks":[]}') };
+    return { json: F.chatBody(F.cutsJson(blockIndex(call.body) === 0 ? [{ start: m1.start + 2, end: m1.end - 1, punchline: m1.punch }] : [])) };
+  });
+  t.after(() => mock.close());
+  const review = [
+    { id: 'x2', start: T + 10, end: T + 40 }, // começa no desfecho: a premissa ficou de fora
+    { id: 'x3', start: 1000, end: 1030 }, { id: 'x4', start: 1500, end: 1530 }, { id: 'x5', start: 2000, end: 2030 },
+    { id: 'x6', start: 3000, end: 3030 }, { id: 'x7', start: 3500, end: 3530 }
+  ];
+  const { done, failed } = await run(s.make(mock).manager, { review }, s.tr);
+  assert.equal(failed, undefined, failed && failed.message);
+  const v = Object.fromEntries(done.review.verdicts.map((x) => [x.id, x]));
+  assert.deepEqual([v.x2.start, v.x2.end], [T, T + 34], 'início no começo da fala da premissa; fim no fim da fala');
+  for (const id of ['x3', 'x4', 'x5', 'x6', 'x7']) assert.equal(v[id].start, undefined, `${id}: sem bordas novas`);
+  assert.deepEqual([done.review.adjusted, done.review.boundsRefused], [1, 3]);
+  assert.equal(done.ai.review.adjusted, 1);
+  // o pedido leva a fala de antes do corte (a premissa) e a de depois, separadas
+  assert.ok(reviewMsg.includes('antes do corte:') && reviewMsg.includes('depois do corte:'));
+  const block = reviewMsg.slice(reviewMsg.indexOf('id=a1 |'), reviewMsg.indexOf('id=a2 |'));
+  assert.ok(block.indexOf('eu preciso muito de couro agora') < block.indexOf('no corte:'), 'a premissa aparece antes do corte');
+  assert.ok(block.indexOf(m2.punch) > block.indexOf('no corte:'));
+});

@@ -10,6 +10,7 @@ const assert = require('node:assert/strict');
 const parse = require('../src/core/analysis/ai/parse');
 const { verifyCandidate, dedupe, findPunchline, coveredBy } = require('../src/core/analysis/ai/verify');
 const { buildWindows, estimate, describeEstimate, OVERLAP_SEC } = require('../src/core/analysis/ai/chunking');
+const { buildReviewMessage } = require('../src/core/analysis/ai/prompt');
 const { callWithRetry, failureMessage } = require('../src/core/analysis/ai/analyze');
 const { buildBlockMessage, SYSTEM_PROMPT } = require('../src/core/analysis/ai/prompt');
 const { AiError, classify } = require('../src/core/ai/errors');
@@ -337,4 +338,63 @@ test('verifyCandidate: corte que passa do máximo por pouco adianta o começo e 
   const far = run({ start: 480, end: 560, punchline: 'que situação engraçada essa' });
   assert.equal(far.ok, false);
   assert.equal(far.reason, 'duration');
+});
+
+test('parseReviews: lê o veredito de cada trecho, aceita "sim"/"não", ignora item sem id ou sem veredito e aproveita resposta cortada', () => {
+  const r = parse.parseReviews(JSON.stringify({ reviews: [
+    { id: 'a1', keep: true, relevance: 0.8, title: 'Título', category: 'hype', reasons: ['história com desfecho'] },
+    { id: 'a2', keep: 'não', relevance: '20%', reasons: 'conversa técnica' },
+    { id: 'a3', keep: 'sim' },
+    { id: 'a4' },                 // sem veredito
+    { keep: true },               // sem id
+    { id: 'a5', keep: 'talvez' }  // veredito ilegível
+  ] }));
+  assert.deepEqual(r.reviews.map((x) => [x.id, x.keep]), [['a1', true], ['a2', false], ['a3', true]]);
+  assert.equal(r.reviews[0].category, 'Hype');
+  assert.equal(r.reviews[1].relevance, 0.2);
+  assert.deepEqual(r.reviews[1].reasons, ['conversa técnica']);
+  assert.equal(r.salvaged, false);
+  const cut = parse.parseReviews('{ "reviews": [ {"id":"a1","keep":false,"reasons":["sem desfecho"]}, {"id":"a2","keep":true,"tit');
+  assert.deepEqual(cut.reviews.map((x) => [x.id, x.keep]), [['a1', false]]);
+  assert.equal(cut.salvaged, true);
+  assert.throws(() => parse.parseReviews('{"outra":1}'), (e) => e.code === 'BAD_JSON');
+});
+
+test('parseReviews: lê o início e o fim que a IA deu (m:ss ou segundos); sem horário ou horário ilegível fica null', () => {
+  const r = parse.parseReviews(JSON.stringify({ reviews: [
+    { id: 'a1', keep: true, start: '1:32', end: '2:14' },
+    { id: 'a2', keep: true, start: 95.5, end: '' },
+    { id: 'a3', keep: true, start: 'logo antes', end: '9:99' },
+    { id: 'a4', keep: false }
+  ] }));
+  assert.deepEqual(r.reviews.map((x) => [x.id, x.start, x.end]), [['a1', 92, 134], ['a2', 95.5, null], ['a3', null, null], ['a4', null, null]]);
+});
+
+test('pedido da conferência: leva o horário, a fala e o chat de cada trecho, e NENHUMA pista do algoritmo (nem motivo, nem nota, nem volume)', () => {
+  const msg = buildReviewMessage({
+    items: [
+      { rid: 'a1', id: '1000_1300', start: 100, end: 130, lines: ['1:38 olha o que eu achei aqui', '1:45 não acredito nisso'], chatLines: ['1:50 fulano: kkkkk'], reasons: ['volume acima do normal de fala (+12 dB)'], relevance: 0.97 },
+      { rid: 'a2', id: '5000_5300', start: 500, end: 530, lines: [], chatLines: [] }
+    ],
+    meta: { title: 'Live de teste' }, duration: 3600, prefs: { profile: 'gameplay', minDurationSec: 15, maxDurationSec: 60 }
+  });
+  assert.match(msg, /id=a1 \| corte sugerido de 1:40 a 2:10 \(30 s\)/);
+  assert.ok(msg.includes('olha o que eu achei aqui') && msg.includes('fulano: kkkkk'));
+  assert.ok(msg.includes('(sem fala na transcrição neste trecho)'), 'trecho sem fala é dito como tal');
+  assert.ok(msg.includes('"reviews"') && msg.includes('"keep"') && msg.includes('"start": "m:ss"'));
+  assert.ok(!/volume|dB|0[.,]97|1000_1300|5000_5300/.test(msg), 'nem o motivo, nem a nota, nem o id interno do algoritmo saem');
+});
+
+test('pedido da conferência com bordas: separa a fala de antes, a do corte e a de depois, e pede início e fim dentro da duração', () => {
+  const msg = buildReviewMessage({
+    items: [{ rid: 'a1', id: '1000_1300', start: 100, end: 130, before: ['1:05 sabe o que aconteceu ontem'], lines: ['1:40 e aí ele caiu'], after: ['2:12 *Risos*'], chatLines: [] }],
+    meta: { title: 'Live de teste' }, duration: 3600, prefs: { profile: 'gameplay', minDurationSec: 15, maxDurationSec: 60 }
+  });
+  const at = (s) => msg.indexOf(s);
+  assert.ok(at('antes do corte:') > 0 && at('antes do corte:') < at('1:05 sabe o que aconteceu ontem'));
+  assert.ok(at('1:05 sabe o que aconteceu ontem') < at('no corte:') && at('no corte:') < at('1:40 e aí ele caiu'));
+  assert.ok(at('1:40 e aí ele caiu') < at('depois do corte:') && at('depois do corte:') < at('2:12 *Risos*'));
+  assert.match(msg, /com 15 a 60 segundos/);
+  assert.match(msg, /perder a premissa/);
+  assert.doesNotMatch(msg, /Os horários não mudam/);
 });

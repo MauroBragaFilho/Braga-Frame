@@ -375,6 +375,8 @@ Medido na gameplay de CoD (4h18; gabarito de 51 momentos, 6 fortes e 28 fortes o
 - Fora do gabarito (automática): 29 das 66 sugestões, 27 só do algoritmo e 2 só da IA. Conferidas pela transcrição e, nas 12 reações de jogo, por quadros do vídeo (sem ouvir o áudio): **4 são momentos reais que o gabarito não tinha** (os 2 da IA, conversas; e 2 do algoritmo, mortes com reação que quase não têm fala), 4 são lances simples e 21 são fracas (risadas soltas, conversa técnica ou de menu, saque e captura de contrato). Contando os 4, 41 das 66 sugestões são boas (62%). O gabarito não foi alterado.
 - Ressalvas: uma live só e um modelo de IA só (um modelo mais fraco acharia menos e pior); o gabarito foi feito por quem leu a transcrição (favorece o que tem fala); leva o tempo dos dois motores.
 
+**A IA confere o que só o algoritmo achou** (16/11/2026, ligado por padrão): depois das passadas dela, a IA lê a fala de cada sugestão que só o algoritmo trouxe e diz se vale um corte; a junção tira as recusadas e as guarda, com o motivo, numa seção recolhida. Ela também acerta o início e o fim de cada uma que fica (lê até 40 s antes e 15 s depois). Falha ou falta de resposta nunca tira sugestão. Detalhes e limites em `analise-ia.md`, 17.10 e 17.11.
+
 ## Só os melhores (16/11/2026)
 
 Pedido do dono: o motor recomendar só quando o corte for bom ou forte. A aba ganhou o interruptor **"Só os melhores"** (`#anBestOnly`), acima de "Quantidade automática". Os dois são opostos: ligar um desliga o outro.

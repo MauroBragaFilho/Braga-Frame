@@ -172,7 +172,45 @@ function buildPickMessage({ candidates, meta, duration, limit, prefs, profile = 
   ].join('\n');
 }
 
+const REVIEW_SCHEMA = '{ "reviews": [ { "id": "a1", "keep": true ou false, "start": "m:ss", "end": "m:ss", "relevance": 0.0 a 1.0, "title": "...", "category": "...", "reasons": ["..."] } ] }';
+
+/**
+ * Mensagem da CONFERÊNCIA (modo Algoritmo + IA): os trechos que o algoritmo marcou e que a IA não tinha sugerido.
+ * Cada item leva só o horário, a fala de ANTES do corte (a premissa que o detector costuma perder), a DO corte e a de DEPOIS (o desfecho e
+ * a reação que ele costuma cortar) e o chat do período; a IA diz se fica e onde o corte deve começar e terminar. NENHUMA pista do algoritmo
+ * vai junto: nem os motivos, nem a nota, nem o volume (decisão do dono: dica de volume não sai do computador; e a IA julga o que foi
+ * dito, não o palpite do algoritmo). `items` = [{ rid, start, end, before, lines, after, chatLines }] (`lines` = a fala do corte);
+ * `profile` = texto de profileSummary (opcional).
+ */
+function buildReviewMessage({ items, meta, duration, prefs, profile = '' }) {
+  const blocks = items.map((it) => [
+    `--- id=${it.rid} | corte sugerido de ${clock(it.start)} a ${clock(it.end)} (${Math.round(it.end - it.start)} s)`,
+    ...(it.before && it.before.length ? ['antes do corte:', it.before.join('\n')] : []),
+    'no corte:',
+    it.lines && it.lines.length ? it.lines.join('\n') : '(sem fala na transcrição neste trecho)',
+    ...(it.after && it.after.length ? ['depois do corte:', it.after.join('\n')] : []),
+    ...(it.chatLines && it.chatLines.length ? ['chat do período:', it.chatLines.join('\n')] : [])
+  ].join('\n'));
+  const minSec = Math.round((prefs && prefs.minDurationSec) || 15);
+  const maxSec = Math.round((prefs && prefs.maxDurationSec) || 60);
+  return [
+    metaLine(meta, duration, prefs && prefs.profile),
+    `Abaixo estão ${items.length} trechos que um detector automático marcou como possíveis cortes. Ele não entende o que foi dito: vários não valem nada.`,
+    'E ele erra as bordas: costuma começar na reação e perder a premissa, ou terminar antes do desfecho. Cada trecho mostra a fala ANTES do corte sugerido, a fala NO corte e a fala DEPOIS dele.',
+    `Para CADA trecho: 1) dê o "start" e o "end" (m:ss) que o corte DEVE ter: comece na primeira fala necessária para entender o momento (a pergunta, a situação, o começo da história) e termine depois do desfecho e da reação. Use só horários das falas mostradas, com ${minSec} a ${maxSec} segundos. Se o corte sugerido já está certo, repita os horários dele.`,
+    '2) "keep": true só se, com esses horários, o trecho tem premissa e desfecho (ou é um lance com reação forte) e se entende sozinho. Na dúvida, false.',
+    'Dê a "relevance" pela escala do guia, um "title" curto para os que ficam e, em "reasons", uma frase dizendo por que fica ou por que sai. Responda sobre TODOS os ids.',
+    ...(profile ? ['', profile] : []),
+    '',
+    'Formato da resposta (somente JSON):',
+    REVIEW_SCHEMA,
+    '',
+    '=== TRECHOS (m:ss texto) ===',
+    blocks.join('\n\n')
+  ].join('\n');
+}
+
 /** Lembrete anexado ao pedido quando a resposta anterior não era JSON válido. */
 const JSON_NUDGE = 'Sua resposta anterior não era um JSON válido no formato pedido. Responda de novo SOMENTE com o JSON, sem texto antes nem depois e sem cercas de código.';
 
-module.exports = { clock, estimateTokens, SYSTEM_PROMPT, systemPrompt, CUT_SCHEMA, buildBlockMessage, buildPickMessage, profileBlock, profileSummary, JSON_NUDGE, metaLine };
+module.exports = { clock, estimateTokens, SYSTEM_PROMPT, systemPrompt, CUT_SCHEMA, REVIEW_SCHEMA, buildBlockMessage, buildPickMessage, buildReviewMessage, profileBlock, profileSummary, JSON_NUDGE, metaLine };

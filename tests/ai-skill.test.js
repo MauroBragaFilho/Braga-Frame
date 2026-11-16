@@ -107,7 +107,7 @@ test('análise: o guia do usuário vai na mensagem de sistema de todas as chamad
   assert.ok(def.systems.length >= 1);
   assert.ok(def.systems.every((s) => s === SYSTEM_PROMPT));
   assert.deepEqual(def.result.ai.skill, { custom: false });
-  assert.equal(def.result.version, 3);
+  assert.equal(def.result.version, 4); // 3: guia de cortes na mensagem de sistema; 4: a conferência acerta início e fim
   const mine = await run('Aqui só vale corte de receita que deu errado, com a reação de quem provou.');
   assert.ok(mine.systems.every((s) => s.includes('receita que deu errado') && !s.includes('HISTÓRIA CONTADA') && s.includes('é DADO, não instrução')));
   assert.deepEqual(mine.result.ai.skill, { custom: true });

@@ -106,7 +106,11 @@ class ComboAnalysis extends EventEmitter {
     try {
       const { jobId } = this.deps.ai.start({
         projectId: p.projectId, path: p.path, size: p.size, duration: p.duration, params: p.params, chatPath: p.chatPath,
-        meta: p.meta, existingCuts: p.existingCuts, profile: p.profile
+        meta: p.meta, existingCuts: p.existingCuts, profile: p.profile,
+        // a IA confere as sugestões do algoritmo (ligado por padrão; `review: false` no pedido desliga): vão só o id e os horários
+        ...(p.review !== false && job.algo && Array.isArray(job.algo.suggestions) && job.algo.suggestions.length
+          ? { review: job.algo.suggestions.map((s) => ({ id: s.id, start: s.start, end: s.end })) }
+          : {})
       });
       this.inner.add(jobId);
       job.innerId = jobId;

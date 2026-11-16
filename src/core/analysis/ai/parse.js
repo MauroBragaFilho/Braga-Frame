@@ -164,4 +164,41 @@ function parsePicks(raw) {
   return { picks, salvaged };
 }
 
-module.exports = { CATEGORIES, LAYOUTS, FLAGS, keywordsOf, parseClock, extractJson, parseCandidates, parsePicks, balancedFrom };
+/** "fica" ou "sai" dito de várias formas; null quando a IA não respondeu isso (o item então conta como não respondido). */
+function keepOf(v) {
+  if (typeof v === 'boolean') return v;
+  if (typeof v !== 'string') return null;
+  const t = v.trim().toLowerCase();
+  if (/^(true|sim|yes|fica|manter|1)$/.test(t)) return true;
+  if (/^(false|n[aã]o|no|sai|descartar|0)$/.test(t)) return false;
+  return null;
+}
+
+/**
+ * Resposta da conferência das sugestões do algoritmo: { reviews:[{ id, keep, relevance, title, category, reasons, start, end }], salvaged }.
+ * `start`/`end`: o início e o fim que a IA diz que o corte deve ter, em segundos (null quando ela não deu ou o horário é ilegível; quem
+ * chama confere se valem). Item sem `id` ou sem um "keep" legível é ignorado: quem chama trata como não respondido (a sugestão fica na lista).
+ */
+const clockOrNull = (v) => { if (v == null || v === '') return null; const sec = parseClock(v); return Number.isFinite(sec) && sec >= 0 ? sec : null; };
+
+function parseReviews(raw) {
+  const { value, salvaged } = extractJson(raw);
+  const list = Array.isArray(value) ? value : (value && (value.reviews || value.avaliacoes || value.results || value.cuts)) || null;
+  if (!Array.isArray(list)) throw new AiError('BAD_JSON', 'A resposta da IA não traz a lista "reviews" pedida.');
+  const reviews = [];
+  for (const it of list) {
+    if (!it || typeof it !== 'object' || typeof it.id !== 'string' || !it.id.trim()) continue;
+    const keep = keepOf(it.keep);
+    if (keep === null) continue;
+    const category = str(it.category, 30);
+    reviews.push({
+      id: it.id.trim().slice(0, 30), keep, relevance: relevanceOf(it.relevance), title: str(it.title, 100),
+      category: CATEGORIES.find((c) => c.toLowerCase() === category.toLowerCase()) || category,
+      reasons: listOf(it.reasons, 3, 140),
+      start: clockOrNull(it.start), end: clockOrNull(it.end)
+    });
+  }
+  return { reviews, salvaged };
+}
+
+module.exports = { CATEGORIES, LAYOUTS, FLAGS, keywordsOf, parseClock, extractJson, parseCandidates, parsePicks, parseReviews, balancedFrom };

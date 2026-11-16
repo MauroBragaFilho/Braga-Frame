@@ -237,6 +237,7 @@
       autoQuantity: d && typeof d.autoQuantity === 'boolean' ? d.autoQuantity : false,
       bestOnly: false,
       filterWeak: d && typeof d.filterWeak === 'boolean' ? d.filterWeak : true,
+      aiReview: true, // modo Algoritmo + IA: a IA confere as sugestões que só o algoritmo achou
       textWeights: d && d.textWeights ? { ...d.textWeights } : { laugh: 1, exclaim: 1, pace: 1, repeat: 1, meta: 1, humor: 1, structure: 1 },
       chat: {
         keywords: Array.isArray(fromPrefs) ? fromPrefs.map(String) : (d ? [...d.chat.keywords] : []),
@@ -262,6 +263,7 @@
       autoQuantity: saved.bestOnly === true ? false : (typeof saved.autoQuantity === 'boolean' ? saved.autoQuantity : base.autoQuantity),
       bestOnly: saved.bestOnly === true,
       filterWeak: typeof saved.filterWeak === 'boolean' ? saved.filterWeak : base.filterWeak,
+      aiReview: typeof saved.aiReview === 'boolean' ? saved.aiReview : base.aiReview,
       textWeights: { ...base.textWeights, ...(saved.textWeights || {}) },
       chat: { ...base.chat, ...(saved.chat || {}), keywords: Array.isArray(saved.chat && saved.chat.keywords) ? saved.chat.keywords : base.chat.keywords },
       image: { ...base.image, ...(saved.image || {}) },
@@ -551,7 +553,7 @@
       if (useEngine === 'both') {
         // Algoritmo + IA: o pedido do algoritmo mais o que a IA precisa (metadados, cortes que já existem, perfil do canal)
         const extra = aiPayload(project, chosen);
-        payload = { ...payload, engine: 'both', meta: extra.meta, existingCuts: extra.existingCuts, ...(extra.profile ? { profile: extra.profile } : {}) };
+        payload = { ...payload, engine: 'both', meta: extra.meta, existingCuts: extra.existingCuts, ...(extra.profile ? { profile: extra.profile } : {}), review: chosen.aiReview !== false };
       }
     }
     const res = await BF.api('analysis:start', payload);
@@ -607,6 +609,16 @@
     };
   }
 
+  /** Conferência da IA sobre as sugestões do algoritmo: contagens e a lista do que ela tirou (horário, nota do algoritmo e o motivo dela). */
+  function compactReview(r) {
+    const n = (v) => (Number.isFinite(v) ? v : 0);
+    const list = Array.isArray(r.droppedList) ? r.droppedList : [];
+    return {
+      sent: n(r.sent), kept: n(r.kept), dropped: n(r.dropped), unanswered: n(r.unanswered), adjusted: n(r.adjusted),
+      list: list.slice(0, 150).map((d) => ({ start: d.start, end: d.end, relevance: d.relevance, why: typeof d.why === 'string' ? d.why.slice(0, 160) : '' }))
+    };
+  }
+
   /** O que fica no projeto da execução por IA: contagens, os descartes e o que a escolha final deixou de fora (sem texto da transcrição). */
   function compactAi(ai) {
     return {
@@ -644,6 +656,8 @@
         limit: result.limit,
         engine: usesAi(result.engine) ? result.engine : 'algorithm',
         ai: usesAi(result.engine) && result.ai ? compactAi(result.ai) : undefined,
+        // Algoritmo + IA: o que a IA conferiu das sugestões do algoritmo e o que tirou (some quando a análise não teve conferência)
+        review: result.engine === 'both' && result.review ? compactReview(result.review) : undefined,
         // Algoritmo + IA: quantas sugestões os dois acharam, só a IA e só o algoritmo (e se uma parte falhou)
         ...(result.merge ? { merge: { both: result.merge.both || 0, ai: result.merge.ai || 0, algorithm: result.merge.algorithm || 0, ...(result.merge.aiFailed ? { aiFailed: true } : {}), ...(result.merge.algorithmFailed ? { algorithmFailed: true } : {}) } } : {}),
         signals: result.signals,
@@ -657,6 +671,8 @@
           id: s.id, start: s.start, end: s.end, peak: s.peak, relevance: s.relevance, reasons: s.reasons,
           ...(Number.isInteger(s.episode) ? { episode: s.episode } : {}),
           ...(Array.isArray(s.engines) && s.engines.length ? { engines: s.engines.filter((e) => e === 'algorithm' || e === 'ai') } : {}),
+          ...(s.review === 'ai' ? { review: 'ai' } : {}),
+          ...(s.reviewFrom && Number.isFinite(s.reviewFrom.start) && Number.isFinite(s.reviewFrom.end) ? { reviewFrom: { start: s.reviewFrom.start, end: s.reviewFrom.end } } : {}),
           ...(s.title ? { title: s.title } : {}), ...(s.category ? { category: s.category } : {}),
           ...(s.layout ? { layout: s.layout } : {}), ...(Array.isArray(s.flags) && s.flags.length ? { flags: s.flags } : {}),
           ...(s.theme ? { theme: s.theme } : {}), ...(Array.isArray(s.keywords) && s.keywords.length ? { keywords: s.keywords } : {})
@@ -739,6 +755,10 @@
     // "Só os melhores" (lista curta, quantidade fixa): ligar um desliga o outro
     ui.bestOnly = el('input', { type: 'checkbox', id: 'anBestOnly', class: 'bds-switch', role: 'switch', onchange: () => { if (ui.bestOnly.checked) ui.autoQty.checked = false; onControlChange(); } });
     ui.filterWeak = el('input', { type: 'checkbox', id: 'anFilterWeak', class: 'bds-switch', role: 'switch', onchange: onControlChange });
+    // modo Algoritmo + IA: a IA lê a fala de cada sugestão que só o algoritmo achou e diz se vale um corte (merge.js tira as recusadas)
+    ui.aiReview = el('input', { type: 'checkbox', id: 'anAiReview', class: 'bds-switch', role: 'switch', onchange: onControlChange });
+    ui.aiReviewRow = switchRow('an-switch-row an-ai-review', 'anAiReview', 'IA confere o algoritmo',
+      el('span', { class: 'small' }, 'No modo Algoritmo + IA, a IA lê a fala de cada sugestão que só o algoritmo achou e tira as que não valem um corte. Gasta de 1 a 3 chamadas a mais.'), ui.aiReview);
     ui.sensitivity = el('input', { type: 'range', id: 'anSensitivity', min: '1', max: '5', step: '1', onchange: onControlChange, oninput: syncOutputs });
     ui.sensitivityOut = el('output', { for: 'anSensitivity', class: 'an-out' });
     ui.perHour = el('input', { type: 'range', id: 'anPerHour', min: '1', max: '20', step: '1', onchange: onControlChange, oninput: syncOutputs });
@@ -764,7 +784,7 @@
     ui.reset = el('button', { type: 'button', id: 'anReset', class: 'sm', onclick: resetSettings }, 'Restaurar padrões');
     ui.fresh = el('button', { type: 'button', id: 'anFresh', class: 'secondary sm', onclick: () => run({ fresh: true }) }, 'Analisar de novo, sem usar o guardado');
     // ajustes travados enquanto a análise roda (os sinais são tratados em renderHints)
-    ui.lockables = [ui.profile, ui.episodes, ui.autoQty, ui.bestOnly, ui.filterWeak, ui.sensitivity, ui.perHour, ...SIGNALS.map((sig) => ui.weights[sig.id]), ...TEXT_WEIGHTS.map((feat) => ui.textWeights[feat.id]), ui.keywords, ui.lag, ui.win, ui.fast, ui.reset];
+    ui.lockables = [ui.profile, ui.episodes, ui.autoQty, ui.bestOnly, ui.filterWeak, ui.aiReview, ui.sensitivity, ui.perHour, ...SIGNALS.map((sig) => ui.weights[sig.id]), ...TEXT_WEIGHTS.map((feat) => ui.textWeights[feat.id]), ui.keywords, ui.lag, ui.win, ui.fast, ui.reset];
 
     ui.signalsBlock = el('div', { class: 'an-block', id: 'anSignals' },
       el('h3', { class: 'panel-title' }, 'O que procurar'),
@@ -806,7 +826,8 @@
         switchRow('an-switch-row an-auto-qty', 'anAutoQty', 'Quantidade automática',
           el('span', { class: 'small' }, 'Sem teto por hora. Com o filtro abaixo valendo, a busca fica um degrau mais sensível e só entra a reação confirmada por outra pista (mais cortes para revisar).'), ui.autoQty),
         switchRow('an-switch-row an-filter-weak', 'anFilterWeak', 'Descartar ideias fracas',
-          el('span', { class: 'small' }, 'Com transcrição, tira o que não tem reação de voz (riso, exclamação, comentário) nem do chat (num chat pequeno, a risada escrita conta).'), ui.filterWeak)),
+          el('span', { class: 'small' }, 'Com transcrição, tira o que não tem reação de voz (riso, exclamação, comentário) nem do chat (num chat pequeno, a risada escrita conta).'), ui.filterWeak),
+        ui.aiReviewRow),
       ui.runArea,
       ui.advanced);
   }
@@ -821,6 +842,7 @@
     ui.autoQty.checked = Boolean(s.autoQuantity);
     ui.bestOnly.checked = Boolean(s.bestOnly);
     ui.filterWeak.checked = Boolean(s.filterWeak);
+    ui.aiReview.checked = s.aiReview !== false;
     ui.sensitivity.value = String(s.sensitivity);
     ui.perHour.value = String(s.perHour);
     for (const sig of SIGNALS) ui.weights[sig.id].value = String(s.weights[sig.id]);
@@ -863,6 +885,7 @@
       autoQuantity: ui.autoQty.checked,
       bestOnly: ui.bestOnly.checked,
       filterWeak: ui.filterWeak.checked,
+      aiReview: ui.aiReview.checked,
       sensitivity: num(ui.sensitivity.value, base.sensitivity),
       perHour: num(ui.perHour.value, base.perHour),
       weights: Object.fromEntries(SIGNALS.map((sig) => [sig.id, Math.min(2, Math.max(0, num(ui.weights[sig.id].value, base.weights[sig.id])))])),
@@ -964,6 +987,7 @@
     }
     ui.ffmpegWarn.hidden = !algo || !ffmpegMissing;
     ui.signalWarn.hidden = !algo || !noSignal || state.running;
+    if (ui.aiReviewRow) ui.aiReviewRow.hidden = !(algo && ai); // a conferência só existe quando os dois motores rodam
     ui.aiWarn.hidden = !ai || noProject || blockers.ok || state.running;
     if (ai && !ui.aiWarn.hidden) ui.aiWarn.textContent = blockers.why.join(' ');
     // vídeo longo: avisa que a imagem demora e que existe o modo rápido (nos ajustes avançados)
@@ -1038,6 +1062,15 @@
     return parts;
   }
 
+  /** "a IA conferiu 63 sugestões do algoritmo e tirou 41 (3 sem resposta)"; com ajuste: "…, tirou 41 e ajustou o início ou o fim de 12". */
+  function reviewText(r) {
+    const tail = r.unanswered ? ` (${r.unanswered} sem resposta)` : '';
+    const head = `a IA conferiu ${plural(r.sent, 'sugestão', 'sugestões')} do algoritmo`;
+    return r.adjusted
+      ? `${head}, tirou ${r.dropped} e ajustou o início ou o fim de ${r.adjusted}${tail}`
+      : `${head} e tirou ${r.dropped}${tail}`;
+  }
+
   /** Resumo do modo Algoritmo + IA: de onde veio cada sugestão, o que o algoritmo usou e o que a IA gastou. */
   function bothSummaryText(saved, counts) {
     const m = saved.merge || {};
@@ -1052,6 +1085,7 @@
       parts.push(`IA: ${[ai.provider, ai.model].filter(Boolean).join(' · ') || 'provedor'}`);
       if (ai.calls) parts.push(`${plural(ai.calls, 'chamada', 'chamadas')}, ~${Math.max(1, Math.round(((ai.promptTokens || 0) + (ai.completionTokens || 0)) / 1000)).toLocaleString('pt-BR')} mil tokens`);
       if (funnelText(ai)) parts.push(funnelText(ai));
+      if (saved.review && saved.review.sent) parts.push(reviewText(saved.review));
       if (ai.skill && ai.skill.custom) parts.push('com o seu guia de cortes');
       if (ai.failedBlocks) parts.push(`${plural(ai.failedBlocks, 'bloco falhou', 'blocos falharam')}`);
       if (ai.droppedTotal) parts.push(`${ai.droppedTotal} descartada(s) na conferência local`);
@@ -1095,6 +1129,7 @@
     renderAiModels(saved);
     renderAiDrops(saved);
     renderAiUnpicked(saved);
+    renderAiReview(saved);
     ui.addAll.hidden = list.length < 2;
     ui.addAll.textContent = `Adicionar todas (${list.length})`;
     ui.addAll.disabled = state.running;
@@ -1164,6 +1199,19 @@
       el('span', { class: 'muted small' }, `${u.title || 'sem título'}${Number.isFinite(u.relevance) ? ` · relevância ${Math.round(u.relevance * 100)}%` : ''}`))));
   }
 
+  /** Seção recolhida com as sugestões do algoritmo que a IA leu e tirou da lista (modo Algoritmo + IA). */
+  function renderAiReview(saved) {
+    const ui = state.ui;
+    const r = saved.engine === 'both' && saved.review ? saved.review : null;
+    const list = r && Array.isArray(r.list) ? r.list : [];
+    ui.aiReviewBox.hidden = !list.length;
+    if (!list.length) return;
+    ui.aiReviewTitle.textContent = `Sugestões do algoritmo que a IA tirou (${Math.max(list.length, r.dropped || 0)})`;
+    ui.aiReviewList.replaceChildren(...list.map((d) => el('li', { class: 'an-drop' },
+      el('span', { class: 'an-time small' }, `${clock(d.start)} → ${clock(d.end)}`),
+      el('span', { class: 'muted small' }, `${d.why || 'sem motivo informado'}${Number.isFinite(d.relevance) ? ` · nota do algoritmo ${Math.round(d.relevance * 100)}%` : ''}`))));
+  }
+
   /** Algoritmo + IA: qual motor achou a sugestão (null nas análises de um motor só). */
   function engineChip(s) {
     if (!Array.isArray(s.engines) || !s.engines.length) return null;
@@ -1171,7 +1219,11 @@
     if (both) return el('li', { class: 'bds-chip bds-chip-accent an-engine-chip', title: 'O algoritmo e a IA acharam este momento' }, 'Algoritmo + IA');
     return s.engines[0] === 'ai'
       ? el('li', { class: 'bds-chip an-engine-chip', title: 'Só a IA achou este momento' }, 'IA')
-      : el('li', { class: 'bds-chip an-engine-chip', title: 'Só o algoritmo achou este momento' }, 'Algoritmo');
+      : (s.review === 'ai' && s.reviewFrom
+        ? el('li', { class: 'bds-chip an-engine-chip', title: `Só o algoritmo achou este momento; a IA leu o trecho, aprovou e acertou o início e o fim (o algoritmo tinha marcado ${clock(s.reviewFrom.start)} a ${clock(s.reviewFrom.end)})` }, 'Algoritmo · IA ajustou')
+        : s.review === 'ai'
+        ? el('li', { class: 'bds-chip an-engine-chip', title: 'Só o algoritmo achou este momento; a IA leu o trecho e aprovou' }, 'Algoritmo · IA conferiu')
+        : el('li', { class: 'bds-chip an-engine-chip', title: 'Só o algoritmo achou este momento' }, 'Algoritmo'));
   }
 
   function row(s, index) {
@@ -2262,9 +2314,14 @@
     ui.aiUnpickedBox = el('details', { class: 'an-dismissed', id: 'anAiUnpicked', hidden: true }, ui.aiUnpickedTitle,
       el('p', { class: 'muted small' }, 'Momentos que a IA achou nos blocos e que passaram na conferência, mas que ela mesma deixou de fora ao escolher os melhores. Não viraram sugestão.'),
       ui.aiUnpickedList);
+    ui.aiReviewTitle = el('summary', {}, 'Sugestões do algoritmo que a IA tirou');
+    ui.aiReviewList = el('ul', { class: 'an-droplist' });
+    ui.aiReviewBox = el('details', { class: 'an-dismissed', id: 'anAiReviewDrops', hidden: true }, ui.aiReviewTitle,
+      el('p', { class: 'muted small' }, 'Sugestões que só o algoritmo achou e que a IA, lendo a fala do trecho, disse que não valem um corte. Não estão na lista. Para vê-las, desligue "IA confere o algoritmo" e analise de novo.'),
+      ui.aiReviewList);
     ui.results = el('section', { class: 'an-results', id: 'anResults', 'aria-label': 'Sugestões', hidden: true },
       el('div', { class: 'an-results-head' }, el('h3', { class: 'panel-title' }, 'Sugestões'), el('div', { class: 'an-bulk' }, ui.addAll, ui.dismissAll)),
-      ui.summary, ui.models, ui.emptyBox, ui.orderBox, ui.list, ui.dismissedBox, ui.aiDropBox, ui.aiUnpickedBox);
+      ui.summary, ui.models, ui.emptyBox, ui.orderBox, ui.list, ui.dismissedBox, ui.aiDropBox, ui.aiUnpickedBox, ui.aiReviewBox);
 
     ui.intro = el('p', { class: 'muted small an-intro', id: 'anIntro' });
     return el('div', { class: 'an', id: 'analysis' },

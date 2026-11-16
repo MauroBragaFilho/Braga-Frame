@@ -1393,3 +1393,79 @@ test('Só os melhores: lista curta com quantidade fixa de 4 por hora; é o opost
   assert.equal(saved.q('#anAutoQty').checked, false);
   assert.equal(saved.q('#anPerHour').disabled, true);
 });
+
+test('IA confere o algoritmo: ligado por padrão só no modo Algoritmo + IA, vai no pedido, e a tela mostra o que a IA tirou e o que aprovou', async () => {
+  const ready = aiState({ selected: 'custom', ready: true, accepted: true }, { id: 'custom', label: 'Personalizado', baseUrl: 'http://127.0.0.1:9/v1', host: '127.0.0.1:9', model: 'm', keyRequired: false, ready: true, reason: '', accepted: true, privacy: '' });
+  const env = load({ api: aiApi(ready, transcriptApi(TRANSCRIPT)) });
+  await tick();
+  await tick();
+  assert.equal(env.BF.analysis.engineChoice(), 'both');
+  assert.equal(env.q('#anAiReview').checked, true, 'ligado por padrão');
+  assert.equal(env.q('.an-ai-review').hidden, false, 'aparece no modo Algoritmo + IA');
+  env.q('#anRun').click();
+  await tick();
+  await tick();
+  assert.equal(env.calls.find(([c]) => c === 'analysis:start')[1].review, true);
+  env.mainHandlers.get('analysis:done')({ jobId: 'a1', result: {
+    at: '2026-02-02T00:00:00.000Z', engine: 'both', fromCache: false, tookMs: 65000, limit: 24, warnings: [], usedSignals: ['audio', 'text', 'ai'], params: {},
+    signals: savedAnalysis(SOURCE, []).signals, merge: { both: 1, ai: 0, algorithm: 1 },
+    ai: { provider: 'Personalizado', model: 'm', calls: 4, promptTokens: 9000, completionTokens: 1000, dropped: [], droppedTotal: 0 },
+    review: { sent: 3, kept: 1, dropped: 2, unanswered: 0, droppedList: [{ start: 300, end: 330, relevance: 0.92, why: 'conversa técnica, sem desfecho', extra: 'não vai para o projeto' }, { start: 700, end: 730, relevance: 0.6, why: '' }] },
+    suggestions: [
+      { ...S(100, 130), engines: ['algorithm', 'ai'], title: 'Os dois' },
+      { ...S(500, 530), engines: ['algorithm'], review: 'ai', title: 'Aprovado pela IA' }
+    ]
+  } });
+  assert.match(text(env.q('#anSummary')), /a IA conferiu 3 sugestões do algoritmo e tirou 2/);
+  assert.deepEqual(env.all('.an-engine-chip').map(text), ['Algoritmo + IA', 'Algoritmo · IA conferiu']);
+  const box = env.q('#anAiReviewDrops');
+  assert.equal(box.hidden, false);
+  assert.equal(text(box.children[0]), 'Sugestões do algoritmo que a IA tirou (2)');
+  assert.match(text(box), /conversa técnica, sem desfecho · nota do algoritmo 92%/);
+  assert.match(text(box), /sem motivo informado · nota do algoritmo 60%/);
+  const saved = env.project.ext.analysis;
+  assert.deepEqual(plain(saved.review), { sent: 3, kept: 1, dropped: 2, unanswered: 0, adjusted: 0, list: [{ start: 300, end: 330, relevance: 0.92, why: 'conversa técnica, sem desfecho' }, { start: 700, end: 730, relevance: 0.6, why: '' }] });
+  assert.equal(saved.suggestions[1].review, 'ai');
+
+  // desligar fica no projeto e vai no pedido; em motor que não junta os dois o interruptor some
+  env.q('#anAiReview').checked = false;
+  env.q('#anAiReview').dispatch('change');
+  assert.equal(env.project.ext.analysis.settings.aiReview, false);
+  env.q('#anEngine-algorithm').click();
+  await tick();
+  assert.equal(env.q('.an-ai-review').hidden, true);
+  // análise sem conferência: nem frase no resumo, nem caixa
+  const old = load({ ext: { analysis: savedAnalysis(SOURCE, [S(100, 130)], { engine: 'both', merge: { both: 0, ai: 0, algorithm: 1 }, ai: { provider: 'Groq', model: 'm', calls: 3 } }) } });
+  await tick();
+  assert.doesNotMatch(text(old.q('#anSummary')), /conferiu/);
+  assert.equal(old.q('#anAiReviewDrops').hidden, true);
+});
+
+test('IA confere o algoritmo com bordas: o resumo diz quantas a IA ajustou, o selo muda e o projeto guarda as bordas do algoritmo', async () => {
+  const ready = aiState({ selected: 'custom', ready: true, accepted: true }, { id: 'custom', label: 'Personalizado', baseUrl: 'http://127.0.0.1:9/v1', host: '127.0.0.1:9', model: 'm', keyRequired: false, ready: true, reason: '', accepted: true, privacy: '' });
+  const env = load({ api: aiApi(ready, transcriptApi(TRANSCRIPT)) });
+  await tick();
+  await tick();
+  env.q('#anRun').click();
+  await tick();
+  await tick();
+  env.mainHandlers.get('analysis:done')({ jobId: 'a1', result: {
+    at: '2026-02-02T00:00:00.000Z', engine: 'both', fromCache: false, tookMs: 65000, limit: 24, warnings: [], usedSignals: ['audio', 'text', 'ai'], params: {},
+    signals: savedAnalysis(SOURCE, []).signals, merge: { both: 0, ai: 0, algorithm: 2 },
+    ai: { provider: 'Personalizado', model: 'm', calls: 4, promptTokens: 9000, completionTokens: 1000, dropped: [], droppedTotal: 0 },
+    review: { sent: 2, kept: 2, dropped: 0, unanswered: 0, adjusted: 1, droppedList: [] },
+    suggestions: [
+      { ...S(275, 334), engines: ['algorithm'], review: 'ai', reviewFrom: { start: 300, end: 330 }, title: 'Ajustado pela IA' },
+      { ...S(500, 530), engines: ['algorithm'], review: 'ai', title: 'Aprovado pela IA' }
+    ]
+  } });
+  assert.match(text(env.q('#anSummary')), /a IA conferiu 2 sugestões do algoritmo, tirou 0 e ajustou o início ou o fim de 1/);
+  const chips = env.all('.an-engine-chip');
+  assert.deepEqual(chips.map(text), ['Algoritmo · IA ajustou', 'Algoritmo · IA conferiu']);
+  assert.match(chips[0].attrs.title ?? chips[0].title, /o algoritmo tinha marcado 5:00 a 5:30/);
+  const saved = env.project.ext.analysis;
+  assert.deepEqual(plain(saved.suggestions[0].reviewFrom), { start: 300, end: 330 });
+  assert.deepEqual([saved.suggestions[0].start, saved.suggestions[0].end], [275, 334]);
+  assert.equal(saved.suggestions[1].reviewFrom, undefined);
+  assert.equal(saved.review.adjusted, 1);
+});
