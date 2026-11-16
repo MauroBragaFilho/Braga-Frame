@@ -103,7 +103,7 @@ function scoreCalm(extracted, { n, th, cues = [] }) {
     }
     if (!count) return [];
     const noSpeech = cues.length ? ', sem fala' : '';
-    return [{ text: `momento calmo: som baixo e contínuo, sem picos${noSpeech} (${Math.round(sum / count)} dB abaixo do normal)`, strength }];
+    return [{ kind: 'calm', text: `momento calmo: som baixo e contínuo, sem picos${noSpeech} (${Math.round(sum / count)} dB abaixo do normal)`, strength }];
   }
 
   return { id: 'calm', score, describe, stats: { calmSeconds, normalDb: Math.round(normal * 10) / 10 } };

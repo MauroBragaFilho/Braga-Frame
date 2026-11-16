@@ -38,6 +38,8 @@ const LAUGH_RUN_MAX = 3; // uma risada longa vale no máximo isto (laços do rec
 const REPEAT_LOOKBACK_SEC = 6; // uma fala "repete" outra dita até 6 s antes
 const SHORT_CUE_WORDS = 4; // fala curta: até 4 palavras
 const MAX_WORDS_PER_SEC = 6; // uma fala nunca concentra as palavras em menos tempo que isto (fala de 6 palavras por segundo no máximo)
+const LOOP_ARTIFACT_MIN_WORDS = 12; // laço do Whisper: fala de 12 palavras ou mais…
+const LOOP_ARTIFACT_MAX_UNIQUE = 0.25; // …em que as palavras diferentes são menos de 1/4 do total ("e horas e horas e horas…")
 const PACE_MIN_SPEECH = 0.4; // palavras/s mínimas para a janela contar como "fala" na linha de base do ritmo
 const PACE_MIN_SCALE = 0.35; // piso do desvio do ritmo (palavras/s)
 const PACE_MIN_SAMPLES = 60; // segundos de fala para o bloco ter linha de base própria
@@ -287,6 +289,9 @@ function extractEvents(cues, n, humor = null, profile = 'gameplay') {
     const norm = normText(text);
     const ws = wordsOf(norm);
     if (!ws.length) continue;
+    // laço do Whisper que passou pelos filtros ("e horas e horas e horas…", "e aí e aí e aí…"): não é fala de verdade e, contado,
+    // virava "ritmo de fala acelerou" (uma sugestão falsa numa gameplay medida em 16/11/2026). Não conta ritmo nem repetição.
+    if (isLoopArtifact(ws)) continue;
 
     // palavras por segundo: espalhadas sobre a duração da fala (no mínimo palavras/6 s: ninguém fala mais rápido que isso)
     const spread = Math.max(cue.end - cue.start, ws.length / MAX_WORDS_PER_SEC);
@@ -343,6 +348,11 @@ function extractEvents(cues, n, humor = null, profile = 'gameplay') {
   }
   closeRun();
   return { laugh, exclaim, repeat, meta, humor: humorUnits, humorHits, words, structure };
+}
+
+/** Fala longa feita quase só das mesmas poucas palavras: laço de alucinação do Whisper, não fala. */
+function isLoopArtifact(ws) {
+  return ws.length >= LOOP_ARTIFACT_MIN_WORDS && new Set(ws).size / ws.length < LOOP_ARTIFACT_MAX_UNIQUE;
 }
 
 /** Soma de `values` em [k - back, k + ahead] para cada k, com somas acumuladas. */
@@ -430,17 +440,26 @@ function scoreText(transcript, { n, th, baselineSec = 600, textWeights = {}, hum
       for (const id of FEATURES) if (parts[id][k] > 0 && (best[id] < 0 || parts[id][k] > parts[id][best[id]])) best[id] = k;
     }
     const strength = (id) => clamp01(w(id) * parts[id][best[id]]);
-    if (best.laugh >= 0) out.push({ text: laughSum[best.laugh] >= 2 ? 'risadas' : 'risada', strength: strength('laugh') });
-    if (best.exclaim >= 0) out.push({ text: 'exclamações e reações', strength: strength('exclaim') });
-    if (best.pace >= 0) out.push({ text: `ritmo de fala acelerou (${fmtN(rate[best.pace])} palavras/s)`, strength: strength('pace') });
-    if (best.repeat >= 0) out.push({ text: conversa ? 'laço de repetição (bordão)' : 'repetição (bordão)', strength: strength('repeat') });
-    if (best.meta >= 0) out.push({ text: 'fala sobre o próprio momento', strength: strength('meta') });
-    if (best.humor >= 0) out.push({ text: humorReason(best.humor), strength: strength('humor') });
-    if (best.structure >= 0) out.push({ text: 'conselho, história ou opinião', strength: strength('structure') });
+    // risada LONGA (duas ou mais marcas em ~15 s): além de 'laugh', a evidência leva 'laughrun'. Uma crise de riso se confirma sozinha
+    // (as quatro da gameplay medida estão na seleção feita à mão), então não precisa de outra pista na quantidade automática
+    if (best.laugh >= 0) {
+      const long = laughSum[best.laugh] >= 2;
+      out.push({ kind: 'laugh', text: long ? 'risadas' : 'risada', strength: strength('laugh'), ...(long ? { also: ['laughrun'] } : {}) });
+    }
+    if (best.exclaim >= 0) out.push({ kind: 'exclaim', text: 'exclamações e reações', strength: strength('exclaim') });
+    if (best.pace >= 0) out.push({ kind: 'pace', text: `ritmo de fala acelerou (${fmtN(rate[best.pace])} palavras/s)`, strength: strength('pace') });
+    if (best.repeat >= 0) out.push({ kind: conversa ? 'loop' : 'repeat', text: conversa ? 'laço de repetição (bordão)' : 'repetição (bordão)', strength: strength('repeat') });
+    if (best.meta >= 0) out.push({ kind: 'meta', text: 'fala sobre o próprio momento', strength: strength('meta') });
+    if (best.humor >= 0) out.push({ kind: 'humor', text: humorReason(best.humor), strength: strength('humor') });
+    if (best.structure >= 0) out.push({ kind: 'structure', text: 'conselho, história ou opinião', strength: strength('structure') });
     return out;
   }
 
-  return { id: 'text', score, describe, parts, stats: { cues: cues.length, laughs: laughMarks, humorHits: ev.humorHits.length } };
+  // segundos com alguma reação de voz marcada na transcrição (risada, exclamação, fala sobre o momento, expressão do canal): diz se a
+  // transcrição "enxerga" reações (Whisper com pontuação e *Risos*) ou não (legenda sem pontuação, transcrição sem risadas)
+  let voiceSeconds = 0;
+  for (let k = 0; k < n; k += 1) if (ev.laugh[k] > 0 || ev.exclaim[k] > 0 || ev.meta[k] > 0 || ev.humor[k] > 0) voiceSeconds += 1;
+  return { id: 'text', score, describe, parts, stats: { cues: cues.length, laughs: laughMarks, humorHits: ev.humorHits.length, voiceSeconds } };
 }
 
 module.exports = {

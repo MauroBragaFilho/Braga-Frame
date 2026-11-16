@@ -11,7 +11,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { chatCompletion, redact } = require('../src/core/ai/client');
+const { chatCompletion, redact, serverDetail } = require('../src/core/ai/client');
 const { SecretStore, usableSafeStorage } = require('../src/core/ai/secretStore');
 const { AiRuntime } = require('../src/core/ai/runtime');
 const providers = require('../src/core/ai/providers');
@@ -272,7 +272,7 @@ test('nenhum provedor vem pré-selecionado: o usuário escolhe o provedor e o mo
   assert.equal(gemini.selected, 'gemini');
   assert.equal(gemini.provider.baseUrl, 'https://generativelanguage.googleapis.com/v1beta/openai');
   assert.equal(gemini.provider.model, '');
-  assert.equal(gemini.provider.suggestedModel, 'gemini-2.5-flash');
+  assert.equal(gemini.provider.suggestedModel, 'gemini-3.8-flash');
   assert.equal(gemini.provider.ready, false);
   assert.match(gemini.provider.reason, /modelo/i);
   assert.match(runtime.save({ model: 'gemini-x' }).provider.reason, /chave/i);
@@ -491,4 +491,59 @@ test('testar conexão: pedido fixo e minúsculo, sem dado do projeto; erro claro
   await assert.rejects(() => empty.test(), (e) => e.code === 'NOT_CONFIGURED' && /Escolha o provedor/.test(e.message));
   empty.save({ provider: 'groq', model: 'm' });
   await assert.rejects(() => empty.test(), (e) => e.code === 'NO_KEY');
+});
+
+test('serverDetail: o detalhe do erro do provedor não fica com frase nem endereço pela metade', () => {
+  const long = 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://example.com/docs/rate-limits-and-quotas-of-the-api and then try again later.';
+  const out = serverDetail(JSON.stringify({ error: { message: long } }), '');
+  assert.equal(out, 'You exceeded your current quota, please check your plan and billing details.');
+  assert.ok(!out.includes('http'), 'o endereço que seria cortado não entra');
+  // sem frase inteira que valha: corta na última palavra e marca com reticências
+  const flat = serverDetail(JSON.stringify({ error: { message: 'palavra '.repeat(40).trim() } }), '');
+  assert.ok(flat.length <= 161 && flat.endsWith('palavra…'), flat);
+  // texto curto passa inteiro, e a chave continua sendo apagada antes do corte
+  assert.equal(serverDetail(JSON.stringify({ error: { message: 'Model not found.' } }), ''), 'Model not found.');
+  const key = ['sk', 'teste', 'abcdefghijklmnop'].join('-');
+  assert.ok(!serverDetail(JSON.stringify({ error: { message: `Invalid key ${key}. ${'x'.repeat(300)}` } }), key).includes(key));
+});
+
+test('rede local: a chave pode ir por http:// a outra máquina da casa (IP privado ou nome local), nunca a um servidor da internet', async () => {
+  const local = ['192.168.0.10', '10.0.0.5', '172.16.0.1', '172.31.255.254', '169.254.10.1', '100.64.0.1', '100.100.50.5', 'notebook-da-sala', 'servidor.local', 'nas.lan', 'pc.home.arpa', '[fd7a:115c:a1e0::1]', '[fe80::1]'];
+  const outside = ['servidor.exemplo', 'exemplo.com', '8.8.8.8', '172.32.0.1', '172.15.0.1', '100.128.0.1', '100.63.0.1', '192.169.0.1', '11.0.0.1', '[2001:db8::1]', 'falso.local.exemplo.com', 'localhost', '127.0.0.1'];
+  for (const h of local) assert.equal(providers.isLocalNetworkHost(new URL(`http://${h}:20128/v1`).hostname), true, h);
+  for (const h of outside) assert.equal(providers.isLocalNetworkHost(new URL(`http://${h}/v1`).hostname), false, h);
+  // formas esquisitas de escrever um IP são normalizadas pelo URL antes da conferência
+  assert.equal(providers.isLocalNetworkHost(new URL('http://0xC0A8000A/v1').hostname), true, '192.168.0.10 em hexadecimal');
+  assert.equal(providers.isLocalNetworkHost(new URL('http://134744072/v1').hostname), false, '8.8.8.8 em decimal');
+  assert.equal(providers.keyOverHttpAllowed('localhost'), true, 'a própria máquina continua valendo');
+
+  const seen = [];
+  const fetchImpl = async (url, init) => { seen.push({ url, init }); return { ok: true, status: 200, headers: new Map(), text: async () => JSON.stringify({ choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }] }) }; };
+  for (const base of ['http://192.168.0.10:20128/v1', 'http://notebook-da-sala:20128/v1', 'http://100.100.50.5:20128/v1']) {
+    const r = await chatCompletion({ baseUrl: base, apiKey: F.KEY, model: 'm', messages: msgs, fetchImpl });
+    assert.equal(r.text, 'ok');
+  }
+  assert.equal(seen.length, 3);
+  assert.ok(seen.every((c) => c.init.headers.authorization === `Bearer ${F.KEY}`), 'a chave vai no cabeçalho');
+  let called = 0;
+  const never = async () => { called += 1; throw new Error('não devia chamar'); };
+  for (const base of ['http://203.0.113.7/v1', 'http://172.32.0.1/v1', 'http://meu-gateway.exemplo.com/v1']) {
+    await assert.rejects(() => chatCompletion({ baseUrl: base, apiKey: F.KEY, model: 'm', messages: msgs, fetchImpl: never }), (e) => e.code === 'KEY_INSECURE' && /rede local/.test(e.message) && !e.message.includes(F.KEY), base);
+  }
+  assert.equal(called, 0, 'para a internet por http:// a chave nem sai');
+});
+
+test('rede local: o estado do provedor marca o endereço http:// da rede e o aviso de privacidade diz que vai sem criptografia', (t) => {
+  const { runtime } = runtimeIn(t);
+  runtime.save({ provider: 'custom', baseUrl: 'http://192.168.0.10:20128/v1', model: 'm', apiKey: F.KEY });
+  const lan = runtime.state().provider;
+  assert.equal(lan.localNetwork, true);
+  assert.equal(lan.loopback, false);
+  assert.match(lan.privacy, /sem criptografia/);
+  runtime.save({ baseUrl: 'https://192.168.0.10/v1' });
+  assert.equal(runtime.state().provider.localNetwork, false, 'com https:// não há o que avisar');
+  assert.doesNotMatch(runtime.state().provider.privacy, /sem criptografia/);
+  runtime.save({ baseUrl: 'http://127.0.0.1:20128/v1' });
+  assert.equal(runtime.state().provider.localNetwork, false, 'a própria máquina não é rede');
+  assert.equal(runtime.state().provider.loopback, true);
 });

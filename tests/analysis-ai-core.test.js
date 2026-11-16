@@ -283,3 +283,58 @@ test('callWithRetry: resposta cortada pelo limite de saída (modelos que pensam)
   await assert.rejects(() => callWithRetry({ chat: bad, system: 's', userContent: 'u', maxTokens: 6000, parse: parse.parseCandidates, sleepFn: async () => {}, attempts: 2, stats: stats0() }), (e) => e.code === 'BAD_JSON');
   assert.deepEqual(seen, [6000, 6000]);
 });
+
+test('verifyCandidate: num jogo, lance com pouca fala e crise de riso passam; em conversa valem os 20% de fala', () => {
+  const game = { ...PREFS, profile: 'gameplay' };
+  const talk = { ...PREFS, profile: 'conversa' };
+  const run = (cues, c, prefs) => verifyCandidate({ ...base(), ...c }, { cues, duration: 1000, window: { from: 0, to: 1000 }, prefs, existing: [] });
+
+  // lance: 6 falas curtas em 46 s (18% de fala), como numa troca de tiros
+  const lance = [
+    { start: 200, end: 201, text: 'vou descer por ali agora' }, { start: 206, end: 207, text: 'ficou perto demais' }, { start: 224, end: 224.6, text: 'que isso' },
+    { start: 228, end: 228.6, text: 'nossa' }, { start: 237, end: 240, text: 'acertei de muito longe esse tiro' }, { start: 244, end: 246, text: 'nem acredito que pegou' }
+  ];
+  const shot = { start: 200, end: 246, punchline: 'acertei de muito longe esse tiro' };
+  assert.equal(run(lance, shot, game).ok, true, JSON.stringify(run(lance, shot, game)));
+  assert.equal(run(lance, shot, PREFS).ok, true, 'sem tipo de vídeo informado vale a regra do jogo (o padrão do app)');
+  assert.equal(run(lance, shot, talk).reason, 'nospeech', 'em conversa, 18% de fala não basta');
+
+  // crise de riso: quase só risada marcada (6% de fala, 37% de voz)
+  const riso = [{ start: 100, end: 101.5, text: 'ele correu para o outro lado' }, { start: 118, end: 118.5, text: 'e agora' }];
+  for (let t = 120; t < 138; t += 2) riso.push({ start: t, end: t + 2, text: '*Risos*', laugh: true });
+  riso.push({ start: 154, end: 154.5, text: 'pronto' }, { start: 157, end: 158, text: 'acabou a festa deles ali' });
+  const laugh = { start: 100, end: 158, punchline: 'acabou a festa deles ali' };
+  const ok = run(riso, laugh, game);
+  assert.equal(ok.ok, true, JSON.stringify(ok));
+  assert.ok(ok.suggestion.start <= 100 && ok.suggestion.end >= 158, 'a risada inteira fica dentro');
+  assert.equal(run(riso, laugh, talk).reason, 'nospeech');
+
+  // uma frase solta em 50 s (4%): nem num jogo
+  const solta = [{ start: 300, end: 302, text: 'olha isso aqui agora' }];
+  assert.equal(run(solta, { start: 300, end: 350, punchline: 'olha isso aqui agora' }, game).reason, 'nospeech');
+  // só risada, sem nenhuma palavra dita: também não
+  const soRiso = [];
+  for (let t = 400; t < 430; t += 2) soRiso.push({ start: t, end: t + 2, text: '*Risos*', laugh: true });
+  assert.equal(run(soRiso, { start: 400, end: 430, punchline: 'risos' }, game).reason, 'nospeech');
+});
+
+test('verifyCandidate: corte que passa do máximo por pouco adianta o começo e guarda o desfecho', () => {
+  const prefs = { ...PREFS, padBeforeSec: 0, padAfterSec: 0, profile: 'gameplay' };
+  const cues = [
+    { start: 480, end: 481.5, text: 'outra coisa dita bem antes' },
+    { start: 500, end: 501, text: 'atira nele atira nele' }, { start: 503.5, end: 504.5, text: 'peguei o equipamento errado' },
+    { start: 520, end: 523, text: 'vamos juntos por aqui' }, { start: 540, end: 543, text: 'ele estava bem do meu lado' },
+    { start: 560, end: 560.7, text: 'que situação engraçada essa' }
+  ];
+  const run = (c) => verifyCandidate({ ...base(), ...c }, { cues, duration: 1000, window: { from: 0, to: 1000 }, prefs, existing: [] });
+  // a IA mandou 60 s exatos; o fim ajustado à fala do desfecho dá 60,7 s
+  const near = run({ start: 500, end: 560, punchline: 'que situação engraçada essa' });
+  assert.equal(near.ok, true, JSON.stringify(near));
+  assert.equal(near.suggestion.start, 503.5, 'o começo vai para o início da fala seguinte');
+  assert.equal(near.suggestion.end, 560.7, 'o desfecho continua inteiro');
+  assert.ok(near.suggestion.end - near.suggestion.start <= 60);
+  // 20 s a mais não é ajuste: continua rejeitado
+  const far = run({ start: 480, end: 560, punchline: 'que situação engraçada essa' });
+  assert.equal(far.ok, false);
+  assert.equal(far.reason, 'duration');
+});

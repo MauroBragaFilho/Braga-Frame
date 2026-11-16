@@ -78,7 +78,7 @@ class AnalysisManager extends EventEmitter {
       const now = Date.now();
       if (now - job.lastEmit < PROGRESS_THROTTLE_MS && ev.p < 1) return;
       job.lastEmit = now;
-      this.emit('progress', { jobId: job.id, p: ev.p, stage: ev.stage, message: ev.message });
+      this.emit('progress', { jobId: job.id, p: ev.p, stage: ev.stage, message: ev.message, ...(typeof ev.stageP === 'number' ? { stageP: ev.stageP } : {}) });
     };
     try {
       progress({ p: 0, stage: 'probe', message: job.message });

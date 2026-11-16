@@ -18,6 +18,16 @@ const { normalizeKeyword } = require('./params');
  */
 
 const MIN_RATE = 0.02; // msg/s: piso da média de referência (chat quase parado não explode a razão)
+// CHAT PEQUENO (poucas pessoas conversando com quem transmite): nunca chega a "6 mensagens em 10 s" nem a "3 com palavra-chave", então a
+// velocidade e as palavras-chave não dizem nada. O que diz é a RISADA escrita ("kkkk", "haha", "rsrs", 😂): cada mensagem de riso é uma
+// reação ao que aconteceu de REACT_BACK_MIN_SEC a REACT_BACK_MAX_SEC antes (atraso da transmissão + digitar). Uma mensagem pontua pouco
+// (não vira sugestão sozinha); duas somam. Medido numa gameplay de 4h18 com 1,5 mensagem por minuto: 35% das risadas do chat caem num
+// momento forte ou bom da seleção feita à mão (20% ao acaso) e 15 dos 37 momentos fortes ou bons têm uma.
+const SMALL_CHAT_RATE = 0.05; // msg/s na média do vídeo (3 por minuto): abaixo disto é chat pequeno
+const REACT_BACK_MIN_SEC = 3;
+const REACT_BACK_MAX_SEC = 35;
+const LAUGH_ONE = 0.45; // quanto vale UMA mensagem de riso (duas: 0,70; três: 0,83)
+const LAUGH_RE = /k{3,}|(?:ha){2,}|(?:he){2,}|(?:hue?){2,}|(?:rs){2,}|(?:ka){2,}|\blol\b|\blmf?ao+\b|[\u{1F602}\u{1F923}\u{1F480}\u{1F639}]/iu;
 const RATIO_CAP = 12; // limite superior da razão: um chat quase parado que recebe uma rajada não vira "40× a média"
 
 /** Lê e valida o chat. Devolve { platform, messages:[{ t, text }] } ou lança CHAT_UNREADABLE. */
@@ -91,10 +101,13 @@ function scoreChat(chat, { n, th, params }) {
   const kwCounts = new Float64Array(n);
   const kwEvents = []; // { sec, hits:[palavras] } só das mensagens com palavra-chave
   const matchers = keywords.map((word) => ({ word, re: new RegExp(`(?:^|[^a-z0-9])${escapeRe(normalizeKeyword(word))}`) }));
+  const small = n > 0 && chat.messages.length / n < SMALL_CHAT_RATE;
+  const laughSecs = []; // segundo de cada mensagem de riso (só conta em chat pequeno)
 
   for (const msg of chat.messages) {
     const sec = Math.floor(msg.t);
     if (sec < 0 || sec >= n) continue;
+    if (small && msg.text && LAUGH_RE.test(msg.text)) laughSecs.push(sec);
     if (matchers.length && msg.text) {
       const text = normalizeKeyword(msg.text);
       const hits = [];
@@ -124,11 +137,18 @@ function scoreChat(chat, { n, th, params }) {
     kwScore[k] = matchers.length && kw >= th.chatKeywords0 ? softRamp(kw, th.chatKeywords0 - 1, th.chatKeywordsSpan) : 0;
   }
 
+  // chat pequeno: cada risada pontua os segundos ANTERIORES a ela (já no tempo do lance, sem o deslocamento de `lagSec`)
+  const laughScore = new Float64Array(n);
+  for (const sec of laughSecs) {
+    for (let k = Math.max(0, sec - REACT_BACK_MAX_SEC); k <= sec - REACT_BACK_MIN_SEC; k += 1) laughScore[k] = 1 - (1 - laughScore[k]) * (1 - LAUGH_ONE);
+  }
+
   // o evento aconteceu `lagSec` ANTES da reação do chat
   const score = new Float64Array(n);
   for (let k = 0; k < n; k += 1) {
     const c = k + lagSec;
-    if (c < n) score[k] = 1 - (1 - rateScore[c]) * (1 - kwScore[c]);
+    const burst = c < n ? 1 - (1 - rateScore[c]) * (1 - kwScore[c]) : 0;
+    score[k] = 1 - (1 - burst) * (1 - laughScore[k]);
   }
 
   function describe(from, to) {
@@ -141,7 +161,7 @@ function scoreChat(chat, { n, th, params }) {
       if (rateScore[c] > 0 && (rk < 0 || ratio[c] > ratio[rk + lagSec])) rk = k;
       if (kwScore[c] > 0 && (kk < 0 || kwInWindow[c] > kwInWindow[kk + lagSec])) kk = k;
     }
-    if (rk >= 0) out.push({ text: `chat ${fmtRatio(ratio[rk + lagSec])}× a média`, strength: rateScore[rk + lagSec] });
+    if (rk >= 0) out.push({ kind: 'rate', text: `chat ${fmtRatio(ratio[rk + lagSec])}× a média`, strength: rateScore[rk + lagSec] });
     if (kk >= 0) {
       const c = kk + lagSec;
       const lo = c - half;
@@ -152,12 +172,19 @@ function scoreChat(chat, { n, th, params }) {
         for (const w of ev.hits) tally.set(w, (tally.get(w) || 0) + 1);
       }
       const top = [...tally.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([w, c2]) => `${w} ×${c2}`);
-      out.push({ text: `palavras-chave no chat: ${top.join(', ')}`, strength: kwScore[c] });
+      out.push({ kind: 'keywords', text: `palavras-chave no chat: ${top.join(', ')}`, strength: kwScore[c] });
+    }
+    if (laughSecs.length) {
+      // risadas do chat que reagem a este trecho: as que chegaram de REACT_BACK_MIN_SEC depois do começo até REACT_BACK_MAX_SEC depois do fim
+      const count = laughSecs.filter((sec) => sec >= from + REACT_BACK_MIN_SEC && sec <= to + REACT_BACK_MAX_SEC).length;
+      let best = 0;
+      for (let k = Math.max(0, from); k <= to && k < n; k += 1) if (laughScore[k] > best) best = laughScore[k];
+      if (count > 0 && best > 0) out.push({ kind: 'laugh', text: count >= 2 ? `o chat riu (${count} mensagens)` : 'o chat riu', strength: best });
     }
     return out;
   }
 
-  return { id: 'chat', score, describe, stats: { messages: chat.messages.length, keywordMessages: kwEvents.length } };
+  return { id: 'chat', score, describe, stats: { messages: chat.messages.length, keywordMessages: kwEvents.length, small, laughMessages: laughSecs.length } };
 }
 
-module.exports = { loadChat, chatFingerprint, scoreChat, perSecondCounts };
+module.exports = { loadChat, chatFingerprint, scoreChat, perSecondCounts, SMALL_CHAT_RATE, LAUGH_ONE, REACT_BACK_MIN_SEC, REACT_BACK_MAX_SEC };

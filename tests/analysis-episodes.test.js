@@ -83,6 +83,18 @@ test('espera: a transcrição que vaza não engana (duas evidências bastam); m�
   assert.deepEqual(findBreaks({ image: cover.image, audio: cover.audio, cues: cover.cues, n: 1200 }).breaks, []);
 });
 
+test('espera: silêncio sem fala com a imagem MEXENDO não é espera (o streamer calado na câmera, menus, telas de carregamento)', () => {
+  // gameplay medida em 16/11/2026: conversa de câmera e menus com o som em silêncio digital entre as falas viravam "esperas"
+  const L = live({ plan: [['show', 0, 300], ['wait', 300, 420], ['show', 420, 900]] });
+  for (let k = 300; k < 420; k += 1) L.image.motion[k] = 0.5 + (k % 7) * 0.3; // a câmera mexe pouco, mas mexe (0,5 a 2,3)
+  assert.deepEqual(findBreaks({ image: L.image, audio: L.audio, cues: L.cues, n: 900 }).breaks, [], 'silêncio + sem fala, mas a imagem mexe');
+  // a mesma janela com a imagem parada de verdade é espera
+  const still = live({ plan: [['show', 0, 300], ['wait', 300, 420], ['show', 420, 900]] });
+  assert.deepEqual(plain(findBreaks({ image: still.image, audio: still.audio, cues: still.cues, n: 900 }).breaks), [{ start: 300, end: 420 }]);
+  // sem a imagem lida (desligada), silêncio e falta de fala ainda decidem juntos
+  assert.deepEqual(plain(findBreaks({ audio: L.audio, cues: L.cues, n: 900 }).breaks), [{ start: 300, end: 420 }]);
+});
+
 test('espera: pausa curta não conta, animação curta não quebra, modo rápido não usa a imagem e vídeo parado demais não marca nada', () => {
   const short = live({ plan: [['show', 0, 300], ['wait', 300, 300 + BREAK_MIN_SEC - 5], ['show', 325, 700]] });
   assert.deepEqual(findBreaks({ image: short.image, audio: short.audio, n: 700 }).breaks, [], `menos de ${BREAK_MIN_SEC} s é pausa`);

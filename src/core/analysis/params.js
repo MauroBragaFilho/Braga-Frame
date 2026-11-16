@@ -24,6 +24,14 @@ const { normalizeAlgorithmLists } = require('./humor');
  */
 const ALGO_VERSION = 5;
 
+/**
+ * Revisão do RESULTADO (16/11/2026): muda quando o cálculo das sugestões muda sem mudar a leitura do vídeo nem os parâmetros. Entra só na
+ * chave do resultado guardado (analyze.js): a análise é refeita com os sinais que já estão no cache, sem ler o vídeo de novo. Sem ela, quem
+ * já tinha analisado um vídeo receberia o resultado antigo. 2 = espera exige imagem parada, laço do Whisper ignorado, início no lance; 3 = filtro de ideias fracas e o tipo de cada motivo (evidence);
+ * 4 = risada do chat em chat pequeno, fim do corte cobrindo a risada, quantidade automática mais aberta e ordem por concordância das pistas.
+ */
+const RESULT_REVISION = 4;
+
 /** Perfis do vídeo (ver acima). Gameplay é o padrão e o comportamento de sempre. */
 const PROFILES = Object.freeze(['gameplay', 'conversa']);
 
@@ -43,6 +51,12 @@ const DEFAULTS = Object.freeze({
   profile: 'gameplay', // 'gameplay' | 'conversa' (PROFILES)
   // live com vários programas separados por tela de espera (segments.js): a espera fica fora e cada episódio ganha pelo menos uma sugestão
   episodes: true,
+  // quantidade automática (16/11/2026): sem teto por hora; entra tudo o que passa na relevância mínima e no filtro, até AUTO_PER_HOUR por
+  // hora (trava de segurança) e AUTO_PER_WINDOW por janela de 10 min
+  autoQuantity: false,
+  // filtro de ideias fracas (com transcrição): sugestão sem reação de voz (riso, exclamação, fala sobre o momento, expressão do canal,
+  // estrutura, laço) nem do chat é descartada; a vaga vai para o próximo pico
+  filterWeak: true,
   // `structure` só existe no perfil de conversa (no de gameplay o peso não muda nada)
   textWeights: Object.freeze({ laugh: 1, exclaim: 1, pace: 1, repeat: 1, meta: 1, humor: 1, structure: 1 }),
   // perfil de humor do canal (humor.js; vem da preferência analysis.humor): bordões e palavras de reação, sem acento e em minúsculas
@@ -249,13 +263,20 @@ function normalizeParams(raw) {
     },
     image: { fast: bool(image.fast, d.image.fast) },
     profile: PROFILES.includes(src.profile) ? src.profile : d.profile,
-    episodes: bool(src.episodes, d.episodes)
+    episodes: bool(src.episodes, d.episodes),
+    autoQuantity: bool(src.autoQuantity, d.autoQuantity),
+    filterWeak: bool(src.filterWeak, d.filterWeak)
   };
 }
 
 /** Teto de sugestões: `maxSuggestions` se informado; senão `perHour` x horas (mínimo 3, máximo 300). */
+/** Quantidade automática: trava de segurança por hora e por janela de 10 min (o que decide é a relevância mínima e o filtro). */
+const AUTO_PER_HOUR = 30;
+const AUTO_PER_WINDOW = 5;
+
 function suggestionLimit(params, durationSec) {
   if (params.maxSuggestions) return params.maxSuggestions;
+  if (params.autoQuantity) return Math.min(300, Math.max(3, Math.ceil(AUTO_PER_HOUR * (durationSec / 3600))));
   return Math.min(300, Math.max(3, Math.round(params.perHour * (durationSec / 3600))));
 }
 
@@ -266,6 +287,7 @@ function suggestionLimit(params, durationSec) {
  */
 function perWindowLimit(params, durationSec, limit = suggestionLimit(params, durationSec)) {
   if (params.spread.perWindow) return params.spread.perWindow;
+  if (params.autoQuantity && !params.maxSuggestions) return AUTO_PER_WINDOW;
   const average = durationSec > 0 ? (limit * params.spread.windowSec) / durationSec : limit;
   return Math.max(2, Math.ceil(2 * average));
 }
@@ -275,7 +297,8 @@ function perWindowLimit(params, durationSec, limit = suggestionLimit(params, dur
  * sozinho nunca passa de ~68%) seria sempre engolido pelos picos e nunca apareceria. Quando o calmo é o único sinal, vale a quantidade inteira.
  */
 function calmLimit(params, durationSec) {
-  return Math.max(1, Math.round(suggestionLimit(params, durationSec) * 0.25));
+  // na quantidade automática a cota do calmo continua a da Quantidade escolhida (um quarto de "por hora"), não a da trava de segurança
+  return Math.max(1, Math.round(suggestionLimit({ ...params, autoQuantity: false }, durationSec) * 0.25));
 }
 
 /** JSON com chaves em ordem fixa (base de chaves de cache estáveis). */
@@ -290,6 +313,6 @@ function canonicalJson(value) {
 const sha1 = (text) => crypto.createHash('sha1').update(text).digest('hex');
 
 module.exports = {
-  ALGO_VERSION, DEFAULTS, DEFAULT_KEYWORDS, TEXT_FEATURES, PROFILES, RANGES, SENSITIVITY_TABLE,
-  normalizeParams, normalizeKeyword, thresholds, suggestionLimit, perWindowLimit, calmLimit, canonicalJson, sha1
+  ALGO_VERSION, RESULT_REVISION, DEFAULTS, DEFAULT_KEYWORDS, TEXT_FEATURES, PROFILES, RANGES, SENSITIVITY_TABLE,
+  normalizeParams, normalizeKeyword, thresholds, suggestionLimit, perWindowLimit, calmLimit, canonicalJson, sha1, AUTO_PER_HOUR, AUTO_PER_WINDOW
 };

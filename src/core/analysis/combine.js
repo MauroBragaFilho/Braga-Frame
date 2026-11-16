@@ -26,6 +26,15 @@ const { suggestionLimit, perWindowLimit } = require('./params');
  * `groups` (opcional, cota por episódio): trechos [{ start, end }] que devem ter pelo menos uma sugestão cada. Primeiro, enquanto houver
  * grupo sem sugestão, o pico é procurado só nos grupos vazios (o melhor deles vence; a cota por janela não barra esta rodada, mas conta);
  * grupo sem nenhum pico acima da relevância mínima fica sem. Depois, a escolha de sempre no vídeo inteiro, até o teto.
+ * `discard` (opcional, filtro de ideias fracas): (sugestão com `evidence` = ["text:laugh", "audio:level", …]) -> motivo | null. Descartada, a
+ * vaga vai para o próximo pico e ela entra em `discarded` (lista opcional que quem chamou passa) com o motivo.
+ * `tailOut` (opcional: "fim cobrindo a reação"): { active: Uint8Array(n) (1 = reação marcada neste segundo, hoje a risada da transcrição),
+ *   maxSec, gapSec }. A risada vem DEPOIS do lance e a pista dela pontua os segundos ANTERIORES, então o corte terminava quando a risada
+ *   começava (medido numa gameplay: quatro crises de riso, as quatro cortadas no começo da risada). Com isto o fim vai até o fim dela.
+ * `leadIn` (opcional, perfil de gameplay: "início no lance"): { signal: Float64Array(n), baseSec, maxSec, gapSec, minScore }. A reação do
+ * streamer vem DEPOIS do lance; o início volta pelo menos `baseSec` antes do evento e, se `signal` (o som do jogo) estava ativo antes
+ * (>= minScore), segue essa atividade para trás, aceitando buracos de até `gapSec`, até `maxSec`. O fim fica onde estava, a duração
+ * máxima continua valendo e o início nunca invade o espaço de outra sugestão.
  * Devolve sugestões ordenadas por relevância (decrescente).
  */
 
@@ -37,6 +46,7 @@ const SNAP_START_BACK_SEC = 4; // o início anda até 4 s para trás (começo de
 const SNAP_START_FORWARD_SEC = 2;
 const SNAP_END_FORWARD_SEC = 4; // o fim anda até 4 s para frente (fim de fala) ou até 2 s para trás
 const SNAP_END_BACK_SEC = 2;
+const LEAD_SNAP_BACK_SEC = 6; // início no lance (gameplay): o começo de fala pode estar até 6 s antes do início calculado
 
 const round1 = (x) => Math.round(x * 10) / 10;
 const round3 = (x) => Math.round(x * 1000) / 1000;
@@ -89,7 +99,7 @@ function snapToSpeech(start, end, alignTo, { lo, hi, minDur, maxDur }) {
   return { start, end };
 }
 
-function combine({ n, duration, signals, params, alignTo = null, blocked = [], limitOverride = null, groups = [] }) {
+function combine({ n, duration, signals, params, alignTo = null, blocked = [], limitOverride = null, groups = [], leadIn = null, tailOut = null, discard = null, discarded = null }) {
   if (!n || !signals.length) return [];
   const parts = signals
     .map((s) => {
@@ -262,6 +272,49 @@ function combine({ n, duration, signals, params, alignTo = null, blocked = [], l
       end = Math.min(hi, e2);
     }
 
+    // gameplay: o corte começa no lance, não na reação (veja `leadIn` acima)
+    if (leadIn) {
+      let b = l;
+      let quiet = 0;
+      for (let k = l - 1; k >= Math.max(0, Math.ceil(lo), l - leadIn.maxSec); k -= 1) {
+        if (consumed[k]) break;
+        if (leadIn.signal[k] >= leadIn.minScore) { b = k; quiet = 0; } else if ((quiet += 1) > leadIn.gapSec) break;
+      }
+      const want = Math.min(l - leadIn.baseSec, b - padBeforeSec);
+      if (want < start) {
+        let s2 = Math.max(lo, want, end - maxDur);
+        // com transcrição, o novo início também é começo de fala: o último antes dele (sem sair do espaço livre nem passar da duração
+        // máxima), senão o primeiro depois dele (sem passar do início que já existia)
+        if (alignTo && alignTo.starts && alignTo.starts.length) {
+          const i = lowerBound(alignTo.starts, s2 + 1e-6);
+          const prev = i > 0 ? alignTo.starts[i - 1] : null;
+          const next = i < alignTo.starts.length ? alignTo.starts[i] : null;
+          if (prev !== null && prev >= lo - 1e-9 && s2 - prev <= LEAD_SNAP_BACK_SEC && end - prev <= maxDur + 1e-9) s2 = prev;
+          else if (next !== null && next < start) s2 = next;
+          else s2 = start;
+        }
+        start = Math.min(start, s2);
+      }
+    }
+
+    // o corte termina DEPOIS da reação, não quando ela começa (veja `tailOut` acima): segue a reação marcada a partir do fim atual,
+    // tolerando buracos de gapSec, até maxSec a mais e sem sair do espaço livre. Se estourar a duração máxima, quem anda é o começo
+    // (o desfecho vale mais que a preparação), sem passar do começo do pico.
+    if (tailOut) {
+      let last = -1;
+      let quiet = 0;
+      const stop = Math.min(n - 1, Math.floor(hi) - 1, Math.floor(end) + tailOut.maxSec);
+      for (let k = Math.max(0, Math.floor(end) - 2); k <= stop; k += 1) {
+        if (tailOut.active[k]) { last = k; quiet = 0; } else if ((quiet += 1) > tailOut.gapSec) break;
+      }
+      if (last >= Math.floor(end)) {
+        let e2 = Math.min(hi, last + 1 + padAfterSec);
+        if (e2 - start > maxDur) start = Math.min(Math.max(start, e2 - maxDur), Math.max(start, l - 1));
+        if (e2 - start > maxDur) e2 = start + maxDur;
+        end = Math.max(end, e2);
+      }
+    }
+
     // com transcrição, começa e termina em limites de falas (nunca no meio de uma frase)
     if (alignTo) ({ start, end } = snapToSpeech(start, end, alignTo, { lo, hi, minDur, maxDur }));
 
@@ -273,6 +326,7 @@ function combine({ n, duration, signals, params, alignTo = null, blocked = [], l
     const from = Math.max(0, Math.min(l, n - 1));
     const to = Math.max(from, Math.min(r, n - 1));
     const reasons = [];
+    const evidence = []; // o TIPO de cada motivo ("text:laugh", "audio:level"…): é o que o filtro de ideias fracas olha
     const contrib = {};
     for (const p of parts) {
       let strength = 0;
@@ -282,9 +336,28 @@ function combine({ n, duration, signals, params, alignTo = null, blocked = [], l
       for (const item of p.s.describe(from, to)) {
         const weighted = clamp01(item.strength * p.w);
         if (weighted >= 0.1 && !reasons.some((x) => x.text === item.text)) reasons.push({ text: item.text, strength: weighted });
+        if (weighted >= 0.1) {
+          // o tipo do motivo e, se o sinal informar, tipos extras do mesmo motivo (`also`, ex.: a risada longa leva também 'laughrun')
+          for (const name of [item.kind || 'other', ...(Array.isArray(item.also) ? item.also : [])]) {
+            const kind = `${p.s.id}:${name}`;
+            if (!evidence.includes(kind)) evidence.push(kind);
+          }
+        }
       }
     }
     reasons.sort((a, b) => b.strength - a.strength);
+
+    // filtro de ideias fracas: descartada, a vaga vai para o próximo pico (o evento inteiro sai da disputa)
+    if (discard) {
+      const why = discard({ start, end, peak: peak + 0.5, relevance: best, reasons: reasons.map((x) => x.text), evidence });
+      if (why) {
+        if (Array.isArray(discarded)) {
+          discarded.push({ start, end, peak: Math.min(peak + 0.5, total), relevance: round3(best), reasons: reasons.map((x) => x.text), evidence, why });
+        }
+        drop(Math.min(l, p0), Math.max(r, r0));
+        continue;
+      }
+    }
 
     chosen.push({ start, end });
     const spentFrom = Math.floor(start);
@@ -309,6 +382,7 @@ function combine({ n, duration, signals, params, alignTo = null, blocked = [], l
       peak: Math.min(peak + 0.5, total),
       relevance: round3(best),
       reasons: reasons.map((x) => x.text),
+      evidence,
       signals: contrib
     });
   }

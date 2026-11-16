@@ -406,7 +406,7 @@ test('poucos botões visíveis antes de analisar: o seletor de motor, Analisar, 
   const env = load();
   const shown = (node) => { for (let n = node; n; n = n.parent) if (n.hidden) return false; return true; };
   // a transcrição (opcional no algoritmo) tem "Transcrever" e "Importar"; remover, cancelar e o resto só aparecem quando fazem sentido
-  assert.deepEqual(env.all('button').filter(shown).map((b) => b.id).sort(), ['anEngine-ai', 'anEngine-algorithm', 'anFresh', 'anReset', 'anRun', 'anTGenerate', 'anTImport']);
+  assert.deepEqual(env.all('button').filter(shown).map((b) => b.id).sort(), ['anEngine-ai', 'anEngine-algorithm', 'anEngine-both', 'anFresh', 'anReset', 'anRun', 'anTGenerate', 'anTImport']);
   assert.equal(env.q('.an-advanced').open, false);
   assert.equal(env.all('button').filter((b) => b.className.split(/\s+/).includes('primary') && shown(b)).length, 1, 'um destaque primário só');
 });
@@ -529,6 +529,32 @@ test('Separar por episódios: ligado por padrão, vai no pedido; cada sugestão 
   assert.doesNotMatch(text(old.q('#anSummary')), /episódio|espera/);
 });
 
+test('Quantidade automática e filtro de ideias fracas: padrões, o controle por hora trava na automática, vão no pedido e o resumo conta as descartadas', async () => {
+  const env = load();
+  const auto = env.q('#anAutoQty');
+  const filter = env.q('#anFilterWeak');
+  assert.equal(auto.checked, false, 'quantidade fixa por padrão');
+  assert.equal(filter.checked, true, 'filtro ligado por padrão');
+  assert.equal(env.q('#anPerHour').disabled, false);
+  auto.checked = true;
+  auto.dispatch('change');
+  assert.equal(env.project.ext.analysis.settings.autoQuantity, true, 'fica no projeto');
+  assert.equal(env.q('#anPerHour').disabled, true, 'na automática o "por hora" não vale');
+  assert.match(text(env.all('.an-out')[1]), /automática/, 'a saída da Quantidade diz "automática"');
+  env.q('#anRun').click();
+  await tick();
+  const start = env.calls.find(([channel]) => channel === 'analysis:start');
+  assert.equal(start[1].params.autoQuantity, true);
+  assert.equal(start[1].params.filterWeak, true);
+  env.mainHandlers.get('analysis:done')({ jobId: 'a1', result: {
+    at: '2026-02-02T00:00:00.000Z', fromCache: false, tookMs: 2000, limit: 30, warnings: [], usedSignals: ['audio', 'text'], params: {},
+    signals: savedAnalysis(SOURCE, []).signals, filter: { on: true, voicePerHour: 60, discarded: 7 }, filtered: [],
+    suggestions: [S(100, 130), S(200, 230)]
+  } });
+  assert.match(text(env.q('#anSummary')), /7 ideias fracas descartadas/);
+  assert.deepEqual(plain(env.project.ext.analysis.filter), { on: true, discarded: 7 });
+});
+
 test('Ordem da lista: mais relevantes primeiro por padrão; "Ordem dos episódios" mostra pela ordem do vídeo, fica no projeto e não muda o resto', async () => {
   const EPS = { episodes: [{ start: 60, end: 300 }, { start: 360, end: 540 }], breaks: [{ start: 0, end: 60 }, { start: 300, end: 360 }, { start: 540, end: 600 }] };
   const sugs = [S(400, 430, { relevance: 0.95, episode: 2 }), S(100, 130, { relevance: 0.9, episode: 1 }), S(200, 230, { relevance: 0.7, episode: 1 })];
@@ -646,6 +672,61 @@ test('IA: escolhido o provedor, o modelo continua vazio (só uma sugestão no ca
   assert.equal(text(safe.q('#anCfgEnc')), SAFE_NOTE);
   assert.doesNotMatch(safe.q('#anCfgEnc').className, /an-warn/);
   assert.equal(safe.all('#anHints').length, 0, 'não existe mais a opção "Dicas de volume"');
+});
+
+test('IA: "Ver modelos disponíveis" busca a lista do provedor, mostra no seletor e na sugestão do campo; escolher salva; erro aparece', async () => {
+  const state = aiState({ selected: 'groq' }, { id: 'groq', label: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', host: 'api.groq.com', suggestedModel: 'llama-3.3-70b-versatile', model: 'velho', hasKey: true, keyStatus: 'stored', reason: '' });
+  let modelsReply = { ok: true, provider: 'groq', models: ['llama-3.3-70b-versatile', 'qwen-4-32b', 'velho'], hidden: 2 };
+  const env = load({ ext: { analysis: { settings: { engine: 'ai' } } }, api: aiApi(state, (channel) => (channel === 'analysis:aiModels' ? modelsReply : transcriptApi(TRANSCRIPT)(channel))) });
+  await tick();
+  await tick();
+  const btn = env.q('#anCfgModels');
+  assert.ok(btn && !btn.hidden && !btn.disabled, 'o botão aparece ao lado do campo Modelo');
+  assert.equal(env.q('#anCfgModelPick').hidden, true, 'sem lista buscada, sem seletor');
+  btn.click();
+  await tick();
+  await tick();
+  assert.equal(env.calls.filter(([c]) => c === 'analysis:aiModels').length, 1);
+  const pick = env.q('#anCfgModelPick');
+  assert.equal(pick.hidden, false);
+  assert.equal(pick.children.length, 4, 'a frase de escolha + os 3 modelos');
+  assert.match(text(pick.children[3]), /velho .em uso./);
+  assert.equal(env.q('#anCfgModelList').children.length, 3, 'o campo também sugere os modelos (sem repetir a sugestão)');
+  assert.match(text(env.q('#anCfgModelsOut')), /3 modelos disponíveis neste provedor .2 outros, de embedding, voz ou imagem, ficaram de fora./);
+  pick.value = 'qwen-4-32b';
+  pick.dispatch('change');
+  await tick();
+  assert.deepEqual(plain(env.calls.filter(([c]) => c === 'analysis:aiSave').map(([, p]) => p)).pop(), { model: 'qwen-4-32b' });
+  // a busca falha: a mensagem do processo principal aparece no lugar
+  modelsReply = { ok: false, code: 'AUTH', message: 'O provedor recusou a chave de API.' };
+  btn.click();
+  await tick();
+  await tick();
+  assert.match(text(env.q('#anCfgModelsOut')), /recusou a chave/);
+  assert.equal(env.q('#anCfgModelPick').hidden, true);
+});
+
+test('IA: análise que falha por modelo recusado oferece "Ver modelos disponíveis" no aviso, ao lado de "Usar o algoritmo"', async () => {
+  const ready = aiState({ selected: 'custom', ready: true, accepted: true }, { id: 'custom', label: 'Personalizado', baseUrl: 'http://127.0.0.1:9/v1', host: '127.0.0.1:9', model: 'velho', keyRequired: false, ready: true, reason: '', accepted: true, privacy: '' });
+  const env = load({ ext: { analysis: { settings: { engine: 'ai' } } }, api: aiApi(ready, (channel) => {
+    if (channel === 'analysis:start') return { ok: false, code: 'MODEL', message: 'O provedor não encontrou o modelo (ou o endereço). Confira o nome do modelo.' };
+    if (channel === 'analysis:aiModels') return { ok: true, provider: 'custom', models: ['novo'], hidden: 0 };
+    return transcriptApi(TRANSCRIPT)(channel);
+  }) });
+  await tick();
+  await tick();
+  env.q('#anRun').click();
+  await tick();
+  await tick();
+  const help = env.q('#anModelHelp');
+  assert.ok(help, 'o aviso oferece a lista');
+  assert.ok(env.q('#anUseAlgorithm'), 'e continua oferecendo o algoritmo');
+  help.click();
+  await tick();
+  await tick();
+  assert.equal(env.q('#anAiConfig').open, true, 'abre o cartão do provedor');
+  assert.equal(env.calls.filter(([c]) => c === 'analysis:aiModels').length, 1);
+  assert.equal(env.q('#anCfgModelPick').hidden, false);
 });
 
 test('IA: sem "Dicas de volume" na tela, nas configurações salvas nem no pedido; o pedido não carrega audioHints', async () => {
@@ -800,7 +881,7 @@ test('perfil de humor: cartão recolhido; sem perfil diz "Não definido"; com pe
   assert.equal(none.q('#anHScope').value, 'general');
   // poucos botões: só os de sempre continuam visíveis (Salvar e Limpar aparecem quando fazem sentido)
   const shown = (node) => { for (let n = node; n; n = n.parent) if (n.hidden) return false; return true; };
-  assert.deepEqual(none.all('button').filter(shown).map((b) => b.id).sort(), ['anEngine-ai', 'anEngine-algorithm', 'anFresh', 'anReset', 'anRun', 'anTGenerate', 'anTImport']);
+  assert.deepEqual(none.all('button').filter(shown).map((b) => b.id).sort(), ['anEngine-ai', 'anEngine-algorithm', 'anEngine-both', 'anFresh', 'anReset', 'anRun', 'anTGenerate', 'anTImport']);
 });
 
 test('perfil de humor: editar mostra "Salvar"; salvar grava o perfil LIMPO nas Preferências do escopo escolhido; recusa o vazio; limpar pede confirmação', async () => {
@@ -1066,4 +1147,249 @@ test('sugestão da IA com tema e palavras-chave: chips no cartão e, ao Adiciona
   assert.deepEqual(plain(cut.keywords), ['susto', 'corredor', 'bicho gigante']);
   assert.equal(cut.status, 'pending', 'nunca aprovado sozinho');
   assert.equal(cut.origin, 'auto');
+});
+
+test('Algoritmo + IA: escolhido sozinho com a IA pronta; mostra os ajustes dos dois; o pedido leva o do algoritmo e o da IA; resumo e chips dizem quem achou', async () => {
+  const ready = aiState({ selected: 'custom', ready: true, accepted: true }, { id: 'custom', label: 'Personalizado', baseUrl: 'http://127.0.0.1:9/v1', host: '127.0.0.1:9', model: 'm', keyRequired: false, ready: true, reason: '', accepted: true, privacy: '' });
+  const env = load({ cuts: [{ id: 'k1', start: 40, end: 60, status: 'pending', origin: 'manual' }], api: aiApi(ready, transcriptApi(TRANSCRIPT)) });
+  await tick();
+  await tick();
+  assert.equal(env.BF.analysis.engineChoice(), 'both', 'IA pronta e aceita: os dois juntos');
+  assert.match(text(env.q('#anEngineHint')), /junta as listas.*\(escolhido automaticamente\)/);
+  assert.equal(env.q('#anSignals').hidden, false, 'os sinais do algoritmo continuam na tela');
+  assert.equal(env.q('#anAi').hidden, false, 'e o provedor da IA também');
+  assert.match(text(env.q('#anIntro')), /Roda o algoritmo .* e depois a IA/);
+  env.q('#anRun').click();
+  await tick();
+  await tick();
+  const [, payload] = env.calls.find(([c]) => c === 'analysis:start');
+  assert.equal(payload.engine, 'both');
+  assert.equal(payload.params.signals.audio, true, 'os parâmetros do algoritmo');
+  assert.ok(payload.params.humor, 'com as listas do perfil para o algoritmo');
+  assert.equal(payload.projectId, 'p1');
+  assert.equal(payload.meta.title.length > 0, true, 'os metadados da IA');
+  assert.deepEqual(plain(payload.existingCuts), [{ start: 40, end: 60 }]);
+  env.mainHandlers.get('analysis:done')({ jobId: 'a1', result: {
+    at: '2026-02-02T00:00:00.000Z', engine: 'both', fromCache: false, tookMs: 65000, limit: 24, warnings: [], usedSignals: ['audio', 'text', 'ai'], params: {},
+    signals: savedAnalysis(SOURCE, []).signals, merge: { both: 1, ai: 1, algorithm: 1 }, ai: { provider: 'Personalizado', model: 'm', calls: 3, promptTokens: 9000, completionTokens: 1000, dropped: [], droppedTotal: 0 },
+    suggestions: [
+      { ...S(100, 130), engines: ['algorithm', 'ai'], title: 'O bicho', category: 'Humor' },
+      { ...S(200, 230), engines: ['ai'], title: 'Outro' },
+      { ...S(300, 330), engines: ['algorithm'] }
+    ]
+  } });
+  assert.match(text(env.q('#anSummary')), /3 sugestão\(ões\) encontrada\(s\): 1 que os dois acharam, 1 só da IA, 1 só do algoritmo/);
+  assert.match(text(env.q('#anSummary')), /IA: Personalizado · m · 3 chamadas, ~10 mil tokens/);
+  const saved = env.project.ext.analysis;
+  assert.equal(saved.engine, 'both');
+  assert.deepEqual(plain(saved.merge), { both: 1, ai: 1, algorithm: 1 });
+  assert.deepEqual(plain(saved.suggestions.map((s) => s.engines)), [['algorithm', 'ai'], ['ai'], ['algorithm']]);
+  const chips = env.all('.an-engine-chip').map(text);
+  assert.deepEqual(chips, ['Algoritmo + IA', 'IA', 'Algoritmo']);
+});
+
+test('Algoritmo + IA: sem transcrição não começa (a IA precisa dela) e a tela diz o porquê', async () => {
+  const ready = aiState({ selected: 'custom', ready: true, accepted: true }, { id: 'custom', label: 'Personalizado', baseUrl: 'http://127.0.0.1:9/v1', host: '127.0.0.1:9', model: 'm', keyRequired: false, ready: true, reason: '', accepted: true, privacy: '' });
+  const env = load({ ext: { analysis: { settings: { engine: 'both' } } }, api: aiApi(ready, transcriptApi({ exists: false })) });
+  await tick();
+  await tick();
+  assert.equal(env.BF.analysis.engineChoice(), 'both');
+  assert.equal(env.q('#anRun').disabled, true);
+  assert.match(text(env.q('#anAiWarn')), /A IA precisa da transcrição/);
+  env.q('#anEngine-algorithm').click();
+  await tick();
+  assert.equal(env.q('#anRun').disabled, false, 'só o algoritmo roda sem transcrição');
+});
+
+test('Guia de cortes: só é pedido ao abrir; editar libera Salvar; salvar e restaurar falam com o processo principal; o resumo diz quando valeu o seu guia', async () => {
+  const ready = aiState({ selected: 'custom', ready: true, accepted: true }, { id: 'custom', label: 'Personalizado', baseUrl: 'http://127.0.0.1:9/v1', host: '127.0.0.1:9', model: 'm', keyRequired: false, ready: true, reason: '', accepted: true, privacy: '' });
+  const DEFAULT_TEXT = '---\nname: selecionar-cortes\n---\n\n# Guia de seleção de cortes\n\ntexto padrão';
+  let skill = { source: 'default', text: DEFAULT_TEXT, chars: 40, tokens: 13, defaultText: DEFAULT_TEXT, minChars: 200, maxChars: 12000 };
+  const env = load({ ext: { analysis: { settings: { engine: 'ai' } } }, api: aiApi(ready, (channel, payload) => {
+    if (channel === 'analysis:aiSkill') return { ok: true, skill };
+    if (channel === 'analysis:aiSkillSave') { skill = { ...skill, source: 'custom', text: payload.text }; return { ok: true, skill }; }
+    if (channel === 'analysis:aiSkillReset') { skill = { ...skill, source: 'default', text: DEFAULT_TEXT }; return { ok: true, skill }; }
+    return transcriptApi(TRANSCRIPT)(channel);
+  }) });
+  await tick();
+  await tick();
+  assert.equal(env.calls.filter(([c]) => c === 'analysis:aiSkill').length, 0, 'nada é pedido antes de abrir a caixa');
+  assert.equal(env.q('#anSkillText').disabled, true);
+  const box = env.q('#anSkillBox');
+  box.open = true;
+  box.dispatch('toggle');
+  await tick();
+  await tick();
+  const area = env.q('#anSkillText');
+  assert.equal(area.value, DEFAULT_TEXT);
+  assert.equal(area.disabled, false);
+  assert.equal(text(env.q('#anSkillChip')), 'Padrão');
+  assert.match(text(env.q('#anSkillInfo')), /Guia padrão do app · \d+ caracteres/);
+  assert.equal(env.q('#anSkillSave').disabled, true, 'sem mudança não há o que salvar');
+  assert.equal(env.q('#anSkillReset').disabled, true, 'e o padrão já está valendo');
+  area.value = 'meu guia: só história com final engraçado';
+  area.dispatch('input');
+  assert.equal(env.q('#anSkillSave').disabled, false);
+  assert.match(text(env.q('#anSkillInfo')), /alterado, ainda não salvo/);
+  env.q('#anSkillSave').click();
+  await tick();
+  await tick();
+  assert.deepEqual(plain(env.calls.find(([c]) => c === 'analysis:aiSkillSave')[1]), { text: 'meu guia: só história com final engraçado' });
+  assert.equal(text(env.q('#anSkillChip')), 'Personalizado');
+  assert.match(text(env.q('#anSkillOut')), /Guia salvo/);
+  assert.equal(env.q('#anSkillReset').disabled, false);
+  env.q('#anSkillReset').click();
+  await tick();
+  await tick();
+  await tick();
+  assert.equal(env.calls.filter(([c]) => c === 'analysis:aiSkillReset').length, 1);
+  assert.equal(text(env.q('#anSkillChip')), 'Padrão');
+  assert.equal(env.q('#anSkillText').value, DEFAULT_TEXT);
+  // o resumo da análise diz quando o guia usado foi o do usuário
+  env.q('#anRun').click();
+  await tick();
+  await tick();
+  env.mainHandlers.get('analysis:done')({ jobId: 'a1', result: {
+    at: '2026-02-02T00:00:00.000Z', engine: 'ai', fromCache: false, tookMs: 30000, limit: 12, warnings: [], usedSignals: ['ai'], params: {}, signals: {},
+    ai: { provider: 'Personalizado', model: 'm', calls: 2, promptTokens: 5000, completionTokens: 500, dropped: [], droppedTotal: 0, skill: { custom: true } },
+    suggestions: [S(100, 130)]
+  } });
+  assert.match(text(env.q('#anSummary')), /com o seu guia de cortes/);
+  assert.deepEqual(plain(env.project.ext.analysis.ai.skill), { custom: true });
+});
+
+test('tempo restante pela etapa: usa o ritmo da etapa em andamento (a mais lenta, se houver duas), ignora a terminada e espera ter base', () => {
+  const { BF } = load();
+  const { stageRemainingSec } = BF.analysis;
+  const now = 1_700_000_000_000;
+  const min = 60000;
+  assert.equal(stageRemainingSec(null, now), null);
+  assert.equal(stageRemainingSec({}, now), null);
+  // imagem: começou há 4 min em 0% e está em 20% -> faltam 16 min (a conta pela barra dizia outra coisa a cada minuto)
+  assert.equal(Math.round(stageRemainingSec({ image: { startedAt: now - 4 * min, p0: 0, p: 0.2 } }, now)), 16 * 60);
+  // vista pela primeira vez já em 40% (janela recarregada): vale o que andou desde então
+  assert.equal(Math.round(stageRemainingSec({ image: { startedAt: now - 2 * min, p0: 0.4, p: 0.5 } }, now)), 10 * 60);
+  // áudio terminado não conta; com duas em andamento vale a que demora mais
+  assert.equal(Math.round(stageRemainingSec({ audio: { startedAt: now - 5 * min, p0: 0, p: 1 }, image: { startedAt: now - 4 * min, p0: 0, p: 0.2 } }, now)), 16 * 60);
+  assert.equal(Math.round(stageRemainingSec({ audio: { startedAt: now - min, p0: 0, p: 0.5 }, image: { startedAt: now - min, p0: 0, p: 0.1 } }, now)), 9 * 60);
+  // cedo demais: menos de 5 s ou de 2% andados
+  assert.equal(stageRemainingSec({ image: { startedAt: now - 3000, p0: 0, p: 0.3 } }, now), null);
+  assert.equal(stageRemainingSec({ image: { startedAt: now - min, p0: 0, p: 0.01 } }, now), null);
+  assert.equal(stageRemainingSec({ audio: { startedAt: now - min, p0: 0, p: 0.5 }, image: { startedAt: now - 2000, p0: 0, p: 0 } }, now), null, 'uma etapa ativa sem base ainda: não chuta');
+});
+
+test('tempo restante na tela: com a etapa informada (stageP) não usa mais a barra inteira nem chuta antes de ter base', async () => {
+  const env = load();
+  env.q('#anRun').click();
+  await tick();
+  const send = (ev) => env.mainHandlers.get('analysis:progress')({ jobId: 'a1', ...ev });
+  // sem stageP (versão antiga do processo principal): a conta pela barra, como antes
+  send({ p: 0.5, stage: 'image', message: 'Analisando a imagem…' });
+  assert.match(text(env.q('#anProgressText')), /Analisando a imagem… 50%/);
+  assert.ok(!/nesta etapa/.test(text(env.q('#anProgressText'))));
+  // com stageP: a etapa acabou de começar, então ainda não há base (e a barra em 60% não vira estimativa)
+  send({ p: 0.6, stage: 'image', stageP: 0.1, message: 'Analisando a imagem…', phase: 'algorithm' });
+  assert.equal(text(env.q('#anProgressText')), 'Analisando a imagem… 60%', 'sem chute enquanto a etapa não tem 5 s');
+  env.mainHandlers.get('analysis:done')({ jobId: 'a1', result: { at: '2026-02-02T00:00:00.000Z', fromCache: false, tookMs: 1000, limit: 6, warnings: [], usedSignals: ['audio'], params: {}, signals: savedAnalysis(SOURCE, []).signals, suggestions: [] } });
+  assert.equal(text(env.q('#anRun')), 'Analisar', 'a análise terminou');
+});
+
+
+test('contagem dos candidatos da IA: o resumo diz quantos ela propôs e com quantos a escolha final ficou; o que ficou de fora aparece recolhido e é guardado no projeto', async () => {
+  const ready = aiState({ selected: 'custom', ready: true, accepted: true }, { id: 'custom', label: 'Personalizado', baseUrl: 'http://127.0.0.1:9/v1', host: '127.0.0.1:9', model: 'm', keyRequired: false, ready: true, reason: '', accepted: true, privacy: '' });
+  const env = load({ api: aiApi(ready, transcriptApi(TRANSCRIPT)) });
+  await tick();
+  await tick();
+  env.q('#anRun').click();
+  await tick();
+  await tick();
+  const funnel = { returned: 40, verified: 36, unique: 36, offered: 36, picked: 17, final: 17, perBlock: [{ from: 0, to: 2100, returned: 22, verified: 20 }, { from: 2010, to: 4110, returned: 18, verified: 16 }] };
+  const unpicked = [{ start: 500, end: 540, title: 'Ficou de fora', relevance: 0.7 }, { start: 900, end: 930, title: '', relevance: 0.55 }];
+  env.mainHandlers.get('analysis:done')({ jobId: 'a1', result: {
+    at: '2026-02-02T00:00:00.000Z', engine: 'both', fromCache: false, tookMs: 65000, limit: 24, warnings: [], usedSignals: ['audio', 'text', 'ai'], params: {},
+    signals: savedAnalysis(SOURCE, []).signals, merge: { both: 1, ai: 0, algorithm: 0 },
+    ai: { provider: 'Personalizado', model: 'm', calls: 9, promptTokens: 9000, completionTokens: 1000, dropped: [], droppedTotal: 4, funnel: { ...funnel, extra: 'não vai para o projeto' }, unpicked: unpicked.map((u) => ({ ...u, punchline: 'não vai para o projeto' })) },
+    suggestions: [{ ...S(100, 130), engines: ['algorithm', 'ai'], title: 'O bicho', category: 'Humor' }]
+  } });
+  assert.match(text(env.q('#anSummary')), /a IA propôs 40 candidatos, 36 passaram na conferência, a escolha final ficou com 17 de 36/);
+  const box = env.q('#anAiUnpicked');
+  assert.equal(box.hidden, false);
+  assert.equal(box.open, false, 'recolhida');
+  assert.equal(text(box.children[0]), 'Fora da escolha final da IA (19)', 'o total vem da contagem, não só dos que estão listados');
+  assert.match(text(box), /Ficou de fora · relevância 70%/);
+  assert.match(text(box), /sem título · relevância 55%/);
+  const saved = env.project.ext.analysis.ai;
+  assert.deepEqual(plain(saved.funnel), funnel, 'só as contagens conhecidas');
+  assert.deepEqual(plain(saved.unpicked), unpicked, 'só horários, título e nota');
+
+  // análise antiga (sem a contagem) e análise em que a escolha final não cortou nada: nada a dizer
+  const old = load({ ext: { analysis: savedAnalysis(SOURCE, [S(100, 130)], { engine: 'ai', ai: { provider: 'Groq', model: 'm', calls: 3 } }) } });
+  await tick();
+  assert.doesNotMatch(text(old.q('#anSummary')), /propôs/);
+  assert.equal(old.q('#anAiUnpicked').hidden, true);
+  const all = load({ ext: { analysis: savedAnalysis(SOURCE, [S(100, 130)], { engine: 'ai', ai: { provider: 'Groq', model: 'm', calls: 3, funnel: { returned: 1, verified: 1, unique: 1, offered: 1, picked: null, final: 1, perBlock: [] } } }) } });
+  await tick();
+  assert.match(text(all.q('#anSummary')), /a IA propôs 1 candidato ·/);
+  assert.equal(all.q('#anAiUnpicked').hidden, true);
+});
+
+test('rede local: o aviso de que a chave vai sem criptografia aparece junto do endereço, só no Personalizado com http:// da rede', async () => {
+  const custom = (over) => aiState({ selected: 'custom', ready: true, accepted: true }, { id: 'custom', label: 'Personalizado', baseUrl: 'http://192.168.0.10:20128/v1', host: '192.168.0.10:20128', model: 'm', keyRequired: false, hasKey: true, ready: true, reason: '', accepted: true, privacy: '', ...over });
+  const lan = load({ api: aiApi(custom({ localNetwork: true }), transcriptApi(TRANSCRIPT)) });
+  await tick();
+  await tick();
+  assert.equal(lan.q('#anCfgLanNote').hidden, false);
+  assert.match(text(lan.q('#anCfgLanNote')), /sem criptografia/);
+  const tls = load({ api: aiApi(custom({ baseUrl: 'https://gateway.exemplo/v1', host: 'gateway.exemplo', localNetwork: false }), transcriptApi(TRANSCRIPT)) });
+  await tick();
+  await tick();
+  assert.equal(tls.q('#anCfgLanNote').hidden, true);
+});
+
+test('Só os melhores: lista curta com quantidade fixa de 4 por hora; é o oposto da quantidade automática, trava o "por hora" e vai no pedido sem mudar o ajuste guardado', async () => {
+  const env = load();
+  const best = env.q('#anBestOnly');
+  const auto = env.q('#anAutoQty');
+  assert.equal(best.checked, false, 'desligado por padrão');
+  env.q('#anPerHour').value = '9';
+  env.q('#anPerHour').dispatch('change');
+  assert.equal(env.project.ext.analysis.settings.perHour, 9);
+
+  // ligar "Só os melhores" desliga a automática, trava o controle por hora e diz quantas sugestões cabem
+  auto.checked = true;
+  auto.dispatch('change');
+  assert.equal(env.project.ext.analysis.settings.autoQuantity, true);
+  best.checked = true;
+  best.dispatch('change');
+  assert.equal(env.q('#anAutoQty').checked, false, 'ligar um desliga o outro');
+  assert.deepEqual([env.project.ext.analysis.settings.bestOnly, env.project.ext.analysis.settings.autoQuantity], [true, false], 'fica no projeto');
+  assert.equal(env.project.ext.analysis.settings.perHour, 9, 'o valor do controle por hora continua guardado');
+  assert.equal(env.q('#anPerHour').disabled, true);
+  assert.match(text(env.all('.an-out')[1]), /só os melhores: 4 por hora/);
+
+  // o pedido leva a quantidade fixa de 4 por hora, sem a automática
+  env.q('#anRun').click();
+  await tick();
+  const start = env.calls.find(([channel]) => channel === 'analysis:start');
+  assert.equal(start[1].params.perHour, 4);
+  assert.equal(start[1].params.autoQuantity, false);
+  assert.equal(env.project.ext.analysis.settings.perHour, 9, 'analisar não troca o ajuste do usuário');
+  env.mainHandlers.get('analysis:done')({ jobId: 'a1', result: { at: '2026-02-02T00:00:00.000Z', fromCache: false, tookMs: 1000, limit: 8, warnings: [], usedSignals: ['audio'], params: {}, signals: savedAnalysis(SOURCE, []).signals, suggestions: [S(100, 130)] } });
+
+  // ligar a automática de volta desliga "Só os melhores" e o controle por hora volta a valer quando os dois estão desligados
+  const auto2 = env.q('#anAutoQty');
+  auto2.checked = true;
+  auto2.dispatch('change');
+  assert.equal(env.q('#anBestOnly').checked, false);
+  assert.equal(env.project.ext.analysis.settings.bestOnly, false);
+  auto2.checked = false;
+  auto2.dispatch('change');
+  assert.equal(env.q('#anPerHour').disabled, false);
+  assert.match(text(env.all('.an-out')[1]), /9 por hora/);
+
+  // projeto que já vinha com a opção ligada abre com ela ligada (e, se a automática também vier marcada, vale a mais exigente)
+  const saved = load({ ext: { analysis: { settings: { bestOnly: true, autoQuantity: true, perHour: 12 } } } });
+  assert.equal(saved.q('#anBestOnly').checked, true);
+  assert.equal(saved.q('#anAutoQty').checked, false);
+  assert.equal(saved.q('#anPerHour').disabled, true);
 });

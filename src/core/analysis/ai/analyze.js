@@ -14,18 +14,24 @@
 
 const { AiError, cancelled, classify } = require('../../ai/errors');
 const { normalizeParams, suggestionLimit } = require('../params');
-const { SYSTEM_PROMPT, buildBlockMessage, buildPickMessage, profileBlock, profileSummary, JSON_NUDGE, estimateTokens, clock } = require('./prompt');
+const { SYSTEM_PROMPT, systemPrompt, buildBlockMessage, buildPickMessage, profileBlock, profileSummary, JSON_NUDGE, estimateTokens, clock } = require('./prompt');
 const { normalizeProfile, isEmpty: isEmptyProfile, fold } = require('../humor');
 const { normalizeExamples } = require('./humorExamples');
 const { buildWindows, estimate } = require('./chunking');
 const { parseCandidates, parsePicks } = require('./parse');
 const { verifyCandidate, dedupe, REASONS } = require('./verify');
 
-const ALGO_VERSION = 2; // versão do método de IA (prompt + conferência); mude quando mudarem (2: sem dicas de volume no pedido)
+const ALGO_VERSION = 3; // versão do método de IA (prompt + conferência); mude quando mudarem (2: sem dicas de volume no pedido; 3: guia de cortes na mensagem de sistema)
 const MAX_CANDIDATES_PER_BLOCK = 8;
+// QUANTIDADE AUTOMÁTICA (params.autoQuantity): a IA pode devolver mais candidatos por bloco e a escolha final olha mais deles. Numa gameplay
+// de 4h18 a seleção feita à mão tem ~9 momentos a cada 35 min (5 fortes ou bons), e os blocos mais ricos passam de 8. O guia de cortes
+// continua pedindo para não completar a lista com trechos fracos. NÃO medido com provedor de verdade.
+const AUTO_CANDIDATES_PER_BLOCK = 12;
+const AUTO_PICK_CANDIDATES = 80;
 const MAX_FAILED_WINDOWS = 2;
 const MAX_PICK_CANDIDATES = 40;
 const MAX_DROPPED_LISTED = 40;
+const MAX_UNPICKED_LISTED = 40; // candidatos que a escolha final deixou de fora e ficam listados no resultado
 // Modelos que "pensam" (ex.: Gemini 2.5) gastam parte do limite de saída raciocinando: o teto é folgado (só se paga o que é gerado)
 // e, se a resposta vier cortada sem JSON, a tentativa seguinte pede mais espaço (até MAX_OUTPUT_TOKENS). Medido em rede real
 // (23/10/2026, Nemotron 3 Ultra gratuito): 3 de 5 blocos gastaram de 3 a 3,4 mil dos 6000 tokens só raciocinando e um bloco e a escolha final
@@ -34,6 +40,7 @@ const MAX_DROPPED_LISTED = 40;
 // UMA vez com mais espaço (a lista inteira é o valor dela); (4) o prazo da chamada cresce com o limite de saída.
 const OUTPUT_MAX_TOKENS_BLOCK = 6000;
 const OUTPUT_MAX_TOKENS_PICK = 6000;
+const AUTO_OUTPUT_MAX_TOKENS_BLOCK = 9000; // quantidade automática: até 12 candidatos por bloco
 const MAX_OUTPUT_TOKENS = 16000;
 const OUTPUT_GROWTH = 1.6;
 // Um modelo gratuito que raciocina levou de 77 s a 279 s por chamada de ~6000 tokens (o prazo fixo de 120 s do cliente o cortaria):
@@ -128,7 +135,8 @@ function failureMessage(err) {
  * @param {object} request {
  *   duration, hasAudio, params (parâmetros da análise: normalizeParams), transcript: { cues }, chat: bf-chat-1 | null,
  *   meta: { title?, channel?, game? }, existingCuts: [{start,end}],
- *   profile?: perfil de humor do canal (humor.js), examples?: { approved, rejected } (humorExamples.js; só entram se o perfil deixa) }
+ *   profile?: perfil de humor do canal (humor.js), examples?: { approved, rejected } (humorExamples.js; só entram se o perfil deixa),
+ *   skill?: as instruções do guia de cortes do USUÁRIO (skill.js); vazio = o guia padrão do app }
  * @param {object} deps { chat(params) -> { text, usage, finishReason }, provider: { label, model }, limits: { maxCalls, maxInputTokens, windowMinutes, attempts },
  *   signal, onProgress({ p, stage, message }), sleep?, retry? }
  */
@@ -141,13 +149,15 @@ async function analyzeWithAi(request, deps) {
   const { duration, transcript } = request;
   const limits = deps.limits;
   const sleepFn = deps.sleep || sleep;
-  const report = (p, stage, message) => { if (deps.onProgress) { try { deps.onProgress({ p: Math.min(0.99, Math.max(0, p)), stage, message }); } catch { /* ouvinte com defeito */ } } };
+  // stageP (opcional): quanto da etapa já foi (na 1ª passada, os blocos prontos); a tela estima o tempo restante por ele
+  const report = (p, stage, message, stageP) => { if (deps.onProgress) { try { deps.onProgress({ p: Math.min(0.99, Math.max(0, p)), stage, message, ...(typeof stageP === 'number' ? { stageP } : {}) }); } catch { /* ouvinte com defeito */ } } };
   if (!transcript || !Array.isArray(transcript.cues) || !transcript.cues.length) throw new AiError('NO_TRANSCRIPT', 'A análise por IA precisa da transcrição do vídeo. Gere ou importe uma na aba Análise.');
   if (!(duration > 0)) throw new AiError('INVALID_ARGS', 'Não sei a duração do vídeo.');
 
   const prefs = {
     minDurationSec: params.minDurationSec, maxDurationSec: params.maxDurationSec, padBeforeSec: params.padBeforeSec,
-    padAfterSec: params.padAfterSec, minRelevance: params.minRelevance, keywords: params.chat.keywords
+    padAfterSec: params.padAfterSec, minRelevance: params.minRelevance, keywords: params.chat.keywords,
+    profile: params.profile // o tipo de vídeo (gameplay ou conversa) vai em cada pedido: o guia de cortes diz o que rende em cada um
   };
   // perfil de humor do canal: critérios, bordões e palavras sempre que existem; os exemplos só se o perfil deixa (`examples`) e o chamador os trouxe
   const profile = normalizeProfile(request.profile);
@@ -155,12 +165,18 @@ async function analyzeWithAi(request, deps) {
   const examples = useProfile && profile.examples ? normalizeExamples(request.examples) : { approved: [], rejected: [] };
   const blockProfile = useProfile ? profileBlock(profile, examples) : '';
   const pickProfile = useProfile ? profileSummary(profile) : '';
+  // guia de cortes: o do usuário (se escreveu um) entra na mensagem de sistema no lugar do padrão; a diferença de tamanho conta no limite de tokens
+  const skillBody = typeof request.skill === 'string' ? request.skill.trim() : '';
+  const system = skillBody ? systemPrompt(skillBody) : SYSTEM_PROMPT;
+  const skillExtra = Math.max(0, estimateTokens(system) - estimateTokens(SYSTEM_PROMPT));
 
   const limit = suggestionLimit(params, duration);
+  const perBlock = params.autoQuantity ? AUTO_CANDIDATES_PER_BLOCK : MAX_CANDIDATES_PER_BLOCK;
+  const pickMax = params.autoQuantity ? AUTO_PICK_CANDIDATES : MAX_PICK_CANDIDATES;
   const windows = buildWindows(transcript.cues, duration, {
-    windowSec: limits.windowMinutes * 60, maxInputTokens: limits.maxInputTokens, chat: request.chat, profileTokens: estimateTokens(blockProfile)
+    windowSec: limits.windowMinutes * 60, maxInputTokens: limits.maxInputTokens, chat: request.chat, profileTokens: estimateTokens(blockProfile) + skillExtra
   });
-  const est = estimate(windows, { candidatesPerBlock: MAX_CANDIDATES_PER_BLOCK, pickExtraTokens: estimateTokens(pickProfile) });
+  const est = estimate(windows, { candidatesPerBlock: perBlock, pickExtraTokens: estimateTokens(pickProfile) + skillExtra });
   if (!windows.length) throw new AiError('NO_TRANSCRIPT', 'A transcrição não tem nenhuma fala para enviar.');
   if (est.calls > limits.maxCalls) {
     throw new AiError('TOO_MANY_CALLS', `Esta análise precisaria de ~${est.calls} chamadas, mais que o limite de ${limits.maxCalls}. Aumente o limite nas configurações da IA ou use o algoritmo.`, { calls: est.calls, limit: limits.maxCalls });
@@ -177,27 +193,62 @@ async function analyzeWithAi(request, deps) {
 
   const accepted = [];
   const failedWindows = [];
+  // por bloco: quantos candidatos o modelo devolveu e quantos passaram na conferência (null = o bloco não respondeu)
+  const blockStats = windows.map((w) => ({ from: w.from, to: w.to, returned: null, verified: null }));
   let lastFailure = null;
   const shareBlocks = 0.84;
   const retryNote = (i) => ({ attempt, waitMs, kind }) => report(shareBlocks * (i / windows.length), 'ai1', `${kind === 'rate' ? 'Limite do provedor' : kind === 'json' ? 'Resposta fora do formato' : 'Falha de conexão'}: nova tentativa em ${Math.max(1, Math.round(waitMs / 1000))} s (${attempt + 1} de ${limits.attempts})…`);
 
   // limite de saída por chamada: começa nos padrões e CRESCE quando uma resposta vem cortada (modelo que raciocina), valendo para as seguintes
-  const budget = { block: OUTPUT_MAX_TOKENS_BLOCK, pick: OUTPUT_MAX_TOKENS_PICK };
+  // na quantidade automática cada bloco pode trazer 12 candidatos: o limite de saída já começa mais folgado (só se paga o que é gerado)
+  const budget = { block: params.autoQuantity ? AUTO_OUTPUT_MAX_TOKENS_BLOCK : OUTPUT_MAX_TOKENS_BLOCK, pick: OUTPUT_MAX_TOKENS_PICK };
+
+  /** Aproveita a resposta de um bloco: confere cada candidato com a transcrição e guarda o que passa. */
+  const takeBlock = (outcome, i, win) => {
+    const { items, invalid, salvaged } = outcome.parsed;
+    if (invalid) dropCount.format = (dropCount.format || 0) + invalid;
+    if (salvaged) warnings.push({ code: 'AI_TRUNCATED', message: `A resposta do bloco ${i + 1} veio cortada; só os cortes completos foram aproveitados.` });
+    let passed = 0;
+    for (const c of items) {
+      const v = verifyCandidate(c, { cues: transcript.cues, duration, window: win, prefs, existing: request.existingCuts });
+      if (v.ok) { accepted.push({ ...v.suggestion, block: i }); passed += 1; } else drop(v.reason, v.detail, c);
+    }
+    blockStats[i].returned = items.length + (invalid || 0);
+    blockStats[i].verified = passed;
+  };
+  const askBlock = (i, win) => callWithRetry({
+    chat: deps.chat, system,
+    userContent: buildBlockMessage({ window: win, meta: request.meta, duration, prefs, maxCandidates: perBlock, profile: blockProfile }),
+    maxTokens: budget.block, parse: (text) => parseCandidates(text), signal, sleepFn, attempts: limits.attempts, retry: deps.retry, stats, onRetry: retryNote(i)
+  });
 
   // ---- 1ª passada: candidatos por bloco ----
   for (let i = 0; i < windows.length; i += 1) {
     check();
     const win = windows[i];
-    report(shareBlocks * (i / windows.length), 'ai1', `Analisando o bloco ${i + 1} de ${windows.length} (${clock(win.from)} a ${clock(win.to)})…`);
+    report(shareBlocks * (i / windows.length), 'ai1', `Analisando o bloco ${i + 1} de ${windows.length} (${clock(win.from)} a ${clock(win.to)})…`, i / windows.length);
     let outcome;
     try {
-      outcome = await callWithRetry({
-        chat: deps.chat, system: SYSTEM_PROMPT,
-        userContent: buildBlockMessage({ window: win, meta: request.meta, duration, prefs, maxCandidates: MAX_CANDIDATES_PER_BLOCK, profile: blockProfile }),
-        maxTokens: budget.block, parse: (text) => parseCandidates(text), signal, sleepFn, attempts: limits.attempts, retry: deps.retry, stats, onRetry: retryNote(i)
-      });
+      outcome = await askBlock(i, win);
       budget.block = Math.max(budget.block, outcome.limit);
-      if (outcome.res && outcome.res.finishReason === 'length') budget.block = growOutput(outcome.limit);
+      if (outcome.res && outcome.res.finishReason === 'length') {
+        budget.block = growOutput(outcome.limit);
+        // cortada pelo limite de saída: os candidatos que não couberam se perdem (visto com provedor de verdade, num modelo que raciocina:
+        // o bloco mais rico voltou com menos cortes). Pede o MESMO bloco de novo, uma vez, com mais espaço, se o limite de chamadas deixa.
+        // Só quando o JSON veio cortado no meio (`salvaged`): se veio inteiro, nada se perdeu
+        if (outcome.parsed.salvaged && stats.calls < limits.maxCalls) {
+          report(shareBlocks * (i / windows.length), 'ai1', `A resposta do bloco ${i + 1} veio cortada pelo limite de saída da IA: pedindo de novo com mais espaço…`);
+          try {
+            const again = await askBlock(i, win);
+            budget.block = Math.max(budget.block, again.limit);
+            if (again.res && again.res.finishReason === 'length') budget.block = growOutput(again.limit);
+            if (again.parsed.items.length >= outcome.parsed.items.length) outcome = again;
+          } catch (againErr) {
+            if (againErr && againErr.code === 'CANCELLED') throw againErr;
+            // o segundo pedido falhou: vale a primeira resposta, mesmo cortada
+          }
+        }
+      }
     } catch (err) {
       if (err && err.code === 'CANCELLED') throw err;
       const verdict = err && err.code === 'BAD_JSON' ? { retry: true } : classify(err);
@@ -210,12 +261,27 @@ async function analyzeWithAi(request, deps) {
       }
       continue;
     }
-    const { items, invalid, salvaged } = outcome.parsed;
-    if (invalid) dropCount.format = (dropCount.format || 0) + invalid;
-    if (salvaged) warnings.push({ code: 'AI_TRUNCATED', message: `A resposta do bloco ${i + 1} veio cortada; só os cortes completos foram aproveitados.` });
-    for (const c of items) {
-      const v = verifyCandidate(c, { cues: transcript.cues, duration, window: win, prefs, existing: request.existingCuts });
-      if (v.ok) accepted.push({ ...v.suggestion, block: i }); else drop(v.reason, v.detail, c);
+    takeBlock(outcome, i, win);
+  }
+
+  // ---- segunda chance: o bloco que falhou (servidor sobrecarregado, rede, limite por minuto) é pedido de novo no fim, quando o problema
+  // costuma ter passado. Visto com provedor de verdade: um bloco de 35 min ficou de fora por HTTP 503 depois de 3 tentativas em poucos
+  // segundos, e era o bloco com mais momentos da live. Só se o limite de chamadas deixa; falhar de novo só mantém o bloco de fora.
+  for (const failed of [...failedWindows]) {
+    check();
+    if (stats.calls >= limits.maxCalls) break;
+    const i = failed.index;
+    const win = windows[i];
+    report(shareBlocks, 'ai1', `Tentando de novo o bloco ${i + 1} de ${windows.length} (${clock(win.from)} a ${clock(win.to)}), que tinha falhado…`);
+    try {
+      const outcome = await askBlock(i, win);
+      budget.block = Math.max(budget.block, outcome.limit);
+      takeBlock(outcome, i, win);
+      failedWindows.splice(failedWindows.indexOf(failed), 1);
+      stats.recoveredBlocks = (stats.recoveredBlocks || 0) + 1;
+    } catch (err) {
+      if (err && err.code === 'CANCELLED') throw err;
+      lastFailure = err; // continua de fora; o aviso abaixo diz qual trecho
     }
   }
   if (failedWindows.length) {
@@ -226,8 +292,11 @@ async function analyzeWithAi(request, deps) {
   // ---- junta os blocos: o mesmo momento achado duas vezes (sobreposição) fica uma vez só ----
   const merged = dedupe(accepted);
   for (const d of merged.dropped) drop('duplicate', REASONS.duplicate, d);
-  let ranked = merged.kept.slice(0, MAX_PICK_CANDIDATES);
+  let ranked = merged.kept.slice(0, pickMax);
   ranked.forEach((c, k) => { c.cid = `c${k + 1}`; });
+  const offered = ranked.length; // quantos candidatos foram para a escolha final
+  let pickedCount = null;        // quantos ela devolveu (null = não houve escolha final, ou ela falhou)
+  let unpicked = [];             // os que ela deixou de fora: passaram na conferência, mas a IA preferiu outros
 
   // ---- 2ª passada: escolha e ordenação ----
   let pickUsed = false;
@@ -236,7 +305,7 @@ async function analyzeWithAi(request, deps) {
     report(shareBlocks, 'ai2', `Escolhendo os melhores entre ${ranked.length} candidatos…`);
     try {
       const askPick = (maxTokens) => callWithRetry({
-        chat: deps.chat, system: SYSTEM_PROMPT,
+        chat: deps.chat, system,
         userContent: buildPickMessage({ candidates: ranked, meta: request.meta, duration, limit, prefs, profile: pickProfile }),
         maxTokens, parse: (text) => parsePicks(text), signal, sleepFn, attempts: limits.attempts, retry: deps.retry, stats,
         onRetry: ({ attempt, waitMs }) => report(shareBlocks, 'ai2', `Nova tentativa da escolha final em ${Math.max(1, Math.round(waitMs / 1000))} s (${attempt + 1} de ${limits.attempts})…`)
@@ -268,7 +337,7 @@ async function analyzeWithAi(request, deps) {
           title: pick.title || c.title, category: pick.category || c.category, reasons: pick.reasons.length ? pick.reasons : c.reasons
         });
       }
-      if (chosen.length) { ranked = chosen; pickUsed = true; } else warnings.push({ code: 'AI_PICK_EMPTY', message: 'A escolha final da IA não trouxe nenhum corte válido; foi usada a ordem da primeira passada.' });
+      if (chosen.length) { unpicked = ranked.filter((c) => !seen.has(c.cid)); pickedCount = chosen.length; ranked = chosen; pickUsed = true; } else warnings.push({ code: 'AI_PICK_EMPTY', message: 'A escolha final da IA não trouxe nenhum corte válido; foi usada a ordem da primeira passada.' });
     } catch (err) {
       if (err && err.code === 'CANCELLED') throw err;
       if (!classify(err).retry && err.code !== 'BAD_JSON') throw Object.assign(new AiError(err.code || 'ERROR', failureMessage(err)), { status: err.status });
@@ -319,10 +388,18 @@ async function analyzeWithAi(request, deps) {
     suggestions,
     ai: {
       provider: deps.provider ? deps.provider.label : '', model: deps.provider ? deps.provider.model : '',
-      blocks: windows.length, failedBlocks: failedWindows.length, pickUsed, calls: stats.calls, retries: stats.retries,
+      blocks: windows.length, failedBlocks: failedWindows.length, ...(stats.recoveredBlocks ? { recoveredBlocks: stats.recoveredBlocks } : {}), pickUsed, calls: stats.calls, retries: stats.retries,
       promptTokens: stats.promptTokens, completionTokens: stats.completionTokens, estimate: est,
       candidates: accepted.length, droppedTotal, droppedByReason: dropCount, dropped,
+      // o caminho dos candidatos, para ver ONDE os cortes se perdem (modelo que devolve poucos por bloco, conferência, ou escolha final que
+      // corta): devolvidos pelo modelo, aprovados na conferência, sem repetição, enviados à escolha final, escolhidos e entregues
+      funnel: {
+        returned: blockStats.reduce((n, b) => n + (b.returned || 0), 0), verified: accepted.length, unique: merged.kept.length,
+        offered, picked: pickedCount, final: suggestions.length, perBlock: blockStats
+      },
+      unpicked: unpicked.slice(0, MAX_UNPICKED_LISTED).map((c) => ({ start: c.start, end: c.end, title: c.title || '', relevance: c.relevance })),
       models: stats.models, // { <modelo que respondeu>: <chamadas> } (campo `model` da resposta; vazio se o provedor não informou)
+      skill: { custom: Boolean(skillBody) }, // o guia de cortes usado: o do usuário ou o padrão do app (o texto não é guardado no resultado)
       // perfil de humor do canal que foi enviado (só contagens; o texto do perfil e dos exemplos não é guardado no resultado)
       profile: useProfile
         ? { criteria: Boolean(profile.criteria), catchphrases: profile.catchphrases.length, reactions: profile.reactions.length, themes: profile.themes.length, examples: { approved: examples.approved.length, rejected: examples.rejected.length } }
@@ -331,4 +408,4 @@ async function analyzeWithAi(request, deps) {
   };
 }
 
-module.exports = { analyzeWithAi, callWithRetry, failureMessage, sleep, ALGO_VERSION, MAX_CANDIDATES_PER_BLOCK, DEFAULT_RETRY };
+module.exports = { analyzeWithAi, callWithRetry, failureMessage, sleep, ALGO_VERSION, MAX_CANDIDATES_PER_BLOCK, AUTO_CANDIDATES_PER_BLOCK, AUTO_PICK_CANDIDATES, DEFAULT_RETRY };

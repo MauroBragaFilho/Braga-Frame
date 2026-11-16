@@ -1,12 +1,13 @@
 'use strict';
 
 const { AnalysisError, cancelled } = require('./errors');
-const { ALGO_VERSION, normalizeParams, thresholds, suggestionLimit, calmLimit, canonicalJson, sha1 } = require('./params');
+const { ALGO_VERSION, RESULT_REVISION, normalizeParams, thresholds, suggestionLimit, calmLimit, canonicalJson, sha1 } = require('./params');
 const { AnalysisCache, sourceKey } = require('./cache');
 const { extractAudio, scoreAudio } = require('./audioSignal');
 const { extractImage, scoreImage } = require('./imageSignal');
 const { loadChat, chatFingerprint, scoreChat } = require('./chatSignal');
 const { scoreText } = require('./textSignal');
+const { isLaughter } = require('./transcript/format');
 const { scoreCalm } = require('./calmSignal');
 const { combine } = require('./combine');
 const { findBreaks, episodeAt } = require('./segments');
@@ -40,6 +41,49 @@ const CONVERSA_REACH = Object.freeze({ startBack: 8, startForward: 3, endForward
 // preferências pedem mais, valem as preferências
 const CONVERSA_MIN_SEC = 30;
 const CONVERSA_MAX_SEC = 75;
+// perfil de gameplay: o corte começa no lance, não na reação (combine, `leadIn`). Medido numa live de CoD (16/11/2026): o lance vem 5 a
+// 40 s antes da reação ("Nossa senhora!", o riso). O início volta 8 s antes do evento e, se o som do jogo estava ativo antes (score do
+// áudio >= 0,2, buracos de até 15 s), segue essa atividade até 40 s antes: o parceiro atropelado pelo trem 30 s antes do riso passou a
+// entrar no corte. Buraco de 12 s não alcançava (o jogo fica quieto e ninguém fala entre o lance e a reação)
+// filtro de ideias fracas (params.filterWeak; docs "Filtro de ideias fracas"): com transcrição, a sugestão precisa de ao menos uma reação de
+// voz ou do chat. Medido numa live de CoD (16/11/2026, 86 candidatos): "voz + volume" acerta 16 de 24 e "voz sem volume" 7 de 14; sem
+// voz, "volume sozinho" acerta 5 de 25, "volume + repetição/ritmo" 2 de 14 e "só repetição/ritmo/imagem" 1 de 9
+const VOICE_EVIDENCE = Object.freeze(['text:laugh', 'text:exclaim', 'text:meta', 'text:humor', 'text:structure', 'text:loop', 'chat:rate', 'chat:keywords']);
+// no perfil de conversa o ritmo de fala também é reação de voz (num podcast é uma das pistas que mais pesam: sem ela a live medida cai de 5
+// para 3 de 20); no gameplay, ritmo sozinho acertou pouco
+const VOICE_EVIDENCE_CONVERSA = Object.freeze([...VOICE_EVIDENCE, 'text:pace']);
+// o filtro só vale quando a transcrição marca reações: abaixo disto por hora (a do .md importado da live de podcast: 20; a do Whisper do
+// app na live de CoD: 61) ele fica desligado e a análise avisa. Medido em duas transcrições: é um corte prudente, não calibrado
+const MIN_VOICE_PER_HOUR = 30;
+// CONCORDÂNCIA das pistas: em quantas FAMÍLIAS independentes a sugestão tem evidência. Uma família no máximo (o volume estourado, a fala
+// rápida) diz pouco; quando a voz reage, o chat ri, o volume sobe e a fala acelera no mesmo trecho, quase sempre há um momento ali. Medido
+// numa gameplay de 4h18 contra a seleção feita à mão (lista bem aberta, 188 sugestões): 1 família 10% de acerto, 2 famílias 38%, 3 famílias
+// 51%, 4 famílias 69%. A imagem fica de fora (troca de cena acontece em quase todo trecho de jogo) e o momento calmo conta zero.
+const FAMILIES = Object.freeze({
+  voice: Object.freeze(['text:laugh', 'text:laughrun', 'text:exclaim', 'text:meta', 'text:humor', 'text:structure', 'text:loop']),
+  chat: Object.freeze(['chat:rate', 'chat:keywords', 'chat:laugh']),
+  audio: Object.freeze(['audio:level', 'audio:rise']),
+  speech: Object.freeze(['text:pace', 'text:repeat'])
+});
+/** Em quantas famílias de pista (voz, chat, volume, ritmo da fala) a evidência aparece: 0 a 4. */
+function agreementOf(evidence) {
+  let count = 0;
+  for (const kinds of Object.values(FAMILIES)) if ((evidence || []).some((e) => kinds.includes(e))) count += 1;
+  return count;
+}
+// quantidade automática: como não há teto por hora, uma pista sozinha não basta (com o filtro valendo). A sugestão precisa de duas famílias
+// de pista, ou de duas reações de voz DIFERENTES (risada e fala sobre o momento, exclamação e risada…), que já se confirmam entre si
+const AUTO_MIN_AGREEMENT = 2;
+/** A evidência se confirma? Duas famílias, ou duas reações de voz diferentes. */
+function corroborated(evidence) {
+  if (agreementOf(evidence) >= AUTO_MIN_AGREEMENT) return true;
+  return (evidence || []).filter((e) => FAMILIES.voice.includes(e)).length >= 2;
+}
+const ONE_CUE_REASON = 'uma pista só (sem outra que confirme)';
+// "fim cobrindo a reação" (combine.js, tailOut): o corte segue a risada marcada até 30 s além do fim, tolerando buracos de 4 s
+const REACTION_TAIL = Object.freeze({ maxSec: 30, gapSec: 4 });
+const WEAK_REASON = 'sem reação de voz nem do chat';
+const GAMEPLAY_LEAD = Object.freeze({ baseSec: 8, maxSec: 40, gapSec: 15, minScore: 0.2 });
 
 /**
  * Perfil de conversa: limites de FRASE para o começo e o fim dos cortes. Começo: fala depois de um ponto (ou de uma pausa). Fim: fala que
@@ -128,7 +172,7 @@ async function analyzeSource(request, deps) {
 
   // ---- cache do resultado final ----
   const resultKey = sha1(canonicalJson({
-    v: ALGO_VERSION, key, hasAudio: hasAudio !== false, params, chat: chat ? chatFingerprint(request.chatPath) : null,
+    v: ALGO_VERSION, rev: RESULT_REVISION, key, hasAudio: hasAudio !== false, params, chat: chat ? chatFingerprint(request.chatPath) : null,
     text: useText ? transcriptFingerprint(cues) : null
   })).slice(0, 32);
   const cachedResult = fresh ? null : cache.get('res', resultKey);
@@ -147,7 +191,9 @@ async function analyzeSource(request, deps) {
     prog[stage] = Math.max(prog[stage], p);
     if (!onProgress) return;
     const sum = w.audio + w.image || 1;
-    onProgress({ p: Math.min(0.97, (w.audio * prog.audio + w.image * prog.image) / sum), stage, message: stageText[stage] });
+    // stageP: quanto DESTA etapa já foi (0..1). A tela estima o tempo pela etapa em andamento: a barra inteira mistura etapas de ritmos
+    // muito diferentes (o áudio de uma live de 4 h leva 1 a 2 min e a imagem, dezenas), e a conta pela barra só fazia o tempo restante subir
+    onProgress({ p: Math.min(0.97, (w.audio * prog.audio + w.image * prog.image) / sum), stage, stageP: prog[stage], message: stageText[stage] });
   };
 
   const common = { ffmpeg: deps.ffmpeg, file, duration, signal, spawn: deps.spawn, onSpawn: deps.onSpawn, inputArgs: deps.inputArgs || [] };
@@ -224,7 +270,18 @@ async function analyzeSource(request, deps) {
   const textSec = useText ? Math.ceil(cues.reduce((m, c) => Math.max(m, c.end), 0)) : 0;
   const total = knownDuration ? duration : Math.max(audioSec, imageSec, textSec);
   const n = Math.ceil(total);
-  const th = thresholds(params.sensitivity);
+  let th = thresholds(params.sensitivity);
+  // QUANTIDADE AUTOMÁTICA com o filtro valendo (transcrição que marca reações): a detecção fica um degrau mais sensível. Sem teto por hora,
+  // quem segura a qualidade é o filtro (reação de voz ou do chat) e a exigência de duas famílias de pista; com eles, um degrau a mais trouxe
+  // 7 momentos fortes ou bons a mais na gameplay medida (25 contra 18 de 37), com as 20 primeiras da lista iguais ou melhores.
+  let autoBoost = false;
+  if (params.autoQuantity && params.filterWeak && useText && params.sensitivity < 5) {
+    const probe = scoreText({ cues }, { n, th, baselineSec: params.baselineSec, textWeights: params.textWeights, humor: params.humor, profile: params.profile });
+    if (total > 0 && (probe.stats.voiceSeconds || 0) / (total / 3600) >= MIN_VOICE_PER_HOUR) {
+      th = thresholds(params.sensitivity + 1);
+      autoBoost = true;
+    }
+  }
   const scored = [];
   if (extracted.audio) scored.push(scoreAudio(extracted.audio.data, { n, th, baselineSec: params.baselineSec }));
   const conversa = params.profile === 'conversa';
@@ -234,6 +291,7 @@ async function analyzeSource(request, deps) {
     info.chat.used = true;
     info.chat.messages = s.stats.messages;
     info.chat.keywordMessages = s.stats.keywordMessages;
+    if (s.stats.small) info.chat.laughMessages = s.stats.laughMessages; // chat pequeno: quantas mensagens de riso contaram como reação
     scored.push(s);
   }
   // momento calmo: precisa do volume (áudio); a imagem e a transcrição, quando existem, tiram pausas, telas paradas e trechos com fala
@@ -289,8 +347,41 @@ async function analyzeSource(request, deps) {
     ? findBreaks({ image: extracted.image ? extracted.image.data : null, audio: extracted.audio ? extracted.audio.data : null, cues: useText ? cues : null, n })
     : { breaks: [], episodes: [] };
   const walls = seg.breaks.map((b) => ({ ...b, gap: 0 })); // sem folga: o corte pode começar assim que a espera acaba
+  const audioScored = scored.find((s) => s.id === 'audio');
+  const leadIn = !conversa && peakSignals.length ? { ...GAMEPLAY_LEAD, signal: audioScored ? audioScored.score : new Float64Array(n) } : null;
+  // só com transcrição (sem ela não há como saber se houve reação de voz) e só na rodada dos picos (o momento calmo é calmo de propósito)
+  const filtered = [];
+  const textScored = scored.find((s) => s.id === 'text');
+  const voicePerHour = textScored && total > 0 ? (textScored.stats.voiceSeconds || 0) / (total / 3600) : 0;
+  const filterOn = Boolean(params.filterWeak && useText && peakSignals.length && voicePerHour >= MIN_VOICE_PER_HOUR);
+  if (params.filterWeak && useText && peakSignals.length && !filterOn) {
+    warnings.push({ code: 'FILTER_OFF', message: `O filtro de ideias fracas ficou desligado nesta análise: a transcrição quase não marca risadas, exclamações ou reações (${Math.round(voicePerHour)} por hora; o filtro precisa de ${MIN_VOICE_PER_HOUR}). Legenda sem pontuação ou sem risadas costuma dar isso.` });
+  }
+  const voiceKinds = conversa ? VOICE_EVIDENCE_CONVERSA : VOICE_EVIDENCE;
+  const discard = filterOn
+    ? (c) => {
+      // reação: da voz, do chat em rajada, ou a risada de um chat pequeno JUNTO de fala animada (ritmo ou repetição). A risada do chat com
+      // volume alto e mais nada acertou pouco (27% contra 43% com a fala animada, na gameplay medida): costuma ser barulho do jogo
+      const laughWithSpeech = c.evidence.includes('chat:laugh') && c.evidence.some((e) => FAMILIES.speech.includes(e));
+      if (!c.evidence.some((e) => voiceKinds.includes(e)) && !laughWithSpeech) return WEAK_REASON;
+      if (params.autoQuantity && !corroborated(c.evidence)) return ONE_CUE_REASON;
+      return null;
+    }
+    : null;
+  // risada marcada na transcrição, segundo a segundo: o corte termina depois dela (combine.js, tailOut)
+  let tailOut = null;
+  if (useText && peakSignals.length) {
+    const active = new Uint8Array(n);
+    let any = false;
+    for (const cue of cues) {
+      if (!cue || !(cue.end > cue.start) || !(cue.laugh === true || isLaughter(cue.text))) continue;
+      for (let k = Math.max(0, Math.floor(cue.start)); k < Math.min(n, Math.ceil(cue.end)); k += 1) { active[k] = 1; any = true; }
+    }
+    if (any) tailOut = { ...REACTION_TAIL, active };
+  }
   let suggestions = combine({
-    n, duration: total, signals: peakSignals.length ? peakSignals : calmSignals, params: cutParams, alignTo, blocked: walls, groups: seg.episodes
+    n, duration: total, signals: peakSignals.length ? peakSignals : calmSignals, params: cutParams, alignTo, blocked: walls, groups: seg.episodes, leadIn,
+    tailOut, discard, discarded: filtered
   });
   let limit = suggestionLimit(params, total);
   if (peakSignals.length && calmSignals.length && params.weights.calm > 0) {
@@ -300,6 +391,9 @@ async function analyzeSource(request, deps) {
     if (calmPicks.length) limit += quota; // o teto só cresce quando o calmo achou algo: sem trecho calmo, o limite é o de sempre
   }
   if (seg.episodes.length) for (const s of suggestions) s.episode = episodeAt(seg.episodes, s.peak);
+  // em quantas famílias de pista a sugestão tem evidência (informação; a ORDEM da lista continua a da relevância: ordenar pela concordância
+  // foi medido e piorou o topo da lista, 12 acertos nas 20 primeiras contra 16)
+  for (const s of suggestions) s.agreement = agreementOf(s.evidence);
   const result = {
     version: ALGO_VERSION,
     at: new Date().toISOString(),
@@ -312,6 +406,9 @@ async function analyzeSource(request, deps) {
     limit,
     episodes: seg.episodes,
     breaks: seg.breaks,
+    // o que o filtro de ideias fracas descartou (o motivo e os sinais de cada uma), para conferir
+    filtered: filtered.slice(0, 300),
+    filter: { on: filterOn, voicePerHour: Math.round(voicePerHour * 10) / 10, discarded: filtered.length, ...(autoBoost ? { autoSensitivity: params.sensitivity + 1 } : {}) },
     warnings,
     suggestions
   };
@@ -324,4 +421,7 @@ async function analyzeSource(request, deps) {
   return result;
 }
 
-module.exports = { analyzeSource, sentenceBounds, CONVERSA_MIN_SEC, CONVERSA_MAX_SEC };
+module.exports = {
+  analyzeSource, sentenceBounds, agreementOf, corroborated, CONVERSA_MIN_SEC, CONVERSA_MAX_SEC, GAMEPLAY_LEAD, VOICE_EVIDENCE, VOICE_EVIDENCE_CONVERSA, MIN_VOICE_PER_HOUR,
+  FAMILIES, AUTO_MIN_AGREEMENT, REACTION_TAIL
+};

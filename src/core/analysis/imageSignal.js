@@ -151,9 +151,9 @@ function scoreImage(extracted, { n, th, baselineSec, ignoreCuts = false }) {
         if (mk < 0 || motionZ[k] > motionZ[mk]) mk = k;
       }
     }
-    if (sk >= 0) out.push({ text: 'mudança de cena', strength: sceneScore[sk] });
+    if (sk >= 0) out.push({ kind: 'scene', text: 'mudança de cena', strength: sceneScore[sk] });
     // movimento só vira motivo se durar (a mediana de 3 s já descarta picos isolados)
-    if (mk >= 0 && motionBins >= 2) out.push({ text: `movimento intenso na imagem (${fmt1(motionZ[mk])}σ)`, strength: motionScore[mk] });
+    if (mk >= 0 && motionBins >= 2) out.push({ kind: 'motion', text: `movimento intenso na imagem (${fmt1(motionZ[mk])}σ)`, strength: motionScore[mk] });
     return out;
   }
 

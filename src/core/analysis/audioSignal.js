@@ -174,8 +174,8 @@ function scoreAudio(extracted, { n, th, baselineSec }) {
       if (peakScore[k] > 0 && (bk < 0 || z[k] > z[bk])) bk = k;
       if (riseScore[k] > 0 && (rk < 0 || rise[k] > rise[rk])) rk = k;
     }
-    if (bk >= 0) out.push({ text: `volume acima do normal de fala (+${fmtDb(sustained[bk] - base.center[bk])} dB)`, strength: peakScore[bk] });
-    if (rk >= 0) out.push({ text: `subida brusca de volume (+${fmtDb(rise[rk])} dB)`, strength: riseScore[rk] });
+    if (bk >= 0) out.push({ kind: 'level', text: `volume acima do normal de fala (+${fmtDb(sustained[bk] - base.center[bk])} dB)`, strength: peakScore[bk] });
+    if (rk >= 0) out.push({ kind: 'rise', text: `subida brusca de volume (+${fmtDb(rise[rk])} dB)`, strength: riseScore[rk] });
     return out;
   }
 

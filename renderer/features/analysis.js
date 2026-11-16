@@ -94,6 +94,25 @@
     return elapsed > 0 ? (elapsed * (1 - p)) / p : null;
   }
 
+  /**
+   * Segundos que faltam para as ETAPAS em andamento terminarem, pelo ritmo de cada uma. `stages` = { nome: { startedAt, p0, p } }: quando a
+   * etapa foi vista pela primeira vez, quanto dela já estava feito ali e quanto está feito agora (0..1). Com mais de uma em andamento (áudio e
+   * imagem ao mesmo tempo), vale a que demora mais. null = cedo demais para estimar (menos de 5 s ou de 2% andados) ou nada em andamento.
+   * A conta pela barra inteira (remainingSec) mistura etapas de ritmos diferentes e fazia o tempo restante SUBIR durante a etapa lenta.
+   */
+  function stageRemainingSec(stages, now = Date.now()) {
+    let worst = null;
+    for (const s of Object.values(stages || {})) {
+      if (!(s.p < 1)) continue;
+      const elapsed = (now - s.startedAt) / 1000;
+      const done = s.p - s.p0;
+      if (!(elapsed >= 5) || !(done >= 0.02)) return null;
+      const left = (elapsed * (1 - s.p)) / done;
+      if (worst === null || left > worst) worst = left;
+    }
+    return worst;
+  }
+
   const pct = (rel) => `${Math.round((rel || 0) * 100)}%`;
   const num = (v, fallback) => (typeof v === 'number' && Number.isFinite(v) ? v : (v !== '' && v !== null && v !== undefined && Number.isFinite(Number(v)) ? Number(v) : fallback));
 
@@ -128,14 +147,28 @@
 
   const ENGINES = [
     { id: 'algorithm', label: 'Algoritmo', hint: 'regras simples sobre áudio, imagem, chat e a transcrição; roda neste computador' },
-    { id: 'ai', label: 'IA na nuvem', hint: 'lê a transcrição e escolhe os melhores momentos' }
+    { id: 'ai', label: 'IA na nuvem', hint: 'lê a transcrição e escolhe os melhores momentos' },
+    { id: 'both', label: 'Algoritmo + IA', hint: 'roda os dois e junta as listas: o que os dois acharam vem primeiro (mais cortes; leva o tempo dos dois)' }
   ];
+  const ENGINE_IDS = ENGINES.map((e) => e.id);
+
+  /** O motor usa a IA na nuvem? ('ai' e 'both') */
+  const usesAi = (eng) => eng === 'ai' || eng === 'both';
+  /** O motor usa o algoritmo? ('algorithm' e 'both') */
+  const usesAlgorithm = (eng) => eng === 'algorithm' || eng === 'both';
 
   /** Duração em texto curto: 3:04:10 (ou 4:10). */
   const hms = (sec) => clock(sec);
 
   /** "1 chamada", "7 chamadas". */
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+  // "Só os melhores": lista curta, só as sugestões de nota mais alta. É um atalho para a quantidade FIXA abaixo, sem a quantidade
+  // automática (pedido do dono, 16/11/2026: recomendar só quando o corte for bom ou forte). Medido numa live de 4 h com Algoritmo + IA:
+  // a lista caiu de 80 para 28 sugestões e as que batem com um corte forte ou bom passaram de 39% para 79% (docs/recursos/analysis.md).
+  const BEST_ONLY_PER_HOUR = 4;
+  /** O que vai no pedido de análise: com "Só os melhores" ligado, quantidade fixa e sem automática; o ajuste guardado continua o da tela. */
+  const applyBestOnly = (s) => (s && s.bestOnly ? { ...s, autoQuantity: false, perHour: BEST_ONLY_PER_HOUR } : s);
 
   function splitKeywords(text) {
     return String(text).split(/[,;\n]/).map((w) => w.trim()).filter(Boolean);
@@ -152,6 +185,10 @@
     startedAt: 0, // Date.now() do início da análise (para estimar o tempo restante)
     notice: null, // { kind: 'error'|'info', text }
     early: [], // eventos que chegaram antes da resposta de analysis:start
+    stages: null, // { etapa: { startedAt, p0, p } } da análise em andamento (eventos com stageP), para o tempo restante; null = sem essa informação
+    skill: null, // o guia de cortes em uso (analysis:aiSkill), pedido ao abrir a caixa "Guia de cortes"
+    skillDraft: false, // a pessoa está editando o guia (o texto dela não é sobrescrito)
+    skillMsg: null, // { ok, text } da última ação no guia
     ui: {}, // nós principais
     ai: null, // estado da IA (analysis:aiState): provedor, modelo, chave guardada?, aceite… NUNCA traz a chave
     transcript: null, // resumo da transcrição do vídeo (analysis:transcriptStatus)
@@ -197,6 +234,9 @@
       weights: d ? { ...d.weights } : { audio: 0.8, image: 0.6, chat: 1, text: 1, calm: 0.7 },
       profile: d && d.profile ? d.profile : 'gameplay',
       episodes: d && typeof d.episodes === 'boolean' ? d.episodes : true,
+      autoQuantity: d && typeof d.autoQuantity === 'boolean' ? d.autoQuantity : false,
+      bestOnly: false,
+      filterWeak: d && typeof d.filterWeak === 'boolean' ? d.filterWeak : true,
       textWeights: d && d.textWeights ? { ...d.textWeights } : { laugh: 1, exclaim: 1, pace: 1, repeat: 1, meta: 1, humor: 1, structure: 1 },
       chat: {
         keywords: Array.isArray(fromPrefs) ? fromPrefs.map(String) : (d ? [...d.chat.keywords] : []),
@@ -218,21 +258,26 @@
       weights: { ...base.weights, ...(saved.weights || {}) },
       profile: PROFILES.some((p) => p.id === saved.profile) ? saved.profile : base.profile,
       episodes: typeof saved.episodes === 'boolean' ? saved.episodes : base.episodes,
+      // "Só os melhores" e a quantidade automática são opostos: se os dois vierem marcados, vale o mais exigente
+      autoQuantity: saved.bestOnly === true ? false : (typeof saved.autoQuantity === 'boolean' ? saved.autoQuantity : base.autoQuantity),
+      bestOnly: saved.bestOnly === true,
+      filterWeak: typeof saved.filterWeak === 'boolean' ? saved.filterWeak : base.filterWeak,
       textWeights: { ...base.textWeights, ...(saved.textWeights || {}) },
       chat: { ...base.chat, ...(saved.chat || {}), keywords: Array.isArray(saved.chat && saved.chat.keywords) ? saved.chat.keywords : base.chat.keywords },
       image: { ...base.image, ...(saved.image || {}) },
-      engine: saved.engine === 'ai' || saved.engine === 'algorithm' ? saved.engine : null // null = escolha automática (veja engineChoice)
+      engine: ENGINE_IDS.includes(saved.engine) ? saved.engine : null // null = escolha automática (veja engineChoice)
     };
   }
 
   /**
-   * Motor em uso. A escolha do usuário vale; sem escolha: IA se há provedor configurado COM o aviso de privacidade aceito, senão o
-   * algoritmo (que roda sem nada configurado e sem enviar nada para fora).
+   * Motor em uso. A escolha do usuário vale; sem escolha: Algoritmo + IA se há provedor configurado COM o aviso de privacidade aceito (na
+   * gameplay medida, os dois juntos acharam mais momentos bons que cada um sozinho), senão o algoritmo (que roda sem nada configurado e sem
+   * enviar nada para fora).
    */
   function engineChoice() {
     const saved = settings().engine;
     if (saved) return saved;
-    return state.ai && state.ai.ready && state.ai.accepted ? 'ai' : 'algorithm';
+    return state.ai && state.ai.ready && state.ai.accepted ? 'both' : 'algorithm';
   }
 
   /** A análise por IA pode começar? { ok, why } — `why` explica o que falta, em português. */
@@ -426,6 +471,7 @@
       title: 'Enviar trechos para a IA?',
       message: [
         'A IA vai receber trechos da transcrição deste vídeo, as mensagens do chat do mesmo período e o título, o canal e o jogo. O vídeo e o áudio nunca saem do seu computador.',
+        'O guia de cortes (as instruções de como escolher, em "Guia de cortes") vai em cada chamada; se você escreveu o seu, vai o seu texto.',
         humorProfile() ? 'O perfil de humor do canal também vai: os critérios e as listas que você escreveu e, se a opção de exemplos estiver ligada, trechos da fala de alguns cortes que você aprovou e rejeitou antes (a lista do que seria enviado aparece em "Perfil de humor do canal").' : '',
         `Quem recebe: ${where}.`,
         'Alguns planos gratuitos usam o que é enviado para treinar modelos; confira os termos do seu plano.',
@@ -472,16 +518,18 @@
     const project = BF.state.project;
     const useEngine = engine || engineChoice();
     if (!project || state.running || state.starting) return;
-    if (useEngine === 'ai' ? !aiBlockers().ok : !usableSignals().length) return;
-    const chosen = readControls();
-    if (useEngine === 'ai' && !(await ensureConsent())) return;
-    saveSettings(chosen);
+    if ((usesAi(useEngine) && !aiBlockers().ok) || (usesAlgorithm(useEngine) && !usableSignals().length)) return;
+    const controls = readControls();
+    const chosen = applyBestOnly(controls); // "Só os melhores" vira quantidade fixa no pedido; o ajuste guardado continua o da tela
+    if (usesAi(useEngine) && !(await ensureConsent())) return;
+    saveSettings(controls);
     state.notice = null;
     state.starting = true;
     state.running = true;
     state.startedAt = Date.now();
     state.lastEngine = useEngine;
     state.progress = { p: 0, message: 'Preparando…' };
+    state.stages = null;
     renderRun();
     let payload;
     if (useEngine === 'ai') {
@@ -500,13 +548,18 @@
         projectId: project.id, size: project.source.size || 0, duration: project.source.duration || (BF.state.info && BF.state.info.duration) || 0,
         ...(fresh ? { fresh: true } : {})
       };
+      if (useEngine === 'both') {
+        // Algoritmo + IA: o pedido do algoritmo mais o que a IA precisa (metadados, cortes que já existem, perfil do canal)
+        const extra = aiPayload(project, chosen);
+        payload = { ...payload, engine: 'both', meta: extra.meta, existingCuts: extra.existingCuts, ...(extra.profile ? { profile: extra.profile } : {}) };
+      }
     }
     const res = await BF.api('analysis:start', payload);
     state.starting = false;
     if (!res.ok) {
       state.running = false;
       state.progress = null;
-      state.notice = { kind: 'error', text: res.message, ...(useEngine === 'ai' ? { fallback: true } : {}) };
+      state.notice = { kind: 'error', text: res.message, ...(usesAi(useEngine) ? { fallback: true, modelHelp: res.code === 'MODEL' } : {}) };
       BF.ui.log(res.message, 'error');
       renderRun();
       renderResults();
@@ -527,20 +580,43 @@
     state.running = false;
     state.job = null;
     state.progress = null;
+    state.stages = null;
   }
 
   function onProgress(ev) {
-    state.progress = { p: ev.p, message: ev.message };
+    if (typeof ev.stageP === 'number' && ev.stage) {
+      const sp = Math.min(1, Math.max(0, ev.stageP));
+      const stages = state.stages || {};
+      if (!stages[ev.stage]) {
+        // etapa nova: as que já estavam no fim saem da conta (a última atualização delas pode ter parado em 99%)
+        for (const [name, s] of Object.entries(stages)) if (s.p >= 0.9) delete stages[name];
+        stages[ev.stage] = { startedAt: Date.now(), p0: sp, p: sp };
+      } else stages[ev.stage].p = Math.max(stages[ev.stage].p, sp);
+      state.stages = stages;
+    }
+    state.progress = { p: ev.p, message: ev.message, phase: ev.phase || null };
     renderRun();
   }
 
-  /** O que fica no projeto da execução por IA: contagens e os descartes (sem texto da transcrição). */
+  /** O caminho dos candidatos da IA, só com números: devolvidos pelo modelo, aprovados na conferência, sem repetição, enviados à escolha final, escolhidos e entregues. */
+  function compactFunnel(f) {
+    const n = (v) => (Number.isFinite(v) ? v : null);
+    return {
+      returned: n(f.returned), verified: n(f.verified), unique: n(f.unique), offered: n(f.offered), picked: n(f.picked), final: n(f.final),
+      perBlock: Array.isArray(f.perBlock) ? f.perBlock.slice(0, 60).map((b) => ({ from: n(b.from), to: n(b.to), returned: n(b.returned), verified: n(b.verified) })) : []
+    };
+  }
+
+  /** O que fica no projeto da execução por IA: contagens, os descartes e o que a escolha final deixou de fora (sem texto da transcrição). */
   function compactAi(ai) {
     return {
       provider: ai.provider, model: ai.model, blocks: ai.blocks, failedBlocks: ai.failedBlocks, calls: ai.calls, retries: ai.retries,
       promptTokens: ai.promptTokens, completionTokens: ai.completionTokens, pickUsed: ai.pickUsed, droppedTotal: ai.droppedTotal,
       ...(ai.models && typeof ai.models === 'object' ? { models: ai.models } : {}), // quem de fato respondeu: { modelo: chamadas }
       ...(ai.profile && typeof ai.profile === 'object' ? { profile: ai.profile } : {}), // só contagens do perfil de humor enviado (o texto não fica no projeto)
+      ...(ai.skill && ai.skill.custom ? { skill: { custom: true } } : {}), // a análise usou o guia de cortes do usuário (e não o padrão do app)
+      ...(ai.funnel && typeof ai.funnel === 'object' ? { funnel: compactFunnel(ai.funnel) } : {}), // quantos candidatos em cada etapa
+      ...(Array.isArray(ai.unpicked) && ai.unpicked.length ? { unpicked: ai.unpicked.slice(0, 40).map((u) => ({ start: u.start, end: u.end, title: u.title, relevance: u.relevance })) } : {}),
       droppedByReason: ai.droppedByReason, dropped: Array.isArray(ai.dropped) ? ai.dropped.slice(0, 25).map((d) => ({ reason: d.reason, detail: d.detail, start: d.start, end: d.end, title: d.title })) : []
     };
   }
@@ -566,16 +642,21 @@
         fromCache: result.fromCache,
         tookMs: result.tookMs,
         limit: result.limit,
-        engine: result.engine === 'ai' ? 'ai' : 'algorithm',
-        ai: result.engine === 'ai' && result.ai ? compactAi(result.ai) : undefined,
+        engine: usesAi(result.engine) ? result.engine : 'algorithm',
+        ai: usesAi(result.engine) && result.ai ? compactAi(result.ai) : undefined,
+        // Algoritmo + IA: quantas sugestões os dois acharam, só a IA e só o algoritmo (e se uma parte falhou)
+        ...(result.merge ? { merge: { both: result.merge.both || 0, ai: result.merge.ai || 0, algorithm: result.merge.algorithm || 0, ...(result.merge.aiFailed ? { aiFailed: true } : {}), ...(result.merge.algorithmFailed ? { algorithmFailed: true } : {}) } } : {}),
         signals: result.signals,
         warnings: result.warnings,
         // episódios e telas de espera achados (só o algoritmo acha; vazio quando a live não tem espera ou a opção está desligada)
         episodes: Array.isArray(result.episodes) ? result.episodes.map((e) => ({ start: e.start, end: e.end })) : [],
         breaks: Array.isArray(result.breaks) ? result.breaks.map((b) => ({ start: b.start, end: b.end })) : [],
+        // o filtro de ideias fracas: se valeu nesta análise e quantas descartou (a lista completa fica no resultado, não no projeto)
+        ...(result.filter ? { filter: { on: Boolean(result.filter.on), discarded: Number(result.filter.discarded) || 0 } } : {}),
         suggestions: result.suggestions.map((s) => ({
           id: s.id, start: s.start, end: s.end, peak: s.peak, relevance: s.relevance, reasons: s.reasons,
           ...(Number.isInteger(s.episode) ? { episode: s.episode } : {}),
+          ...(Array.isArray(s.engines) && s.engines.length ? { engines: s.engines.filter((e) => e === 'algorithm' || e === 'ai') } : {}),
           ...(s.title ? { title: s.title } : {}), ...(s.category ? { category: s.category } : {}),
           ...(s.layout ? { layout: s.layout } : {}), ...(Array.isArray(s.flags) && s.flags.length ? { flags: s.flags } : {}),
           ...(s.theme ? { theme: s.theme } : {}), ...(Array.isArray(s.keywords) && s.keywords.length ? { keywords: s.keywords } : {})
@@ -591,8 +672,8 @@
 
   function onFailed({ code, message }) {
     finish();
-    const wasAi = state.lastEngine === 'ai';
-    state.notice = code === 'CANCELLED' ? { kind: 'info', text: 'Análise cancelada. Nada foi alterado no projeto.' } : { kind: 'error', text: message, ...(wasAi ? { fallback: true } : {}) };
+    const wasAi = usesAi(state.lastEngine);
+    state.notice = code === 'CANCELLED' ? { kind: 'info', text: 'Análise cancelada. Nada foi alterado no projeto.' } : { kind: 'error', text: message, ...(wasAi ? { fallback: true, modelHelp: code === 'MODEL' } : {}) };
     if (code !== 'CANCELLED') BF.ui.log(message, 'error');
     renderRun();
     renderResults();
@@ -653,6 +734,11 @@
     ui.profileHint = el('span', { class: 'muted small', id: 'anProfileHint' });
     // live com vários programas (segments.js): a tela de espera fica fora e cada episódio ganha pelo menos uma sugestão
     ui.episodes = el('input', { type: 'checkbox', id: 'anEpisodes', class: 'bds-switch', role: 'switch', onchange: onControlChange });
+    // quantidade automática (sem teto por hora) e o filtro de ideias fracas (params.js)
+    ui.autoQty = el('input', { type: 'checkbox', id: 'anAutoQty', class: 'bds-switch', role: 'switch', onchange: () => { if (ui.autoQty.checked) ui.bestOnly.checked = false; onControlChange(); } });
+    // "Só os melhores" (lista curta, quantidade fixa): ligar um desliga o outro
+    ui.bestOnly = el('input', { type: 'checkbox', id: 'anBestOnly', class: 'bds-switch', role: 'switch', onchange: () => { if (ui.bestOnly.checked) ui.autoQty.checked = false; onControlChange(); } });
+    ui.filterWeak = el('input', { type: 'checkbox', id: 'anFilterWeak', class: 'bds-switch', role: 'switch', onchange: onControlChange });
     ui.sensitivity = el('input', { type: 'range', id: 'anSensitivity', min: '1', max: '5', step: '1', onchange: onControlChange, oninput: syncOutputs });
     ui.sensitivityOut = el('output', { for: 'anSensitivity', class: 'an-out' });
     ui.perHour = el('input', { type: 'range', id: 'anPerHour', min: '1', max: '20', step: '1', onchange: onControlChange, oninput: syncOutputs });
@@ -678,7 +764,7 @@
     ui.reset = el('button', { type: 'button', id: 'anReset', class: 'sm', onclick: resetSettings }, 'Restaurar padrões');
     ui.fresh = el('button', { type: 'button', id: 'anFresh', class: 'secondary sm', onclick: () => run({ fresh: true }) }, 'Analisar de novo, sem usar o guardado');
     // ajustes travados enquanto a análise roda (os sinais são tratados em renderHints)
-    ui.lockables = [ui.profile, ui.episodes, ui.sensitivity, ui.perHour, ...SIGNALS.map((sig) => ui.weights[sig.id]), ...TEXT_WEIGHTS.map((feat) => ui.textWeights[feat.id]), ui.keywords, ui.lag, ui.win, ui.fast, ui.reset];
+    ui.lockables = [ui.profile, ui.episodes, ui.autoQty, ui.bestOnly, ui.filterWeak, ui.sensitivity, ui.perHour, ...SIGNALS.map((sig) => ui.weights[sig.id]), ...TEXT_WEIGHTS.map((feat) => ui.textWeights[feat.id]), ui.keywords, ui.lag, ui.win, ui.fast, ui.reset];
 
     ui.signalsBlock = el('div', { class: 'an-block', id: 'anSignals' },
       el('h3', { class: 'panel-title' }, 'O que procurar'),
@@ -714,7 +800,13 @@
       el('div', { class: 'an-sliders' },
         ui.sensRow,
         el('label', { class: 'an-slider', for: 'anPerHour' },
-          el('span', { class: 'an-slider-head' }, el('span', { class: 'an-slider-label' }, 'Quantidade'), ui.perHourOut), ui.perHour)),
+          el('span', { class: 'an-slider-head' }, el('span', { class: 'an-slider-label' }, 'Quantidade'), ui.perHourOut), ui.perHour),
+        switchRow('an-switch-row an-best-only', 'anBestOnly', 'Só os melhores',
+          el('span', { class: 'small' }, `Lista curta: ficam só as sugestões de nota mais alta (${BEST_ONLY_PER_HOUR} por hora). É o oposto da quantidade automática: menos cortes para revisar, e bem menos sugestão fraca.`), ui.bestOnly),
+        switchRow('an-switch-row an-auto-qty', 'anAutoQty', 'Quantidade automática',
+          el('span', { class: 'small' }, 'Sem teto por hora. Com o filtro abaixo valendo, a busca fica um degrau mais sensível e só entra a reação confirmada por outra pista (mais cortes para revisar).'), ui.autoQty),
+        switchRow('an-switch-row an-filter-weak', 'anFilterWeak', 'Descartar ideias fracas',
+          el('span', { class: 'small' }, 'Com transcrição, tira o que não tem reação de voz (riso, exclamação, comentário) nem do chat (num chat pequeno, a risada escrita conta).'), ui.filterWeak)),
       ui.runArea,
       ui.advanced);
   }
@@ -726,6 +818,9 @@
     ui.profile.value = s.profile;
     ui.profileHint.textContent = (PROFILES.find((p) => p.id === s.profile) || PROFILES[0]).hint;
     ui.episodes.checked = Boolean(s.episodes);
+    ui.autoQty.checked = Boolean(s.autoQuantity);
+    ui.bestOnly.checked = Boolean(s.bestOnly);
+    ui.filterWeak.checked = Boolean(s.filterWeak);
     ui.sensitivity.value = String(s.sensitivity);
     ui.perHour.value = String(s.perHour);
     for (const sig of SIGNALS) ui.weights[sig.id].value = String(s.weights[sig.id]);
@@ -745,7 +840,17 @@
     const hours = BF.state.info && BF.state.info.duration ? BF.state.info.duration / 3600 : 0;
     const per = Number(ui.perHour.value);
     const total = hours ? Math.min(300, Math.max(3, Math.round(per * hours))) : null;
-    ui.perHourOut.textContent = `${per} por hora${total ? ` (até ${total} neste vídeo)` : ''}`;
+    if (ui.bestOnly && ui.bestOnly.checked) {
+      const best = hours ? Math.min(300, Math.max(3, Math.round(BEST_ONLY_PER_HOUR * hours))) : null;
+      ui.perHourOut.textContent = `só os melhores: ${BEST_ONLY_PER_HOUR} por hora${best ? ` (até ${best} neste vídeo)` : ''}`;
+    } else if (ui.autoQty && ui.autoQty.checked) {
+      // automática: a trava de segurança de params.js (30 por hora); o que decide é a relevância mínima e o filtro
+      const cap = hours ? Math.min(300, Math.max(3, Math.ceil(30 * hours))) : null;
+      ui.perHourOut.textContent = `automática${cap ? ` (até ${cap} neste vídeo)` : ''}`;
+    } else {
+      ui.perHourOut.textContent = `${per} por hora${total ? ` (até ${total} neste vídeo)` : ''}`;
+    }
+    ui.perHour.disabled = Boolean(state.running) || Boolean(ui.autoQty && ui.autoQty.checked) || Boolean(ui.bestOnly && ui.bestOnly.checked);
   }
 
   function readControls() {
@@ -755,6 +860,9 @@
       signals: Object.fromEntries(SIGNALS.map((sig) => [sig.id, ui.signalBoxes[sig.id].checked])),
       profile: PROFILES.some((p) => p.id === ui.profile.value) ? ui.profile.value : base.profile,
       episodes: ui.episodes.checked,
+      autoQuantity: ui.autoQty.checked,
+      bestOnly: ui.bestOnly.checked,
+      filterWeak: ui.filterWeak.checked,
       sensitivity: num(ui.sensitivity.value, base.sensitivity),
       perHour: num(ui.perHour.value, base.perHour),
       weights: Object.fromEntries(SIGNALS.map((sig) => [sig.id, Math.min(2, Math.max(0, num(ui.weights[sig.id].value, base.weights[sig.id])))])),
@@ -835,9 +943,11 @@
     const ffmpegMissing = !BF.state.tools.ffmpeg || !BF.state.tools.ffprobe;
     const noProject = !BF.state.project;
     const noSignal = !noProject && !usableSignals().length;
-    const ai = engineChoice() === 'ai';
+    const eng = engineChoice();
+    const ai = usesAi(eng);
+    const algo = usesAlgorithm(eng);
     const blockers = ai ? aiBlockers() : null;
-    ui.run.disabled = state.running || noProject || (ai ? !blockers.ok : (ffmpegMissing || noSignal));
+    ui.run.disabled = state.running || noProject || (ai && !blockers.ok) || (algo && (ffmpegMissing || noSignal));
     ui.fresh.disabled = ui.run.disabled;
     ui.run.textContent = state.running ? 'Analisando…' : 'Analisar';
     ui.cancel.hidden = !state.running;
@@ -846,22 +956,27 @@
     if (state.running) {
       const p = state.progress ? Math.min(1, Math.max(0, state.progress.p)) : 0;
       ui.progress.value = p;
-      const left = remainingSec(p, state.startedAt);
-      ui.progressText.textContent = `${state.progress ? state.progress.message : 'Preparando…'} ${Math.round(p * 100)}%${left !== null ? ` · ${eta(Math.round(left))}` : ''}`;
+      // tempo restante: pela etapa em andamento quando o processo principal a informa (stageP); senão, pela barra inteira, como antes
+      const byStage = Boolean(state.stages);
+      const left = byStage ? stageRemainingSec(state.stages) : remainingSec(p, state.startedAt);
+      const after = byStage && state.progress && state.progress.phase === 'algorithm' ? ' (depois vem a IA)' : '';
+      ui.progressText.textContent = `${state.progress ? state.progress.message : 'Preparando…'} ${Math.round(p * 100)}%${left !== null ? ` · ${eta(Math.round(left))}${byStage ? ' nesta etapa' : ''}${after}` : ''}`;
     }
-    ui.ffmpegWarn.hidden = ai || !ffmpegMissing;
-    ui.signalWarn.hidden = ai || !noSignal || state.running;
+    ui.ffmpegWarn.hidden = !algo || !ffmpegMissing;
+    ui.signalWarn.hidden = !algo || !noSignal || state.running;
     ui.aiWarn.hidden = !ai || noProject || blockers.ok || state.running;
     if (ai && !ui.aiWarn.hidden) ui.aiWarn.textContent = blockers.why.join(' ');
     // vídeo longo: avisa que a imagem demora e que existe o modo rápido (nos ajustes avançados)
-    const long = !ai && Boolean(BF.state.info) && BF.state.info.duration > 3600 && !(ui.fast && ui.fast.checked);
+    const long = algo && Boolean(BF.state.info) && BF.state.info.duration > 3600 && !(ui.fast && ui.fast.checked);
     ui.longWarn.hidden = !long || state.running;
     // durante a análise os ajustes ficam travados (os sinais são tratados em renderHints)
     for (const control of ui.lockables) control.disabled = state.running;
+    if ((ui.autoQty && ui.autoQty.checked) || (ui.bestOnly && ui.bestOnly.checked)) ui.perHour.disabled = true; // quantidade automática ou "só os melhores": o controle por hora não vale
     for (const button of Object.values(ui.engineButtons || {})) button.disabled = state.running;
     if (ui.tGenerate) renderTranscript();
     if (ui.aiLockables) for (const node of ui.aiLockables) node.disabled = state.running;
     if (ui.hCard) renderHumor(); // o perfil de humor também trava durante a análise
+    if (ui.skillBox) renderSkill(); // e o guia de cortes
     if (ui.orPicker) ui.orPicker.bfPicker.setDisabled(state.running); // o seletor do OpenRouter também trava durante a análise
     renderHints();
     renderNotice();
@@ -876,12 +991,24 @@
     if (state.notice && state.notice.fallback) {
       items.push(el('div', { class: 'an-note an-error', role: 'alert', id: 'anFallback' },
         el('span', { class: 'an-note-text' }, state.notice.text),
+        // modelo recusado (nome errado, aposentado ou indisponível para a chave): a lista do provedor resolve
+        state.notice.modelHelp ? el('button', { type: 'button', id: 'anModelHelp', class: 'sm', onclick: () => openModelList() }, 'Ver modelos disponíveis') : null,
         el('button', { type: 'button', id: 'anUseAlgorithm', class: 'sm', onclick: useAlgorithm }, 'Usar o algoritmo')));
     } else if (state.notice) items.push(el('p', { class: `an-note ${state.notice.kind === 'error' ? 'an-error' : ''}`, role: state.notice.kind === 'error' ? 'alert' : undefined }, state.notice.text));
     if (!state.running && saved && saved.warnings) {
       for (const w of saved.warnings) items.push(el('p', { class: 'an-note an-warn' }, `Aviso: ${w.message}`));
     }
     ui.notice.replaceChildren(...items);
+  }
+
+  /** "a IA propôs 42 candidatos, 38 passaram na conferência, a escolha final ficou com 17 de 38" ('' nas análises antigas, sem a contagem). */
+  function funnelText(ai) {
+    const f = ai && ai.funnel;
+    if (!f || !Number.isFinite(f.returned)) return '';
+    const parts = [`a IA propôs ${plural(f.returned, 'candidato', 'candidatos')}`];
+    if (Number.isFinite(f.verified) && f.verified !== f.returned) parts.push(`${f.verified} ${f.verified === 1 ? 'passou' : 'passaram'} na conferência`);
+    if (Number.isFinite(f.picked) && Number.isFinite(f.offered) && f.picked < f.offered) parts.push(`a escolha final ficou com ${f.picked} de ${f.offered}`);
+    return parts.join(', ');
   }
 
   function aiSummaryText(saved, counts) {
@@ -891,15 +1018,51 @@
     if (counts.dismissed) parts.push(`${counts.dismissed} descartada(s)`);
     parts.push(`IA: ${[ai.provider, ai.model].filter(Boolean).join(' · ') || 'provedor'}`);
     if (ai.calls) parts.push(`${plural(ai.calls, 'chamada', 'chamadas')}, ~${Math.max(1, Math.round(((ai.promptTokens || 0) + (ai.completionTokens || 0)) / 1000)).toLocaleString('pt-BR')} mil tokens`);
+    if (funnelText(ai)) parts.push(funnelText(ai));
     if (ai.profile) parts.push(`perfil do canal enviado: ${humorSentText(ai.profile)}`);
+    if (ai.skill && ai.skill.custom) parts.push('com o seu guia de cortes');
     if (ai.failedBlocks) parts.push(`${plural(ai.failedBlocks, 'bloco falhou', 'blocos falharam')}`);
     if (ai.droppedTotal) parts.push(`${ai.droppedTotal} descartada(s) na conferência local`);
     parts.push(`calculado em ${Math.max(1, Math.round((saved.tookMs || 0) / 1000))} s`);
     return parts.join(' · ');
   }
 
+  /** Episódios, telas de espera e ideias fracas descartadas (só o algoritmo acha). */
+  function algorithmExtras(saved) {
+    const parts = [];
+    const episodes = Array.isArray(saved.episodes) ? saved.episodes.length : 0;
+    const waitMin = Array.isArray(saved.breaks) ? Math.round(saved.breaks.reduce((sum, b) => sum + (b.end - b.start), 0) / 60) : 0;
+    if (episodes > 1) parts.push(`${episodes} episódios`);
+    if (Array.isArray(saved.breaks) && saved.breaks.length) parts.push(`telas de espera puladas (${waitMin < 1 ? 'menos de 1' : waitMin} min)`);
+    if (saved.filter && saved.filter.on && saved.filter.discarded > 0) parts.push(plural(saved.filter.discarded, 'ideia fraca descartada', 'ideias fracas descartadas'));
+    return parts;
+  }
+
+  /** Resumo do modo Algoritmo + IA: de onde veio cada sugestão, o que o algoritmo usou e o que a IA gastou. */
+  function bothSummaryText(saved, counts) {
+    const m = saved.merge || {};
+    const ai = saved.ai || null;
+    const parts = [`${saved.suggestions.length} sugestão(ões) encontrada(s): ${m.both || 0} que os dois acharam, ${m.ai || 0} só da IA, ${m.algorithm || 0} só do algoritmo`];
+    if (counts.inCuts) parts.push(`${counts.inCuts} já nos cortes`);
+    if (counts.dismissed) parts.push(`${counts.dismissed} descartada(s)`);
+    const used = SIGNALS.filter((sig) => saved.signals && saved.signals[sig.id] && saved.signals[sig.id].used).map((sig) => sig.label.toLowerCase());
+    if (!m.algorithmFailed) parts.push(`sinais do algoritmo: ${used.join(', ') || 'nenhum'}`);
+    parts.push(...algorithmExtras(saved));
+    if (ai) {
+      parts.push(`IA: ${[ai.provider, ai.model].filter(Boolean).join(' · ') || 'provedor'}`);
+      if (ai.calls) parts.push(`${plural(ai.calls, 'chamada', 'chamadas')}, ~${Math.max(1, Math.round(((ai.promptTokens || 0) + (ai.completionTokens || 0)) / 1000)).toLocaleString('pt-BR')} mil tokens`);
+      if (funnelText(ai)) parts.push(funnelText(ai));
+      if (ai.skill && ai.skill.custom) parts.push('com o seu guia de cortes');
+      if (ai.failedBlocks) parts.push(`${plural(ai.failedBlocks, 'bloco falhou', 'blocos falharam')}`);
+      if (ai.droppedTotal) parts.push(`${ai.droppedTotal} descartada(s) na conferência local`);
+    }
+    parts.push(`calculado em ${Math.max(1, Math.round((saved.tookMs || 0) / 1000))} s`);
+    return parts.join(' · ');
+  }
+
   function summaryText(saved, counts) {
     if (saved.engine === 'ai') return aiSummaryText(saved, counts);
+    if (saved.engine === 'both') return bothSummaryText(saved, counts);
     const used = SIGNALS.filter((sig) => saved.signals && saved.signals[sig.id] && saved.signals[sig.id].used).map((sig) => sig.label.toLowerCase());
     const ignored = SIGNALS.filter((sig) => saved.signals && saved.signals[sig.id] && !saved.signals[sig.id].used)
       .map((sig) => `${sig.label.toLowerCase()} (${saved.signals[sig.id].reason || 'ignorado'})`);
@@ -909,10 +1072,7 @@
     parts.push(`sinais usados: ${used.join(', ') || 'nenhum'}`);
     const humorHits = saved.signals && saved.signals.text ? saved.signals.text.humorHits : undefined;
     if (typeof humorHits === 'number') parts.push(`perfil do canal: ${plural(humorHits, 'expressão achada', 'expressões achadas')} na fala`);
-    const episodes = Array.isArray(saved.episodes) ? saved.episodes.length : 0;
-    const waitMin = Array.isArray(saved.breaks) ? Math.round(saved.breaks.reduce((sum, b) => sum + (b.end - b.start), 0) / 60) : 0;
-    if (episodes > 1) parts.push(`${episodes} episódios`);
-    if (Array.isArray(saved.breaks) && saved.breaks.length) parts.push(`telas de espera puladas (${waitMin < 1 ? 'menos de 1' : waitMin} min)`);
+    parts.push(...algorithmExtras(saved));
     if (ignored.length) parts.push(`ignorados: ${ignored.join('; ')}`);
     const secs = Math.max(1, Math.round((saved.tookMs || 0) / 1000));
     parts.push(saved.fromCache ? 'resultado do cache' : `calculado em ${secs} s`);
@@ -934,6 +1094,7 @@
     ui.summary.textContent = summaryText(saved, counts);
     renderAiModels(saved);
     renderAiDrops(saved);
+    renderAiUnpicked(saved);
     ui.addAll.hidden = list.length < 2;
     ui.addAll.textContent = `Adicionar todas (${list.length})`;
     ui.addAll.disabled = state.running;
@@ -970,7 +1131,7 @@
    */
   function renderAiModels(saved) {
     const ui = state.ui;
-    const ai = saved.engine === 'ai' && saved.ai ? saved.ai : null;
+    const ai = usesAi(saved.engine) && saved.ai ? saved.ai : null;
     const entries = ai && ai.models && typeof ai.models === 'object' ? Object.entries(ai.models).filter(([, n]) => n > 0) : [];
     const differs = entries.some(([id]) => id !== ai.model);
     ui.models.hidden = !entries.length || !differs;
@@ -980,13 +1141,37 @@
   /** Seção recolhida com o que a conferência local descartou (só nas análises por IA). */
   function renderAiDrops(saved) {
     const ui = state.ui;
-    const dropped = saved.engine === 'ai' && saved.ai && Array.isArray(saved.ai.dropped) ? saved.ai.dropped : [];
+    const dropped = usesAi(saved.engine) && saved.ai && Array.isArray(saved.ai.dropped) ? saved.ai.dropped : [];
     ui.aiDropBox.hidden = !dropped.length;
     if (!dropped.length) return;
     ui.aiDropTitle.textContent = `Descartadas na conferência (${saved.ai.droppedTotal || dropped.length})`;
     ui.aiDropList.replaceChildren(...dropped.map((d) => el('li', { class: 'an-drop' },
       el('span', { class: 'an-time small' }, `${clock(d.start)} → ${clock(d.end)}`),
       el('span', { class: 'muted small' }, `${d.title ? `${d.title} · ` : ''}${d.detail || d.reason}`))));
+  }
+
+  /** Seção recolhida com os candidatos que passaram na conferência e que a escolha final da IA deixou de fora (só nas análises por IA). */
+  function renderAiUnpicked(saved) {
+    const ui = state.ui;
+    const list = usesAi(saved.engine) && saved.ai && Array.isArray(saved.ai.unpicked) ? saved.ai.unpicked : [];
+    ui.aiUnpickedBox.hidden = !list.length;
+    if (!list.length) return;
+    const f = saved.ai.funnel || {};
+    const total = Number.isFinite(f.offered) && Number.isFinite(f.picked) ? Math.max(list.length, f.offered - f.picked) : list.length;
+    ui.aiUnpickedTitle.textContent = `Fora da escolha final da IA (${total})`;
+    ui.aiUnpickedList.replaceChildren(...list.map((u) => el('li', { class: 'an-drop' },
+      el('span', { class: 'an-time small' }, `${clock(u.start)} → ${clock(u.end)}`),
+      el('span', { class: 'muted small' }, `${u.title || 'sem título'}${Number.isFinite(u.relevance) ? ` · relevância ${Math.round(u.relevance * 100)}%` : ''}`))));
+  }
+
+  /** Algoritmo + IA: qual motor achou a sugestão (null nas análises de um motor só). */
+  function engineChip(s) {
+    if (!Array.isArray(s.engines) || !s.engines.length) return null;
+    const both = s.engines.includes('algorithm') && s.engines.includes('ai');
+    if (both) return el('li', { class: 'bds-chip bds-chip-accent an-engine-chip', title: 'O algoritmo e a IA acharam este momento' }, 'Algoritmo + IA');
+    return s.engines[0] === 'ai'
+      ? el('li', { class: 'bds-chip an-engine-chip', title: 'Só a IA achou este momento' }, 'IA')
+      : el('li', { class: 'bds-chip an-engine-chip', title: 'Só o algoritmo achou este momento' }, 'Algoritmo');
   }
 
   function row(s, index) {
@@ -999,8 +1184,9 @@
         el('span', { class: 'an-dur muted small' }, `${dur} s`),
         el('span', { class: 'an-rel bds-chip bds-chip-accent', title: 'Relevância estimada pelas regras (0 a 100%). Não é garantia.', 'aria-label': `Relevância ${pct(s.relevance)}` }, pct(s.relevance))),
       s.title ? el('p', { class: 'an-cut-title' }, s.title) : null,
-      (s.category || s.layout || s.theme || s.episode || s.reasons.length)
+      (s.category || s.layout || s.theme || s.episode || s.reasons.length || engineChip(s))
         ? el('ul', { class: 'an-reasons' },
+          engineChip(s),
           s.episode ? el('li', { class: 'bds-chip bds-chip-info an-episode', title: 'Episódio da live (contado entre as telas de espera)' }, `Episódio ${s.episode}`) : null,
           s.category ? el('li', { class: 'bds-chip bds-chip-info' }, s.category) : null,
           s.theme ? el('li', { class: 'bds-chip bds-chip-accent an-theme', title: 'Tema do perfil do canal' }, `Tema: ${s.theme}`) : null,
@@ -1114,7 +1300,7 @@
     const project = BF.state.project;
     state.estimate = null;
     state.orFree = null;
-    if (!project || engineChoice() !== 'ai' || !state.ai || !state.ai.ready || !state.transcript || !state.transcript.exists || state.transcript.stale) { renderAi(); return; }
+    if (!project || !usesAi(engineChoice()) || !state.ai || !state.ai.ready || !state.transcript || !state.transcript.exists || state.transcript.stale) { renderAi(); return; }
     const profile = humorProfile();
     const res = await BF.api('analysis:aiEstimate', {
       projectId: project.id, path: project.source.path, size: project.source.size || 0, duration: project.source.duration || 0,
@@ -1159,7 +1345,7 @@
 
   /** Salva o motor escolhido neste projeto (a escolha automática vale enquanto o usuário não escolher). */
   function setEngine(id) {
-    if (!BF.state.project || state.running || (id !== 'ai' && id !== 'algorithm')) return;
+    if (!BF.state.project || state.running || !ENGINE_IDS.includes(id)) return;
     saveSettings({ ...readControls(), engine: id });
     renderAll();
     renderResults();
@@ -1213,6 +1399,99 @@
       if (!ok) { renderAi(); return; }
     }
     await saveAi({ baseUrl: value });
+  }
+
+  /** Busca no provedor a lista de modelos que a chave guardada pode usar (o processo principal faz o pedido; a chave não passa por aqui). */
+  async function loadModels() {
+    state.modelsBusy = true;
+    state.modelsMsg = { kind: 'muted', text: 'Buscando os modelos no provedor…' };
+    renderAi();
+    const res = await BF.api('analysis:aiModels');
+    state.modelsBusy = false;
+    if (!res.ok) {
+      state.models = null;
+      state.modelsMsg = { kind: 'bad', text: res.message || 'Não foi possível buscar a lista de modelos.' };
+    } else {
+      const list = Array.isArray(res.models) ? res.models : [];
+      state.models = { provider: res.provider, list };
+      state.modelsMsg = list.length
+        ? { kind: 'good', text: `${plural(list.length, 'modelo disponível', 'modelos disponíveis')} neste provedor${res.hidden ? (res.hidden === 1 ? ' (1 outro, de embedding, voz ou imagem, ficou de fora)' : ` (${res.hidden} outros, de embedding, voz ou imagem, ficaram de fora)`) : ''}. Escolha na lista.` }
+        : { kind: 'muted', text: 'O provedor não informou nenhum modelo de conversa. Digite o nome do modelo.' };
+    }
+    renderAi();
+  }
+
+  function pickModel() {
+    const id = state.ui.cfgModelPick.value;
+    if (!id) return;
+    state.ui.cfgModel.value = id;
+    saveAi({ model: id });
+  }
+
+  /** Do aviso de "modelo recusado": abre o cartão do provedor e busca a lista. */
+  async function openModelList() {
+    const ui = state.ui;
+    ui.aiConfig.open = true;
+    try { ui.cfgModelField.scrollIntoView({ block: 'center' }); } catch { /* sem rolagem no ambiente de teste */ }
+    await loadModels();
+  }
+
+  // ---------- guia de cortes (skill): o texto que ensina a IA a escolher ----------
+
+  /** Busca o guia em uso (o do usuário ou o padrão do app). Só ao abrir a caixa: nada é pedido antes. */
+  async function loadSkill() {
+    const res = await BF.api('analysis:aiSkill');
+    if (res.ok && res.skill) { state.skill = res.skill; state.skillDraft = false; state.skillMsg = null; }
+    else state.skillMsg = { ok: false, text: res.message || 'Não foi possível ler o guia de cortes.' };
+    renderSkill();
+  }
+
+  async function saveSkill() {
+    const ui = state.ui;
+    if (!state.skill || state.running) return;
+    const res = await BF.api('analysis:aiSkillSave', { text: ui.skillText.value });
+    if (res.ok && res.skill) {
+      state.skill = res.skill;
+      state.skillDraft = false;
+      state.skillMsg = { ok: true, text: res.skill.source === 'custom' ? 'Guia salvo. Vale a partir da próxima análise.' : 'O texto é igual ao guia do app: continua valendo o padrão.' };
+      refreshEstimate();
+    } else state.skillMsg = { ok: false, text: res.message || 'Não foi possível salvar o guia.' };
+    renderSkill();
+  }
+
+  async function resetSkill() {
+    if (!state.skill || state.running) return;
+    const ok = await BF.ui.confirm({ title: 'Restaurar o guia do app?', message: 'O seu guia de cortes será apagado e volta a valer o guia padrão do app.', okLabel: 'Restaurar o padrão', cancelLabel: 'Cancelar' });
+    if (!ok) return;
+    const res = await BF.api('analysis:aiSkillReset');
+    if (res.ok && res.skill) {
+      state.skill = res.skill;
+      state.skillDraft = false;
+      state.skillMsg = { ok: true, text: 'Voltou a valer o guia padrão do app.' };
+      refreshEstimate();
+    } else state.skillMsg = { ok: false, text: res.message || 'Não foi possível restaurar o guia.' };
+    renderSkill();
+  }
+
+  function renderSkill() {
+    const ui = state.ui;
+    if (!ui.skillBox) return;
+    const s = state.skill;
+    const custom = Boolean(s) && s.source === 'custom';
+    ui.skillChip.hidden = !s;
+    ui.skillChip.textContent = custom ? 'Personalizado' : 'Padrão';
+    ui.skillChip.className = `bds-chip${custom ? ' bds-chip-accent' : ''}`;
+    if (s && !state.skillDraft && ui.skillText.value !== s.text) ui.skillText.value = s.text; // o que a pessoa está digitando não é sobrescrito
+    const edited = Boolean(s) && ui.skillText.value !== s.text;
+    const n = ui.skillText.value.length;
+    ui.skillInfo.textContent = !s
+      ? 'Carregando o guia…'
+      : `${custom ? 'O seu guia' : 'Guia padrão do app'} · ${n.toLocaleString('pt-BR')} caracteres (cerca de ${Math.ceil(n / 3.2).toLocaleString('pt-BR')} tokens em cada chamada; máximo de ${s.maxChars.toLocaleString('pt-BR')} caracteres)${edited ? ' · alterado, ainda não salvo' : ''}`;
+    ui.skillText.disabled = state.running || !s;
+    ui.skillSave.disabled = state.running || !s || !edited;
+    ui.skillReset.disabled = state.running || !custom;
+    ui.skillOut.textContent = state.skillMsg ? state.skillMsg.text : '';
+    ui.skillOut.className = `small${state.skillMsg && state.skillMsg.ok === false ? ' an-error' : ''}`;
   }
 
   async function testConnection() {
@@ -1638,7 +1917,8 @@
 
     ui.cfgProvider = el('select', { id: 'anCfgProvider', 'aria-label': 'Provedor de IA', onchange: () => { if (ui.cfgProvider.value) saveAi({ provider: ui.cfgProvider.value }); } });
     ui.cfgBaseUrl = el('input', { type: 'url', id: 'anCfgUrl', placeholder: 'https://servidor/v1', autocomplete: 'off', spellcheck: 'false', onchange: changeBaseUrl });
-    ui.cfgBaseUrlField = field('Endereço do servidor', ui.cfgBaseUrl, 'compatível com a API de chat da OpenAI', true);
+    ui.cfgBaseUrlField = field('Endereço do servidor', ui.cfgBaseUrl, 'compatível com a API de chat da OpenAI; http:// só para este computador ou a sua rede local', true);
+    ui.cfgLanNote = el('p', { class: 'an-note an-warn an-field-wide', id: 'anCfgLanNote', hidden: true });
     ui.cfgModelList = el('datalist', { id: 'anCfgModelList' });
     ui.cfgModel = el('input', { type: 'text', id: 'anCfgModel', list: 'anCfgModelList', placeholder: 'nome do modelo', autocomplete: 'off', spellcheck: 'false', onchange: () => saveAi({ model: ui.cfgModel.value }) });
     ui.cfgKey = el('input', { type: 'password', id: 'anCfgKey', placeholder: 'Cole a chave de API', autocomplete: 'off', spellcheck: 'false', 'aria-label': 'Chave de API', onchange: saveKey });
@@ -1657,7 +1937,17 @@
         el('span', { class: 'small' }, 'O modelo do assistente precisa ser gratuito: um modelo pago do OpenRouter é recusado antes de qualquer envio'), ui.hostFree));
     // --- OpenRouter (só no provedor local OpenRouter, com os componentes de renderer/features/aiOpenrouter.js): o seletor de modelos (criado UMA
     // vez, porque ele busca a lista ao nascer), o selo de pedidos gratuitos restantes e os "Modelos de reserva" (fallback entre gratuitos)
-    ui.cfgModelField = field('Modelo', ui.cfgModel, 'você escolhe o modelo; a lista só sugere um nome', true);
+    // a lista de modelos que a CHAVE pode usar (GET /models no processo principal, onde a chave fica): botão, seletor e o que aconteceu
+    ui.cfgModelsBtn = el('button', { type: 'button', id: 'anCfgModels', class: 'sm', onclick: () => loadModels() }, 'Ver modelos disponíveis');
+    ui.cfgModelPick = el('select', { id: 'anCfgModelPick', 'aria-label': 'Modelos disponíveis', hidden: true, onchange: pickModel });
+    ui.cfgModelsOut = el('p', { class: 'small', id: 'anCfgModelsOut', role: 'status' });
+    ui.cfgModel.setAttribute('aria-label', 'Modelo');
+    ui.cfgModelField = el('div', { class: 'an-field an-field-wide', id: 'anCfgModelField' },
+      el('span', { class: 'an-field-label' }, 'Modelo'),
+      el('div', { class: 'an-keyrow' }, ui.cfgModel, ui.cfgModelsBtn),
+      ui.cfgModelPick,
+      el('span', { class: 'muted small' }, 'você escolhe o modelo; "Ver modelos disponíveis" lista os que a sua chave pode usar'),
+      ui.cfgModelsOut);
     ui.orChipHost = el('div', { class: 'an-or-chip', id: 'anOrLimits', hidden: true });
     ui.orPickerHost = el('div', { class: 'an-or-picker', id: 'anOrPicker' });
     ui.orReserve = [1, 2, 3].map((n) => el('select', { id: `anOrReserve${n}`, 'aria-label': `${n}ª reserva`, onchange: saveReserve }));
@@ -1682,6 +1972,7 @@
     ui.cfgLocal = el('div', { class: 'an-adv-group', id: 'anCfgLocal' },
       field('Provedor', ui.cfgProvider),
       ui.cfgBaseUrlField,
+      ui.cfgLanNote,
       ui.cfgModelField,
       ui.orBlock,
       ui.cfgModelList,
@@ -1702,10 +1993,26 @@
           el('h4', { class: 'an-group-title' }, 'Limites'),
           el('div', { class: 'an-adv-grid an-adv-two' }, limitFields),
           el('p', { class: 'muted small' }, 'A tela mostra a estimativa antes de analisar; passar do limite de chamadas bloqueia a análise.'))));
-    ui.aiLockables = [ui.cfgProvider, ui.cfgBaseUrl, ui.cfgModel, ui.cfgKey, ui.cfgKeySave, ui.cfgKeyClear, ui.cfgAccept, ui.hostFree, ...ui.orReserve, ...Object.values(ui.limits)];
+    // guia de cortes (skill): o texto que ensina a IA a escolher; o do usuário vale no lugar do padrão do app
+    ui.skillChip = el('span', { class: 'bds-chip', id: 'anSkillChip', hidden: true });
+    ui.skillText = el('textarea', { id: 'anSkillText', rows: '14', spellcheck: 'true', 'aria-label': 'Texto do guia de cortes', oninput: () => { state.skillDraft = true; state.skillMsg = null; renderSkill(); } });
+    ui.skillText.disabled = true;
+    ui.skillInfo = el('p', { class: 'muted small', id: 'anSkillInfo' });
+    ui.skillOut = el('p', { class: 'small', id: 'anSkillOut', role: 'status' });
+    ui.skillSave = el('button', { type: 'button', id: 'anSkillSave', class: 'sm', onclick: saveSkill }, 'Salvar guia');
+    ui.skillReset = el('button', { type: 'button', id: 'anSkillReset', class: 'sm', onclick: resetSkill }, 'Restaurar o padrão');
+    ui.skillSave.disabled = true;
+    ui.skillReset.disabled = true;
+    ui.skillBox = el('details', { class: 'an-config an-skill', id: 'anSkillBox', ontoggle: () => { if (ui.skillBox.open && !state.skill) loadSkill(); } },
+      el('summary', {}, 'Guia de cortes ', ui.skillChip),
+      el('div', { class: 'an-adv-body' },
+        el('p', { class: 'small' }, 'O texto que ensina a IA a escolher os cortes: o que vale, onde começar e terminar, o que descartar. Vai em cada chamada, para qualquer provedor. Adapte ao seu canal: exemplos do que você gosta e do que não gosta ajudam.'),
+        ui.skillText, ui.skillInfo,
+        el('div', { class: 'an-adv-actions' }, ui.skillSave, ui.skillReset, ui.skillOut)));
+    ui.aiLockables = [ui.cfgProvider, ui.cfgBaseUrl, ui.cfgModel, ui.cfgModelsBtn, ui.cfgModelPick, ui.cfgKey, ui.cfgKeySave, ui.cfgKeyClear, ui.cfgAccept, ui.hostFree, ...ui.orReserve, ...Object.values(ui.limits)];
     ui.pCard = el('div', { class: 'an-card', id: 'anProviderCard' },
       el('div', { class: 'an-split' }, el('strong', {}, 'Provedor de IA'), ui.pChip),
-      ui.pLine, ui.orChipHost, ui.estLine, ui.estFree, ui.aiConfig);
+      ui.pLine, ui.orChipHost, ui.estLine, ui.estFree, ui.aiConfig, ui.skillBox);
     ui.aiRoot = el('div', { class: 'an-ai', id: 'anAi', hidden: true }, ui.pCard);
   }
 
@@ -1724,10 +2031,12 @@
     ui.signalsBlock.hidden = eng === 'ai';
     ui.sensRow.hidden = eng === 'ai';
     ui.advanced.hidden = eng === 'ai';
-    ui.aiRoot.hidden = eng !== 'ai';
+    ui.aiRoot.hidden = !usesAi(eng);
     ui.intro.textContent = eng === 'ai'
       ? 'A IA lê a transcrição do vídeo e sugere os melhores momentos. O app confere cada horário e cada frase antes de virar sugestão. Sugestão não é garantia: revise cada trecho.'
-      : 'Procura volume acima do normal de fala, mudanças de imagem, agitação do chat e, com a transcrição, risadas, exclamações e ritmo de fala. São regras simples, não inteligência artificial: sugestão não é garantia — revise cada trecho.';
+      : eng === 'both'
+        ? 'Roda o algoritmo (neste computador) e depois a IA (na nuvem, com a transcrição), e junta as duas listas: o momento que os dois acharam aparece uma vez só, no topo. Leva o tempo dos dois. Sugestão não é garantia: revise cada trecho.'
+        : 'Procura volume acima do normal de fala, mudanças de imagem, agitação do chat e, com a transcrição, risadas, exclamações e ritmo de fala. São regras simples, não inteligência artificial: sugestão não é garantia — revise cada trecho.';
   }
 
   function renderTranscript() {
@@ -1745,7 +2054,7 @@
       ui.tProgressText.textContent = `${job.message}${total ? ` · ${hms(job.doneUntil)} de ${hms(total)}` : ''}`;
       ui.tCancel.disabled = state.tstarting && !state.tjob;
     }
-    const ai = engineChoice() === 'ai';
+    const ai = usesAi(engineChoice());
     let chip = [ai ? 'Ausente' : 'Opcional', 'bds-chip bds-chip-warn'];
     let line = ai
       ? 'Sem transcrição. A IA precisa do texto do vídeo: gere com o Whisper (neste computador) ou importe uma legenda .srt/.vtt.'
@@ -1839,12 +2148,32 @@
     }
     if (ui.cfgProvider.value !== (ai.selected || '')) ui.cfgProvider.value = ai.selected || '';
     ui.cfgBaseUrlField.hidden = ai.selected !== 'custom';
+    // servidor http:// em outra máquina da rede local: a chave vai sem criptografia, e a tela diz isso junto do endereço
+    ui.cfgLanNote.hidden = !(ai.selected === 'custom' && p.localNetwork);
+    ui.cfgLanNote.textContent = ui.cfgLanNote.hidden ? '' : 'Este endereço usa http:// na rede local: a chave e o conteúdo vão sem criptografia. Use só numa rede em que você confia.';
     if (!typing(ui.cfgBaseUrl)) ui.cfgBaseUrl.value = p.baseUrl || '';
     if (!typing(ui.cfgModel)) ui.cfgModel.value = p.model || '';
     // o modelo é escolha do usuário: o campo começa vazio e a lista só SUGERE um nome (se o provedor tiver sugestão)
     const suggested = p.suggestedModel || '';
     ui.cfgModel.placeholder = none ? 'escolha o provedor primeiro' : (suggested ? `ex.: ${suggested}` : 'nome do modelo');
-    ui.cfgModelList.replaceChildren(...(suggested ? [el('option', { value: suggested })] : []));
+    // a lista buscada vale só para o provedor em que foi buscada (trocar de provedor ou de chave pede outra)
+    if (state.models && state.models.provider !== ai.selected) { state.models = null; state.modelsMsg = null; }
+    const live = state.models ? state.models.list : [];
+    ui.cfgModelList.replaceChildren(...[...new Set([...(suggested ? [suggested] : []), ...live])].map((id) => el('option', { value: id })));
+    ui.cfgModelPick.hidden = !live.length;
+    if (live.length) {
+      const key = live.join('|') + '#' + (p.model || '');
+      if (ui.cfgModelPick.dataset.key !== key) {
+        ui.cfgModelPick.replaceChildren(el('option', { value: '' }, `Escolha um dos ${live.length} modelos…`),
+          ...live.map((id) => el('option', { value: id }, id === p.model ? `${id} (em uso)` : id)));
+        ui.cfgModelPick.dataset.key = key;
+      }
+      ui.cfgModelPick.value = live.includes(p.model) ? p.model : '';
+    }
+    ui.cfgModelsBtn.hidden = Boolean(p.freeCapable) || Boolean(host);
+    ui.cfgModelsBtn.disabled = none || state.running || Boolean(state.modelsBusy);
+    ui.cfgModelsOut.textContent = state.modelsMsg ? state.modelsMsg.text : '';
+    ui.cfgModelsOut.className = `small ${state.modelsMsg && state.modelsMsg.kind === 'bad' ? 'an-bad' : (state.modelsMsg && state.modelsMsg.kind === 'good' ? 'an-good' : 'muted')}`;
     ui.cfgKey.placeholder = none ? 'escolha o provedor primeiro' : (p.hasKey ? 'Colar uma chave nova para trocar' : (p.keyRequired ? 'Cole a chave de API' : 'Chave (opcional neste servidor)'));
     ui.cfgKeyState.className = `bds-chip ${p.hasKey ? (p.keyStatus === 'unreadable' ? 'bds-chip-warn' : 'bds-chip-ok') : ''}`;
     ui.cfgKeyState.textContent = p.hasKey ? (p.keyStatus === 'unreadable' ? 'Chave ilegível: informe de novo' : 'Chave guardada neste computador') : 'Nenhuma chave guardada';
@@ -1868,7 +2197,7 @@
     if (none) for (const node of [ui.cfgModel, ui.cfgKey, ui.cfgKeySave, ui.cfgAccept]) node.disabled = true; // sem provedor escolhido não há o que configurar
     if (host) ui.cfgAccept.disabled = state.running;
     // sem provedor pronto o cartão de configuração já vem aberto
-    if (!ready && !state.autoOpened && engineChoice() === 'ai') { ui.aiConfig.open = true; state.autoOpened = true; }
+    if (!ready && !state.autoOpened && usesAi(engineChoice())) { ui.aiConfig.open = true; state.autoOpened = true; }
   }
 
   function renderAll() {
@@ -1928,9 +2257,14 @@
     ui.aiDropBox = el('details', { class: 'an-dismissed', id: 'anAiDrops', hidden: true }, ui.aiDropTitle,
       el('p', { class: 'muted small' }, 'Sugestões da IA que a conferência local recusou (horário fora do vídeo, desfecho que não existe na transcrição, corte repetido…). Nada disso virou sugestão.'),
       ui.aiDropList);
+    ui.aiUnpickedTitle = el('summary', {}, 'Fora da escolha final da IA');
+    ui.aiUnpickedList = el('ul', { class: 'an-droplist' });
+    ui.aiUnpickedBox = el('details', { class: 'an-dismissed', id: 'anAiUnpicked', hidden: true }, ui.aiUnpickedTitle,
+      el('p', { class: 'muted small' }, 'Momentos que a IA achou nos blocos e que passaram na conferência, mas que ela mesma deixou de fora ao escolher os melhores. Não viraram sugestão.'),
+      ui.aiUnpickedList);
     ui.results = el('section', { class: 'an-results', id: 'anResults', 'aria-label': 'Sugestões', hidden: true },
       el('div', { class: 'an-results-head' }, el('h3', { class: 'panel-title' }, 'Sugestões'), el('div', { class: 'an-bulk' }, ui.addAll, ui.dismissAll)),
-      ui.summary, ui.models, ui.emptyBox, ui.orderBox, ui.list, ui.dismissedBox, ui.aiDropBox);
+      ui.summary, ui.models, ui.emptyBox, ui.orderBox, ui.list, ui.dismissedBox, ui.aiDropBox, ui.aiUnpickedBox);
 
     ui.intro = el('p', { class: 'muted small an-intro', id: 'anIntro' });
     return el('div', { class: 'an', id: 'analysis' },
@@ -1960,7 +2294,7 @@
     if (!res.ok || !res.running || !BF.state.project) return;
     if (BF.state.project.source.path !== res.running.path) return;
     state.job = { id: res.running.jobId, projectId: BF.state.project.id };
-    state.lastEngine = res.running.engine === 'ai' ? 'ai' : 'algorithm';
+    state.lastEngine = usesAi(res.running.engine) ? res.running.engine : 'algorithm';
     state.running = true;
     state.startedAt = Number(res.running.startedAt) || 0; // sem a hora de início real a estimativa de tempo restante sairia absurda
     state.progress = { p: res.running.p, message: res.running.message || 'Analisando…' };
@@ -2035,5 +2369,5 @@
     return true;
   });
 
-  BF.analysis = { engineChoice, isCovered, pendingSuggestions, dismissedSuggestions, sameSource, remainingSec, clock, addSuggestions, dismissSuggestions, restoreSuggestions, splitKeywords, humorProfile };
+  BF.analysis = { engineChoice, isCovered, pendingSuggestions, dismissedSuggestions, sameSource, remainingSec, stageRemainingSec, clock, addSuggestions, dismissSuggestions, restoreSuggestions, splitKeywords, humorProfile };
 })();

@@ -28,7 +28,7 @@ const { writeJsonAtomic, readJsonFile } = require('../preferences/atomic');
 const { AiError, cancelled } = require('./errors');
 const providers = require('./providers');
 const { SecretStore } = require('./secretStore');
-const { chatCompletion, redact } = require('./client');
+const { chatCompletion, listModels, redact } = require('./client');
 const { checkModel } = require('./openrouter/guard');
 const { mapThrownError, fullMessage, redactSecret } = require('./openrouter/errors');
 const { UNSUITABLE_ID_RE, ROUTER_ID } = require('./openrouter/catalog');
@@ -282,11 +282,14 @@ class AiRuntime {
     else if (p.freeCapable && p.freeOnly && !this._freeCheck(p.model, true).ok) { reason = this._freeCheck(p.model, true).message; reasonCode = 'NOT_FREE'; }
     else if (p.keyRequired && keyStatus === 'none') { reason = 'Informe a chave de API.'; reasonCode = 'NO_KEY'; }
     else if (keyStatus === 'unreadable') { reason = 'A chave guardada não pôde ser lida neste computador. Informe a chave de novo.'; reasonCode = 'NO_KEY'; }
+    let localNetwork = false;
+    try { const u = new URL(p.baseUrl); localNetwork = u.protocol === 'http:' && providers.isLocalNetworkHost(u.hostname); } catch { /* sem endereço ainda */ }
     return {
       source: 'local', hostName: null, id: p.id, label: p.label, model: p.model, suggestedModel: p.suggestedModel, baseUrl: p.baseUrl, host: providers.hostOf(p.baseUrl),
       hasKey: keyStatus !== 'none', keyStatus, keyRequired: p.keyRequired, keyHint: p.keyHint, ready: !reason, reason, reasonCode, consentKey: p.id,
-      accepted: acceptedFor(config.accepted[p.id], p), privacy: p.privacy,
+      accepted: acceptedFor(config.accepted[p.id], p), privacy: localNetwork ? `${p.privacy} ${providers.LOCAL_NETWORK_NOTE}` : p.privacy,
       loopback: p.baseUrl ? providers.isLoopbackHost(new URL(p.baseUrl).hostname) : false,
+      localNetwork, // http:// para outra máquina da rede local: a chave vai sem criptografia (a tela avisa)
       ...(p.freeCapable ? { freeCapable: true, freeOnly: p.freeOnly, fallbackModels: p.fallbackModels } : {})
     };
   }
@@ -547,6 +550,28 @@ class AiRuntime {
     }
     const res = await this.openrouter.prepare();
     return { checked: true, source: res.source, fetchedAt: res.fetchedAt, warning: res.warning || null };
+  }
+
+  /**
+   * Modelos que o provedor em uso oferece para a chave guardada (`GET /models`; a chave só sai daqui, no cabeçalho, para o próprio provedor).
+   * Não vale para o OpenRouter (tem a própria lista, com o modo gratuito: src/core/ai/openrouter) nem para o provedor do hospedeiro.
+   * Devolve { provider, models, hidden, current, suggested }; falha lança AiError (sem a chave na mensagem).
+   */
+  async models({ signal } = {}) {
+    if (this.host) throw new AiError('NOT_CONFIGURED', `O modelo é escolhido no ${this.hostName || 'aplicativo que hospeda o Braga Frame'}.`);
+    const p = this._providerOf(this._load());
+    if (!p) throw new AiError('NOT_CONFIGURED', 'Escolha um provedor de IA primeiro.');
+    if (p.freeCapable) throw new AiError('NOT_CONFIGURED', 'O OpenRouter tem a própria lista de modelos logo abaixo.');
+    if (!p.baseUrl) throw new AiError('NOT_CONFIGURED', 'Informe o endereço do servidor primeiro.');
+    const apiKey = this.secrets.get(p.id);
+    if (p.keyRequired && !apiKey) throw new AiError('NO_KEY', 'Guarde a chave de API primeiro: a lista depende do que a sua chave pode usar.');
+    try {
+      const out = await listModels({ baseUrl: p.baseUrl, apiKey, signal, fetchImpl: this.fetchImpl || undefined });
+      return { provider: p.id, models: out.models, hidden: out.hidden, current: p.model || '', suggested: p.suggestedModel || '' };
+    } catch (err) {
+      if (err && typeof err.message === 'string') err.message = redact(err.message, apiKey);
+      throw err;
+    }
   }
 
   /** "Testar conexão": um pedido fixo e minúsculo (sem nenhum dado do projeto). Devolve { ok, message, ms }; falha lança AiError. */

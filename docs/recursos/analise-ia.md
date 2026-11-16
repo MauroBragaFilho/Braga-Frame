@@ -6,11 +6,11 @@ Origem: análise à mão da live `NtadPdBszjk` (Minecraft com convidado, 3 h 05,
 
 ## 1. Como usar
 
-1. Abra um vídeo e vá na aba **Análise**. No topo escolha **Motor da análise: Algoritmo | IA na nuvem**. Sem provedor configurado a tela escolhe o algoritmo sozinha (e diz "escolhido automaticamente"); com provedor **e** aviso aceito, escolhe a IA. A escolha do usuário vale e fica no projeto.
+1. Abra um vídeo e vá na aba **Análise**. No topo escolha **Motor da análise: Algoritmo | IA na nuvem | Algoritmo + IA**. Sem provedor configurado a tela escolhe o algoritmo sozinha (e diz "escolhido automaticamente"); com provedor **e** aviso aceito, escolhe **Algoritmo + IA** (os dois em sequência, listas juntas: [analysis.md](analysis.md), seção "Algoritmo + IA"). A escolha do usuário vale e fica no projeto.
 2. **Transcrição do vídeo** (cartão no modo IA). A IA só trabalha sobre texto: o cartão mostra o estado (**Ausente**, **Importada**, **Gerada**, **Incompleta**, **De outro arquivo**), a duração coberta ("Cobre 3:04:10 de 3:05:00 (99%) · 2.195 falas · 35 risadas") e dois botões:
    - **Transcrever o vídeo**: o Whisper que as Legendas já usam (placa NVIDIA automática, senão processador; o modelo e o idioma escolhidos na aba Legendas, ou o padrão), em pedaços de 10 min, com progresso pelo tempo do vídeo, **Cancelar** e retomada ("Continuar a transcrição", a partir do último pedaço pronto).
    - **Importar legenda…**: um `.srt` ou `.vtt` que você já tenha. Vale qualquer legenda do vídeo (UTF-8, UTF-16 ou Windows-1252).
-3. **Provedor de IA** (cartão recolhido "Provedor, chave e limites", que abre sozinho enquanto falta configurar). **Nenhum provedor vem escolhido**: a lista começa em "Escolha um provedor…" e, até a pessoa escolher, o modelo, a chave e o aceite ficam travados e a tela diz "Escolha o provedor e o modelo de IA. Nada é enviado antes de você escolher, informar a chave e aceitar o aviso de privacidade." Escolha o provedor (**Google Gemini**, **Groq**, **OpenRouter** ou **Personalizado** com URL base), escreva o **modelo** (o campo também começa vazio: a lista do campo só sugere um nome, por exemplo `gemini-2.5-flash`), cole a **chave de API** (campo protegido; depois de guardada a tela mostra só "Chave guardada neste computador", com **Remover**) e use **Testar conexão**. Quando o sistema não cifra a chave, o cartão mostra um alerta em destaque (seção 8). Dentro do **BDS** o cartão mostra "Usando o provedor do BDS: …" somente leitura. Com o **OpenRouter** o campo do modelo vira uma lista: "Automático — roteador gratuito" primeiro, os modelos gratuitos logo abaixo (**nada vem selecionado**), o interruptor **Usar apenas modelos gratuitos** (ligado por padrão), o selo "Restam 38 de 50 pedidos gratuitos hoje" e, recolhidos, os **Modelos de reserva** (até 3 gratuitos que o app tenta, na ordem, se o escolhido falhar): veja [openrouter-gratuito.md](openrouter-gratuito.md).
+3. **Provedor de IA** (cartão recolhido "Provedor, chave e limites", que abre sozinho enquanto falta configurar). **Nenhum provedor vem escolhido**: a lista começa em "Escolha um provedor…" e, até a pessoa escolher, o modelo, a chave e o aceite ficam travados e a tela diz "Escolha o provedor e o modelo de IA. Nada é enviado antes de você escolher, informar a chave e aceitar o aviso de privacidade." Escolha o provedor (**Google Gemini**, **Groq**, **OpenRouter** ou **Personalizado** com URL base), escreva o **modelo** (o campo também começa vazio: a lista do campo só sugere um nome, por exemplo `gemini-3.8-flash`; com a chave guardada, **Ver modelos disponíveis** busca no provedor os modelos que a chave pode usar e mostra num seletor, sem embedding, voz e imagem: veja "Lista de modelos" abaixo), cole a **chave de API** (campo protegido; depois de guardada a tela mostra só "Chave guardada neste computador", com **Remover**) e use **Testar conexão**. Quando o sistema não cifra a chave, o cartão mostra um alerta em destaque (seção 8). Dentro do **BDS** o cartão mostra "Usando o provedor do BDS: …" somente leitura. Com o **OpenRouter** o campo do modelo vira uma lista: "Automático — roteador gratuito" primeiro, os modelos gratuitos logo abaixo (**nada vem selecionado**), o interruptor **Usar apenas modelos gratuitos** (ligado por padrão), o selo "Restam 38 de 50 pedidos gratuitos hoje" e, recolhidos, os **Modelos de reserva** (até 3 gratuitos que o app tenta, na ordem, se o escolhido falhar): veja [openrouter-gratuito.md](openrouter-gratuito.md).
 4. A tela mostra a **estimativa antes de rodar**: "~3 chamadas, ~9 mil tokens. Nada é enviado antes de você confirmar o aviso de privacidade." No OpenRouter com modelos gratuitos ela também compara as chamadas com os pedidos gratuitos que restam hoje ("A análise usa cerca de 2 pedidos; restam 38 hoje."): avisa, nunca bloqueia.
 5. **Analisar**. Na primeira vez (por provedor) aparece o **aviso de privacidade**: o que sai (trechos da transcrição, mensagens do chat do mesmo período, título/canal/jogo; nunca o vídeo nem o áudio), quem recebe, que alguns planos gratuitos usam o conteúdo para treinar modelos. **Agora não** não envia nada; **Aceitar e continuar** lembra o aceite daquele provedor **sem prazo**: vale até a pessoa revogar no interruptor "Aviso de privacidade aceito" (no Personalizado vale para aquele endereço; mudar o endereço o pede de novo).
 6. A lista de sugestões é a de sempre (cartões, motivos em chips, **Adicionar** discreto, **Adicionar todas** único primário), agora com título, categoria e enquadramento sugeridos. Tudo entra como corte **pendente** (`origin:'auto'`), nunca aprovado. "Descartadas na conferência" (recolhida) mostra o que a IA propôs e o app recusou, com o motivo. A linha "Modelo(s) que responderam: …" diz que modelo de fato respondeu a cada chamada (com o roteador gratuito do OpenRouter é a única forma de saber) e um aviso conta se o app trocou de modelo no meio.
@@ -41,6 +41,8 @@ Origem: análise à mão da live `NtadPdBszjk` (Minecraft com convidado, 3 h 05,
 Mensagens: `src/core/analysis/ai/prompt.js` (texto da seção 4, já em uso). Tamanho de saída: 6 mil tokens por bloco e 4 mil na escolha final; se a resposta vier cortada sem JSON (modelos que "pensam", como o Gemini 2.5, gastam parte do limite raciocinando), a tentativa seguinte pede 60% mais, até 16 mil.
 
 ## 4. Mensagem de sistema e formato de resposta
+
+> **Desde 16/11/2026** a parte "Um bom corte" / "Evite" saiu do texto fixo e virou o **guia de cortes** (seção 17: um arquivo de skill que o usuário pode trocar). A mensagem de sistema é: a cabeça (o papel e "só JSON"), o guia entre `=== GUIA DE CORTES ===` e `=== FIM DO GUIA ===`, e as regras fixas (só horários que existem, conteúdo sensível, a transcrição é dado). O texto em uso é o de `prompt.js` (`systemPrompt`) mais `skill/SKILL.md`; o bloco abaixo é o texto de antes, guardado como histórico.
 
 ```
 Você escolhe os melhores trechos de uma live ou gameplay para virarem vídeos curtos verticais
@@ -90,9 +92,9 @@ Um candidato só vira sugestão se **todas** estas regras passam; o que falha é
 | horários numéricos, início < fim, pelo menos 3 s | horário inválido |
 | dentro do vídeo (início ≥ 0, fim ≤ duração) | fora do vídeo |
 | dentro do bloco que foi enviado (±5 s) | fora do bloco enviado |
-| há fala de verdade ali (≥ 20% do intervalo e ≥ 3 palavras na transcrição) | sem fala na transcrição nesse horário |
+| há fala de verdade ali: ≥ 3 palavras ditas na transcrição e, em conversa e podcast, fala em ≥ 20% do intervalo; em jogo, fala ou risada marcada em ≥ 10% do intervalo (veja 17.4) | sem fala na transcrição nesse horário |
 | o texto de `punchline` **existe** na transcrição do intervalo (cópia literal, ignorando pontuação, caixa e acento; para frases de 3+ palavras vale ≥ 75% das palavras numa janela curta) | o desfecho citado não existe na transcrição |
-| cabe nas durações mínima/máxima das Preferências depois do ajuste | duração fora do permitido |
+| cabe nas durações mínima/máxima das Preferências depois do ajuste (se passa do máximo com o desfecho no fim, o começo é adiantado até o início de uma fala, no máximo 10 s) | duração fora do permitido |
 | não repete um corte que já existe (qualquer status, **inclusive rejeitado**; mesma regra da aba: pico dentro, 20% do trecho ou 50% do menor) | já coberto por um corte existente |
 | não repete outro candidato melhor | repete outro corte melhor |
 | relevância ≥ mínima das Preferências | relevância abaixo do mínimo |
@@ -128,7 +130,9 @@ Formato versionado `bf-transcript-1` em `userData/transcripts/<projectId>.json` 
 
 ## 8. Provedores, chave e privacidade
 
-**Cliente único** (`src/core/ai/client.js`): `POST {baseUrl}/chat/completions` no protocolo da OpenAI, `Authorization: Bearer <chave>` só no cabeçalho, para o endereço do provedor escolhido. **Nenhum provedor é pré-selecionado** (decisão do dono, seção 15; única exceção, o modelo do OpenRouter, que parte do roteador gratuito: decisão H): o app conhece o endereço de **Gemini** (`https://generativelanguage.googleapis.com/v1beta/openai`), **Groq** (`https://api.groq.com/openai/v1`) e **OpenRouter** (`https://openrouter.ai/api/v1`) e deixa o **Personalizado** (URL, chave opcional) para qualquer servidor compatível; quem escolhe o provedor **e o modelo** é o usuário. Cada provedor tem só uma *sugestão* de nome de modelo (`gemini-2.5-flash`, `llama-3.3-70b-versatile`, `openrouter/free`: o roteador gratuito, nunca um modelo pago), mostrada como dica no campo e na lista do campo, nunca gravada nem usada sozinha: sem modelo informado a configuração diz "Informe o modelo." e nada é enviado. Só o Personalizado muda o endereço. Mudar o endereço do Personalizado = **outro destinatário**: o **aceite é apagado e pedido de novo** (qualquer mudança, até só o caminho no mesmo servidor) e, se a **origem** (esquema, servidor e porta) mudou, a **chave também é apagada** (ela nunca é reenviada a um servidor novo). A chave nunca vai por `http://` a um servidor que não seja o próprio computador. Os endereços são os documentados pelos provedores e **não foram exercitados em rede real pelo app** (do OpenRouter, o orquestrador observou `GET /key`, o chat do roteador e o erro de modelo inválido em 23/10/2026: [openrouter-gratuito.md](openrouter-gratuito.md), seção 1.1).
+**Lista de modelos** (16/11/2026, `client.listModels`, `runtime.models`, canal `analysis:aiModels`): `GET {baseUrl}/models` com a chave guardada, só no processo principal e com as mesmas regras do chat (chave só no cabeçalho, nunca por `http://` fora do computador, erro explicado sem a chave). Os ids vêm sem o prefixo `models/` do Gemini, sem repetição e sem o que não conversa (embedding, voz, transcrição, imagem, vídeo, moderação: `NOT_CHAT_RE`, contados em "ficaram de fora"). Vale para Gemini, Groq e Personalizado (o LM Studio no próprio computador responde igual e não pede chave); o OpenRouter tem a própria lista (modo gratuito) e o provedor do hospedeiro é escolhido lá. Servidor sem a lista (404) = `NO_MODEL_LIST` ("Digite o nome do modelo"); provedor que pede chave e não tem = `NO_KEY`. Na tela: o botão **Ver modelos disponíveis** ao lado do campo Modelo, um **seletor** que aparece com a lista (o modelo em uso marcado "(em uso)"; escolher salva) e a mesma lista como sugestão do campo, que continua aceitando digitação. A lista vale só para o provedor em que foi buscada. Quando uma análise falha porque o provedor **recusou o modelo** (código `MODEL`: nome errado, aposentado ou indisponível para a chave), o aviso ganha **Ver modelos disponíveis**, que abre o cartão do provedor e busca a lista.
+
+**Cliente único** (`src/core/ai/client.js`): `POST {baseUrl}/chat/completions` no protocolo da OpenAI, `Authorization: Bearer <chave>` só no cabeçalho, para o endereço do provedor escolhido. **Nenhum provedor é pré-selecionado** (decisão do dono, seção 15; única exceção, o modelo do OpenRouter, que parte do roteador gratuito: decisão H): o app conhece o endereço de **Gemini** (`https://generativelanguage.googleapis.com/v1beta/openai`), **Groq** (`https://api.groq.com/openai/v1`) e **OpenRouter** (`https://openrouter.ai/api/v1`) e deixa o **Personalizado** (URL, chave opcional) para qualquer servidor compatível; quem escolhe o provedor **e o modelo** é o usuário. Cada provedor tem só uma *sugestão* de nome de modelo (`gemini-3.8-flash` desde 16/11/2026, quando a API do Google passou a recusar o 2.5 Flash para chaves novas e indicar o 3.8 Flash na própria mensagem de erro; `llama-3.3-70b-versatile`, `openrouter/free`: o roteador gratuito, nunca um modelo pago), mostrada como dica no campo e na lista do campo, nunca gravada nem usada sozinha: sem modelo informado a configuração diz "Informe o modelo." e nada é enviado. Só o Personalizado muda o endereço. Mudar o endereço do Personalizado = **outro destinatário**: o **aceite é apagado e pedido de novo** (qualquer mudança, até só o caminho no mesmo servidor) e, se a **origem** (esquema, servidor e porta) mudou, a **chave também é apagada** (ela nunca é reenviada a um servidor novo). A chave nunca vai por `http://` a um servidor que não seja o próprio computador. Os endereços são os documentados pelos provedores e **não foram exercitados em rede real pelo app** (do OpenRouter, o orquestrador observou `GET /key`, o chat do roteador e o erro de modelo inválido em 23/10/2026: [openrouter-gratuito.md](openrouter-gratuito.md), seção 1.1).
 
 **OpenRouter só com modelos gratuitos** (`src/core/ai/openrouter/**`, [openrouter-gratuito.md](openrouter-gratuito.md)): o interruptor "Usar apenas modelos gratuitos" vem **ligado** e é guardado por provedor. A regra é garantida no processo principal, no caminho real do chat (não só na tela): antes de cada pedido o modelo passa pelo guard (`NOT_FREE`: o pedido nem sai, "nada foi enviado e nada foi cobrado"), o corpo nunca leva `models`/`route`/plugin de busca pagos, há ~3 s entre pedidos (20 por minuto), o fallback só tenta modelos **gratuitos** ("Modelos de reserva") e cada erro (429 por minuto × do dia, 404 por política de dados, modelo inválido ou removido, 402, chave) chega explicado em português. Desligar o interruptor é explícito: aí valem modelos pagos, com o preço por milhão de tokens na lista e o aviso de custo. A lista de modelos gratuitos vem do catálogo público do OpenRouter (cache de 6 h) e é conferida antes de cada análise; nada vem selecionado.
 
@@ -251,6 +255,20 @@ Mesma live, mesma transcrição (2.195 falas), mesmo chat (73 mensagens), mesmos
 - **Conferência local.** Descartou 7 candidatos em cada execução (A: 5 desfechos que não existem na transcrição e 2 duplicados; B: 4 de duração, 1 sem fala e 2 desfechos inexistentes): o que o modelo inventa não vira sugestão.
 - **Leitura honesta.** (1) Com 18 sugestões a IA fica **no nível do acaso nesta live** (12% de chance de 3 acertos só por sorte; p95 = 3) e empata com o algoritmo (4/15). (2) Com a seleção mais exigente da execução A (7 sugestões) 3 acertos são improváveis ao acaso (0,9%), mas essa execução tinha defeitos (bloco perdido, escolha cortada) e **não se repetiu**: a B acertou 3 itens, dois iguais e um diferente, então a variação entre execuções é grande. (3) São **15 itens de uma live só**, num gabarito **circular** (escolhido pelo assistente lendo a mesma transcrição que o modelo recebeu): ele marca 15 momentos entre dezenas de bons momentos de 3 h, então sugestões fora dele (15 das 18 na B) **não são necessariamente ruins** (p.ex. "Morte épica no oceano", 37:27, a 17 s do fim do item #10). (4) O que a IA mostrou: **horário exato** quando acerta e a **conferência local** barrando invenções; o que **não** se mostrou é que ela escolha **melhor** que o algoritmo. Quem decide se as sugestões servem é o usuário, revisando na aba Análise; nenhum número aqui vale para outro conteúdo, outro modelo ou outro provedor.
 
+### 13.6b A IA na nuvem numa gameplay, e juízes locais pequenos (16/11/2026)
+
+Live de **4h18** de Call of Duty Warzone (dupla, conversa no Discord, chat pequeno), transcrita pelo Whisper do app; gabarito de **51 momentos** (6 fortes, 22 bons) marcado por quem leu a live minuto a minuto antes de ver qualquer resultado (favorece o que tem fala). Mesma regra de acerto de sempre.
+
+| Motor | Sugestões | Fortes (6) | Fortes e bons (28) | Todos (51) | Precisão |
+|---|---|---|---|---|---|
+| Algoritmo (gameplay, 6 por hora) | 26 | 5 | 13 | 17 | 65% |
+| **IA na nuvem** (Google Gemini, `gemini-3.8-flash`; 8 blocos, 9 chamadas, nenhuma falha) | 18 | 4 | 11 | 16 | **89%** |
+| Algoritmo + IA (o modo combinado, junção pelo `merge.js`) | 41 | **6** | **21** | 27 | 73% |
+
+Os dois se completam: a IA acha as **conversas** sem grito nem riso (uma brincadeira de pergunta e resposta, uma história de telemarketing, uma piada que volta horas depois) e o Algoritmo acha as **reações e lances** (crises de riso, baixa dupla, abates com riso). Os títulos da IA são bons para publicar. Daí o modo **Algoritmo + IA** (16/11/2026; [analysis.md](analysis.md), seção "Algoritmo + IA"), que roda os dois e junta as listas; com a quantidade automática do algoritmo ele chega a 34 dos 51 momentos.
+
+**Juízes locais pequenos** (LM Studio, modelos de até 2,5 GB com visão: Qwen 3.5 2B e Qwen3-VL 2B, ~2 s por candidato com o raciocínio desligado): dar nota de 0 a 10 a 86 candidatos do Algoritmo (transcrição + 3 quadros) **piorou** o resultado (2 fortes, 8 bons, 11 no total) porque os modelos dão nota alta para quase tudo (papo comum e menu de skins 8 a 9; a melhor conversa da live 7 a 8); escolher o melhor entre 5 trechos também (6 bons; a melhor conversa ficou em 61º de 111). Para julgar o que vira short, a recomendação é a nuvem; modelos pequenos locais ficam para tarefas estreitas (por exemplo, dizer se um quadro é menu ou carregamento).
+
 ### 13.7 Reproduzir
 
 Nada disso fica no repositório (vídeo, transcrição, chat e gabarito são conteúdo de terceiros). Para refazer: (1) extrair o áudio e a imagem (modo rápido) uma vez com `extractAudio`/`extractImage` de `src/core/analysis` e guardá-los no cache da análise (`AnalysisCache.set('sig-audio', sourceKey(video), áudio)` e `set('sig-image', sourceKey(video) + 'f', imagem)`); (2) rodar `analyzeSource({ file, duration, hasAudio, params: { image: { fast: true } }, chatPath, transcript: { cues } }, { ffmpeg, cacheDir })` com um ffmpeg inexistente de propósito, para que nenhum sinal fora do cache seja lido; (3) gravar o resultado e passar a `node scripts/eval-analysis.js --result <resultado.json> --gold <gabarito.json> [--from 0 --to 5400]`. A transcrição vem do `.srt` pelo importador (`parseSubtitleBuffer`). **A referência do acaso** (`--chance <duração do vídeo em segundos>`, 20 mil sorteios com semente fixa) já está no script: `node scripts/eval-analysis.js --result <sugestões.json> --gold <gabarito.json> --chance 11089.85` imprime "Acaso (20.000 sorteios, as mesmas N durações): média…; p95…; p99…; chance de o acaso acertar K ou mais: P%", que é como saíram os números das seções 13.5 e 13.6 (os testes estão em `tests/eval-analysis.test.js`). **A IA (seção 13.6)** roda pelo próprio app (aba Análise, "IA na nuvem") ou, para medir sem interface, por `analyzeWithAi` com um `chat` que chama o provedor: o resultado é a lista `suggestions` da análise.
@@ -362,3 +380,184 @@ Canal novo: `analysis:humorExamples { projectId }` → `{ examples: { approved, 
 - **Não há número de melhora.** O gabarito (15 cortes de uma live, seção 12) é circular e foi escolhido pelo assistente lendo a mesma transcrição; preencher bordões e critérios **olhando esses cortes** e medir neles de novo seria sobreajuste e não provaria nada. Por isso nenhuma melhora é afirmada. Para medir de verdade: a pessoa escreve o perfil **antes** de ver as sugestões, usa lives que não usou para escrever o perfil, aprova ou rejeita as sugestões na aba Cortes (isso vira o gabarito dela) e se compara com `scripts/eval-analysis.js` (`--chance` dá a referência do acaso).
 - **O que os dados da live de referência sugerem** (transcrição do próprio dono, lida só localmente): nos 15 cortes, janelas com exclamação ou reação (palavras do app) em 80% contra 52% no resto da live (mediana de 3,25 contra 0,75), falas sobre o momento ("vou clipar", "olha isso") em 27% contra 4%, repetição em 67% contra 46%, ritmo de 1,34 contra 1,08 palavra por segundo; **nenhuma marca de risada** nos cortes (só 22 na live inteira); e **3 dos 15 cortes não têm exclamação nenhuma** (o humor deles está na situação, não numa palavra de reação). Daí a divisão do perfil: as **listas** ajudam onde o humor do canal tem palavra própria; os **critérios e exemplos** são o caminho para o humor que o texto não entrega.
 - **Limites conhecidos**: a expressão precisa estar dentro de uma fala; o Whisper erra nomes e gírias (um bordão mal reconhecido não casa; vale cadastrar também a grafia que o Whisper costuma escrever); bordões muito comuns são freados de propósito (16.2); os exemplos dependem de existirem projetos antigos do mesmo canal com cortes decididos **e** transcrição guardada (sem isso o perfil vai sem exemplos e a caixa diz por quê); nenhum modelo foi medido com o perfil.
+
+## 17. Guia de cortes (skill)
+
+**O que é.** O texto que ensina a IA conectada a escolher os cortes: o que faz um trecho valer (premissa, virada e desfecho dentro do corte), os tipos que mais rendem (história contada, pergunta ou desafio, lance com reação, frase de efeito, troca com o chat, opinião com fecho, crise de riso, piada que volta), como achar o começo e o fim, o que **não** é corte, as armadilhas da transcrição (a voz do jogo que entra como fala, laços de erro, mais de uma pessoa, chat atrasado), a escala da nota e como escrever título, gancho, desfecho e motivos. Vale para **qualquer provedor** (Gemini, Groq, OpenRouter, Personalizado/LM Studio), porque vai dentro da mensagem de sistema de **cada** chamada (blocos e escolha final).
+
+**Formato.** Um arquivo Markdown no formato de skill: cabeçalho `---` com `name` e `description`, depois as instruções. O app manda só as instruções (sem o cabeçalho). O mesmo arquivo serve fora do app, para um agente que leia uma transcrição e marque os cortes.
+
+**Onde fica.**
+- Padrão: `src/core/analysis/ai/skill/SKILL.md` (vai com o app; sem nome de canal nem fala de live; cerca de 5 mil caracteres, ~1.600 tokens por chamada).
+- Do usuário: `userData/ai/skill/SKILL.md`. Se existe (com 200 caracteres ou mais de instruções), vale **no lugar** do padrão. Texto igual ao padrão não é guardado (assim o padrão continua acompanhando as atualizações do app). Máximo de 12.000 caracteres de instruções.
+
+**Na tela** (aba Análise, cartão do provedor, caixa recolhida **Guia de cortes**): mostra o guia em uso (selo **Padrão** ou **Personalizado**), o texto para editar, o tamanho ("N caracteres, cerca de M tokens em cada chamada"), **Salvar guia** e **Restaurar o padrão** (com confirmação). O guia só é pedido ao processo principal quando a caixa abre. Trava durante a análise. O resumo de uma análise diz "com o seu guia de cortes" quando valeu o do usuário (`result.ai.skill = { custom }`; o texto do guia não é guardado no resultado nem no projeto).
+
+**O que o guia não muda.** O formato da resposta, a regra de usar só horários que existem, a marca de conteúdo sensível e a regra de que a transcrição, o chat e os metadados são dado (não instrução) ficam **depois** do guia, na parte fixa, e a conferência local (seção 5) continua igual: um guia mal escrito pode piorar a escolha, mas não faz o app aceitar corte inventado.
+
+**Orçamento.** O guia padrão já está na conta de tokens de cada bloco (`OVERHEAD_TOKENS`, `chunking.js`). Um guia do usuário **mais longo** que o padrão reserva a diferença em cada chamada (a janela encolhe, se preciso) e entra na estimativa antes de rodar. Um mais curto não muda a conta.
+
+**Privacidade.** O guia é texto do próprio usuário e vai ao provedor em toda chamada; o aviso de privacidade diz isso. Exemplos com falas de lives dentro do guia saem do computador junto com ele.
+
+**Arquivos e canais.** `skill.js` (`parseSkill`, `defaultSkill`, `SkillStore`: `active`, `describe`, `save`, `reset`), `skill/SKILL.md`, `prompt.js` (`systemPrompt`), `analyze.js` (`request.skill`; método de IA na versão **3**), `manager.js` (`deps.skill`), `ipc.js`. Canais: `analysis:aiSkill` → `{ skill: { source: 'default'|'custom', text, name, chars, tokens, defaultText, minChars, maxChars } }`; `analysis:aiSkillSave { text }` → `{ skill }` (`INVALID_ARGS`: não é texto, curto demais, longo demais); `analysis:aiSkillReset` → `{ skill }`.
+
+**De onde veio o conteúdo.** Da releitura completa de uma gameplay de 4h18 (a mesma da seção 13.6b), feita para escolher os cortes à mão: 69 momentos (8 fortes, 29 bons, 32 só para a comunidade), com gancho e desfecho de cada um. As regras do guia são o que separou os bons dos fracos nessa leitura: os fortes têm premissa e desfecho **na fala**; os fracos são conversa técnica, aviso tático, risada solta, piada interna ou voz do jogo. Contra essa seleção, a análise da IA feita **antes** do guia (Gemini 3.8 Flash, 18 sugestões) acertou 5 dos 8 fortes e 15 dos 37 fortes ou bons, com 17 das 18 sugestões batendo com algum momento; o modo Algoritmo + IA, 6 dos 8 e 27 dos 37.
+
+**O que foi e o que NÃO foi medido.** A primeira versão do guia rodou uma vez com provedor de verdade (17.2): resultado misto. As mudanças feitas depois dessa medição (17.2, "O que mudou no guia") não rodaram com provedor nenhum. Ressalvas: a seleção foi feita por quem já tinha visto os resultados dos motores (favorece o que eles acharam) e é uma live só; o guia custa cerca de 1.200 tokens a mais por chamada que o texto de antes; modelos pequenos locais continuam fracos para julgar (13.6b), com ou sem guia.
+
+**Testes.** `ai-skill` (formato de skill; o guia padrão cobre o essencial e cabe no limite; a mensagem de sistema com o padrão e com o do usuário, sempre com as regras fixas depois; guardar, limites, texto igual ao padrão, restaurar, arquivo curto ignorado; a análise manda o guia do usuário em todas as chamadas e diz qual valeu), `analysis-ai-ipc` ("guia de cortes pelo IPC": padrão, guardar, estimativa maior com guia longo, mensagem de sistema de cada chamada, restaurar) e `analysis-ui` ("Guia de cortes": só pede ao abrir, editar libera Salvar, salvar e restaurar, resumo).
+
+### 17.1 O que mais vai para a IA (16/11/2026, depois da seleção nova)
+
+- **Tipo de vídeo em cada pedido.** A primeira linha de cada pedido (blocos e escolha final) diz `Tipo de vídeo: gameplay ou live de jogo` ou `Tipo de vídeo: conversa ou podcast` (o perfil escolhido na aba, `params.profile`), antes do título, do canal e do jogo (`prompt.js`, `metaLine`).
+- **Tipos de jogo no guia padrão.** Seção "Conforme o tipo de jogo ou de programa": o que mais rende em tiro e competitivo, terror, sobrevivência e mundo aberto, corrida e esporte, história e RPG, jogos em grupo e podcast. Entrou para o guia não ficar preso ao jogo da live medida (um jogo de tiro); nenhum dos outros tipos foi medido.
+- **Quantidade automática.** Com `params.autoQuantity`, cada bloco pode devolver **12** candidatos (8 na quantidade fixa) e a escolha final olha até **80** (40). Na seleção feita à mão há cerca de 9 momentos a cada 35 minutos, e os blocos mais ricos passam de 8.
+- **O que não mudou:** o áudio continua sem ir para a IA (decisão do dono, seção 15), e a IA não recebe o resultado do algoritmo no modo Algoritmo + IA.
+
+Nada disto foi medido com provedor de verdade.
+
+### 17.2 Primeira medição com o guia (16/11/2026, pelo dono, no app)
+
+Mesma gameplay de 4h18, modo Algoritmo + IA, quantidade automática, Gemini 3.8 Flash, guia padrão na primeira versão. A IA fez 17 chamadas (8 novas tentativas por limite do provedor e HTTP 503) e **um bloco de 35 minutos ficou de fora** (1:07 a 1:42, o mais rico da live: 6 momentos fortes ou bons). Comparação justa, só fora desse bloco, contra a seleção feita à mão:
+
+| IA sozinha, fora do bloco que falhou | Sugestões | Fortes (7) | Fortes e bons (31) | Todos (58) | Batem com a seleção |
+|---|---|---|---|---|---|
+| antes do guia | 16 | 5 | 14 | 16 | 16 de 16 |
+| com o guia | 24 | 4 | 15 | 20 | 20 de 24 |
+
+- **Mais sugestões e mais acertos no total** (20 contra 16), um forte ou bom a mais, e as 4 que não batem são trechos defensáveis (continuação de uma história, uma fofoca, uma piada curta), não lixo.
+- **Perdeu um forte que achava**: o parceiro atropelado pelo trem do mapa, um lance em que a fala é curta e confusa e quem explica é o chat. Os outros dois fortes que a IA não acha (uma baixa dupla e uma crise de riso) também são lances que a imagem mostra e a fala não conta. A primeira versão do guia mandava descartar "trecho que só se entende com a imagem" e pedia a causa da risada dentro do corte: para gameplay isso estava errado.
+- É **uma** execução de cada lado (o modelo não responde igual duas vezes) e com um bloco faltando: não dá para dizer que o guia melhorou nem que piorou. O que dá para dizer é onde ele errava.
+- O modo inteiro (algoritmo de antes + IA com o guia) deu 71 sugestões, 6 dos 8 fortes, 26 dos 37 fortes ou bons e 42 dos 69, com 59% das sugestões batendo com a seleção. Por motor: as 8 que os dois acharam, 7 batem; só da IA, 13 de 16; só do algoritmo, 22 de 47.
+
+**O que mudou no guia depois disso** (não medido):
+- "Lance com reação": a IA não vê a imagem, e num jogo a reação forte (sequência de exclamações, risada longa, o chat rindo e comentando) **é** a pista do lance; sugerir mesmo sem a fala contar o que houve, com nota de 0,65 a 0,80 e o motivo "depende da imagem".
+- "O chat como prova": chat rindo ou comentando um acontecimento indica um momento de 10 a 40 s antes.
+- "Crise de riso": num jogo a causa pode estar só na imagem; começar 10 a 15 s antes da risada.
+- O descarte de "só se entende com a imagem" ficou só para conversa e podcast.
+
+**Segunda chance para o bloco que falha** (`analyze.js`): depois de passar por todos os blocos, os que falharam (até 2) são pedidos **de novo, uma vez**, com as mesmas tentativas, se o limite de chamadas deixa. Um servidor sobrecarregado costuma voltar em minutos; antes, o bloco ficava de fora depois de 3 tentativas em poucos segundos. `result.ai.recoveredBlocks` conta os recuperados; os que falham de novo continuam no aviso `AI_BLOCKS_FAILED`. Teste: `analysis-ai-run` ("segunda chance").
+
+### 17.3 Segunda rodada no app (16/11/2026): guia ajustado, outro modelo
+
+Mesma live, Algoritmo + IA, quantidade automática, já com o algoritmo e o guia de 17.2. O dono trocou o modelo (um modelo novo do Gemini, que raciocina) e o projeto **não tinha chat** (vídeo aberto do disco, sem o chat baixado). 10 chamadas, nenhum bloco de fora, 4 minutos (os sinais do algoritmo estavam no cache).
+
+| | Sugestões | Fortes (8) | Fortes e bons (37) | Todos (69) | Batem com a seleção |
+|---|---|---|---|---|---|
+| IA, primeira rodada (guia 1, um bloco de fora) | 24 | 4 | 15 | 20 | 20 de 24 |
+| IA, esta rodada (guia ajustado, outro modelo) | 15 | 3 | 13 | 14 | 14 de 15 |
+| modo inteiro, primeira rodada | 71 | 6 | 26 | 42 | 59% |
+| **modo inteiro, esta rodada** | **64** | **6** | **28** | 37 | 58% |
+
+- **O ajuste de "lance com reação" apareceu no resultado**: a IA trouxe a baixa dupla (um dos fortes que nunca achava), uma crise de riso e um lance de cerco, os três com o motivo "lance com reação". Continua sem o lance do trem: sem chat no pedido, a regra "o chat como prova" não tem o que ler.
+- **Menos sugestões da IA** (15 contra 24). Não dá para separar o efeito do guia do efeito do modelo: mudaram os dois.
+- **A resposta de um bloco veio cortada** pelo limite de saída (`AI_TRUNCATED`): o modelo gasta parte do limite raciocinando e, com até 12 candidatos por bloco na automática, não coube. Os candidatos cortados se perdiam (entre eles um forte que a IA achava nas outras rodadas; o algoritmo o achou). Corrigido: quando o JSON de um bloco vem cortado no meio, o **mesmo bloco é pedido de novo, uma vez, com 1,6x do limite** (se o limite de chamadas deixa) e vale a resposta mais completa; e na quantidade automática o limite de saída do bloco já começa em 9.000 tokens (`AUTO_OUTPUT_MAX_TOKENS_BLOCK`). Teste: `analysis-ai-run` ("bloco com a resposta cortada no meio").
+- O modo inteiro ficou com mais momentos fortes ou bons em menos sugestões (28 em 64 contra 26 em 71). Dos 8 fortes, faltam o desafio de pergunta e resposta (ninguém acha: o desfecho fica a mais de 60 s do começo, a duração máxima dos cortes) e a crise de riso do fim, que a trava da automática descartava (corrigido em analysis.md, "Risada longa se confirma sozinha").
+
+### 17.4 Terceira rodada no app (16/11/2026): com o chat e as correções de 17.3
+
+Mesma live, mesmo modelo, Algoritmo + IA, quantidade automática. Antes dela o chat da live (386 mensagens, chat pequeno) foi ligado ao projeto: um vídeo aberto direto do disco não traz o chat, e o registro em `project.chat` foi gravado com o `ProjectStore` e o `chatFormat` do próprio app, com o app fechado. 11 chamadas, nenhum bloco de fora, nenhuma resposta cortada, 6,5 minutos.
+
+| | Sugestões | Fortes (8) | Fortes e bons (37) | Todos (69) | Batem com a seleção |
+|---|---|---|---|---|---|
+| IA, segunda rodada (sem chat) | 15 | 3 | 13 | 14 | 14 de 15 |
+| IA, esta rodada (com chat) | 19 | 5 | 14 | 16 | 16 de 19 |
+| parte do algoritmo, segunda rodada | 55 | 4 | 20 | 29 | 53% |
+| parte do algoritmo, esta rodada | 76 | 6 | 27 | 39 | 51% |
+| modo inteiro, segunda rodada | 64 | 6 | 28 | 37 | 58% |
+| **modo inteiro, esta rodada** | **81** | **6** | **30** | 42 | 52% |
+
+- **"O chat como prova" funcionou.** A IA trouxe o lance do trem, que não achava desde o guia, e confirmou a baixa dupla; nos dois o chat aparece nos motivos. No algoritmo, 45 mensagens de riso do chat contaram como reação (`signals.chat.laughMessages`).
+- **O algoritmo deu no app o que a medição fora dele previa** (76 sugestões, 6 fortes, 26 fortes ou bons). A crise de riso do fim entrou pela regra da risada longa.
+- **Por origem:** os dois motores juntos, 14 sugestões e 13 batem; só a IA, 5 e 3; só o algoritmo, 62 e 26. Pela nota, as 20 primeiras têm 18 que batem; as 40 primeiras, 28.
+- **O desafio de pergunta e resposta foi achado pelos dois motores com outro recorte**: começa na pergunta e termina na primeira resposta errada; o da seleção começa 37 s depois e vai até a resposta final. Pela régua (início a até 5 s ou metade do menor) não conta, por isso continuam 6 de 8. As 3 sugestões da IA fora da seleção são esse recorte, o assunto que o antecede e uma história contada logo depois de outro momento da seleção.
+- **Dois momentos que a IA trazia nas rodadas anteriores (um deles forte) não vieram.** Nada no pedido mudou para eles: é a variação do modelo entre execuções.
+- **A conferência local descartou 3 candidatos, e os 3 eram reais.** Dois por "sem fala": um lance de tiro com 14% de fala, que nenhum motor achou, e a crise de riso do fim, com 6% de fala e 24 s de risada marcada. Um por duração: 60 s que viraram 60,7 s depois do ajuste às falas.
+
+**Correção da conferência (`verify.js`).** A regra dos 20% de fala contradizia o guia ("lance com reação": num jogo a reação é a pista). Nesta live, 48% das janelas de 45 s têm menos de 20% de fala, e 11 dos 69 momentos da seleção também. Contando a risada marcada como voz, nenhum momento da seleção fica abaixo de 10%, e 21% das janelas ao acaso ficam.
+
+- No perfil de gameplay vale **fala ou risada marcada em ≥ 10% do intervalo** (`MIN_VOICE_RATIO`). Continuam valendo as ≥ 3 palavras ditas e o desfecho que precisa existir na transcrição, então a IA segue sem poder inventar um horário no silêncio.
+- No perfil de conversa nada muda: 20% de fala, risada não conta.
+- O corte que passa do máximo com o desfecho no fim tem o **começo adiantado até o início de uma fala, no máximo 10 s** (`MAX_START_TRIM_SEC`, o que o próprio ajuste às falas pode somar). Mais que isso continua descartado.
+
+Reaplicada aos 3 candidatos com a transcrição do app, a conferência nova aceita os três, e os três batem com a seleção. O desfecho usado nessa simulação foi tirado da transcrição: a resposta do modelo não fica guardada. Testes: `analysis-ai-core` (dois novos).
+
+**Medido no app em seguida (quarta rodada, mesma configuração, com a conferência corrigida).** 80 sugestões, 7 fortes, 30 fortes ou bons, 42 de 69, 53%. A IA trouxe 17 sugestões, com 7 dos 8 fortes e 15 que batem, e a conferência não descartou nenhum candidato.
+
+- A crise de riso do fim, com 8% de fala, foi proposta de novo e desta vez **aceita**, com os mesmos horários da simulação.
+- O lance de tiro com pouca fala não foi proposto nesta execução (variação do modelo), então a regra dos 10% só foi exercida por um caso real.
+- O oitavo forte, o desafio de pergunta e resposta, veio outra vez no recorte de 57 s que começa na pergunta. O recorte da seleção tem 83 s, mais que os 60 s de duração máxima das preferências, e começa 37 s depois.
+- O que só o algoritmo achou continua sendo a parte fraca da lista: 27 de 63 batem, contra 12 de 13 no que os dois acharam.
+- **Não se sabe quantos candidatos os blocos devolveram**: o resultado guarda só os descartes da conferência, não o que a escolha final deixou de fora. Com 17 a 19 sugestões em 8 blocos (até 12 por bloco), ou o modelo devolve poucos por bloco, ou a escolha final corta; nessa rodada não dava para distinguir (a contagem passou a ser guardada: 17.5).
+
+### 17.5 Contagem dos candidatos (16/11/2026)
+
+Para saber **onde os cortes se perdem**, o resultado da IA passou a guardar o caminho dos candidatos. Antes ficavam só os descartes da conferência; o que a escolha final deixava de fora não era registrado, e a contagem dos aprovados (`ai.candidates`) não chegava ao projeto.
+
+**No resultado (`analyze.js`):**
+
+- `ai.funnel`: `returned` (o que o modelo devolveu nos blocos, contando os de formato inválido), `verified` (passaram na conferência local), `unique` (sem o mesmo momento achado em dois blocos), `offered` (foram para a escolha final), `picked` (o que ela devolveu; `null` se não houve escolha final ou se ela falhou), `final` (sugestões entregues) e `perBlock` (`{ from, to, returned, verified }` de cada bloco; `null` nos dois números quando o bloco não respondeu).
+- `ai.unpicked`: até 40 candidatos que passaram na conferência e a escolha final deixou de fora, com `start`, `end`, `title` e `relevance`.
+
+**No projeto (`compactAi`, na aba):** as mesmas contagens e a mesma lista, só com esses campos. Nenhum texto da transcrição é guardado; o título é o que a IA escreveu.
+
+**Na tela:**
+
+- O resumo ganha, depois das chamadas, a frase "a IA propôs N candidatos, M passaram na conferência, a escolha final ficou com K de L". As partes que não dizem nada somem (todos passaram; a escolha final não cortou).
+- Abaixo de "Descartadas na conferência" aparece a seção recolhida **"Fora da escolha final da IA (N)"**, com o horário, o título e a relevância de cada candidato deixado de fora. É só leitura.
+- Análises feitas antes disso não têm a contagem: o resumo e a seção simplesmente não aparecem.
+
+Testes: `analysis-ai-run` ("caminho dos candidatos") e `analysis-ui` ("contagem dos candidatos da IA"). Conferido no app de verdade, num perfil isolado com uma cópia de um projeto. **Ainda não há medição**: a primeira análise com a contagem é a próxima que o dono rodar.
+
+### 17.6 Limite do provedor no meio dos testes (16/11/2026)
+
+Na quarta análise do dia com o mesmo modelo, o provedor recusou os pedidos por limite de uso (HTTP 429, "quota"), mesmo depois das esperas, e o modo Algoritmo + IA entregou só as sugestões do algoritmo, com o aviso `AI_FAILED`. As três análises anteriores com esse modelo tinham somado 35 chamadas e cerca de 250 mil tokens. A primeira análise com a contagem de 17.5 não aconteceu por isso. Não é defeito do app: o limite é da conta no provedor e vale por modelo.
+
+Duas correções pequenas que essa falha mostrou:
+
+- **Data e duração da análise (`combo.js`).** A junção herdava a data e o tempo do resultado do algoritmo, que vinha do cache: a análise ficou datada de 80 minutos antes e "calculada" em 9 ms. Agora a data e a duração são as da execução inteira, com a IA dando certo ou não. Teste em `analysis-merge`.
+- **Detalhe do erro do provedor (`client.js`, `serverDetail`).** O texto era cortado em 160 caracteres no meio de um endereço, e o aviso mostrava um link quebrado. Agora o corte para no fim da última frase inteira (ou da última palavra, com "…"). A chave continua sendo apagada antes do corte. Teste em `ai-cloud`.
+
+O que **não** mudou: quando a parte da IA falha, a lista nova substitui a anterior, e as sugestões da IA de uma análise passada deixam de aparecer.
+
+### 17.7 Rodada pelo OpenRouter gratuito e a primeira leitura da contagem (16/11/2026)
+
+Mesma live e mesma configuração (Algoritmo + IA, quantidade automática, com chat), agora com o roteador automático de modelos gratuitos do OpenRouter, porque a cota do outro provedor tinha acabado. Cada chamada foi atendida por um modelo diferente: 6 modelos em 16 chamadas, entre eles um voltado a código e modelos pequenos.
+
+| | Sugestões | Fortes (8) | Fortes e bons (37) | Todos (69) | Batem com a seleção |
+|---|---|---|---|---|---|
+| IA, rodada anterior (um modelo só) | 17 | 7 | 15 | 15 | 15 de 17 |
+| IA, esta rodada (roteador gratuito) | 23 | 1 | 8 | 10 | 10 de 23 |
+| modo inteiro, rodada anterior | 80 | 7 | 30 | 42 | 53% |
+| modo inteiro, esta rodada | 87 | 6 | 27 | 40 | 46% |
+
+- **A lista inteira foi sustentada pelo algoritmo**, que sozinho dá 6 fortes e 27 fortes ou bons. O que só a IA achou acerta 2 de 11.
+- **2 dos 8 blocos ficaram de fora** por resposta vazia, mesmo com a segunda chance; um deles é o bloco com mais momentos da live.
+- **Demorou 30 minutos** (contra 4 a 7) e gastou 296 mil tokens, 185 mil deles de saída: modelos que raciocinam muito antes de responder.
+- **A conferência local fez o trabalho dela**: 5 candidatos tinham um desfecho que não existe na transcrição e foram descartados.
+
+**Primeira leitura da contagem (17.5).** O modelo devolveu 39 candidatos; 33 passaram na conferência; a escolha final ficou com 24; 23 viraram sugestão (um caiu pela relevância mínima). Por bloco: 11, 3, falhou, 8, falhou, 8, 4 e 5.
+
+- **O que a escolha final deixou de fora era melhor do que o que ela manteve**: dos 9 deixados de fora, 6 batem com a seleção (2 fortes); dos 23 mantidos, 10.
+- Nesta rodada isso não mudou a cobertura, porque o algoritmo tinha achado esses momentos. Mudou a ordem: eles teriam entrado como "achado pelos dois" e subido na lista.
+- É **uma rodada, com modelos fracos e misturados**. Não diz como a escolha final se comporta com um modelo bom, que é o caso que interessa; por isso nada foi mudado nela ainda.
+
+### 17.8 Gateway próprio em outra máquina (16/11/2026)
+
+O provedor **Personalizado** também serve para um gateway compatível com a API da OpenAI que roda em outra máquina do usuário (um roteador de modelos, um servidor de modelos locais).
+
+**Regra da chave por `http://` (decisão do dono, 16/11/2026).** Antes a chave só saía por `https://`, ou por `http://` para a própria máquina. O dono pediu que o app aceitasse também a **rede local**. Agora a chave pode ir por `http://` para:
+
+- a própria máquina (como antes);
+- um **endereço IP privado**: 10.x, 172.16 a 172.31.x, 192.168.x, 169.254.x, 100.64 a 100.127.x (a faixa das VPNs de malha, como o Tailscale) e, no IPv6, `fc00::/7` e `fe80::/10`;
+- um **nome que só a rede local resolve**: sem ponto, ou terminado em `.local`, `.lan` ou `.home.arpa`.
+
+Para qualquer outro endereço continua valendo só `https://` (`KEY_INSECURE`, e o pedido nem sai).
+
+- **A conferência é pelo texto do endereço** (`providers.js`: `isLocalNetworkHost`, `keyOverHttpAllowed`). O `URL` já normaliza as formas de escrever um IP (hexadecimal, decimal). O app **não consulta o DNS**: um nome sem ponto que, por configuração da rede, aponte para fora dela não é detectado.
+- **Sem criptografia, e a tela diz isso.** Num endereço `http://` da rede local a chave e o conteúdo passam abertos pela rede. O estado do provedor marca `localNetwork`; o aviso de privacidade ganha a frase "Este endereço usa http:// na rede local: a chave e o conteúdo vão sem criptografia. Use só numa rede em que você confia."; e a mesma frase fica abaixo do campo de endereço (`#anCfgLanNote`). O aceite do Personalizado já é por endereço, então trocar de endereço pede o aceite de novo.
+- **Quem quiser criptografia** pode pôr HTTPS na frente do gateway. Com as duas máquinas no Tailscale, `tailscale serve --bg <porta>` na máquina do gateway dá `https://<máquina>.<rede>.ts.net/v1`, com certificado válido e alcançável só de dentro dessa rede. O nome curto da máquina na VPN também serve por `http://`: nesse caso quem cifra é a própria VPN.
+- **No app:** provedor "Personalizado", o endereço, a chave do gateway e o modelo (ou a combinação de modelos) escolhido em "Ver modelos disponíveis". As chaves ficam guardadas por provedor: trocar para o Personalizado não apaga a dos outros.
+- **O que não mudou:** o endereço de teste do OpenRouter e os downloads de ferramentas continuam aceitando `http://` só na própria máquina.
+- **Testes:** `ai-cloud` (a regra, o cliente e o estado do provedor), `ai-models` (a lista de modelos) e `analysis-ui` (o aviso junto do endereço).
+- **Não verificado:** nenhuma análise foi feita por esse caminho ainda. Só se conferiu que um gateway de verdade responde 401 sem chave, pela rede local e pela VPN.

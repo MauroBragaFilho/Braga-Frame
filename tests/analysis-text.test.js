@@ -47,6 +47,18 @@ test('extractEvents: exclamações, reações, falas sobre o momento e palavras 
   assert.ok(ev.words[60] > 0 && ev.words[64] === 0);
 });
 
+test('extractEvents: laço de alucinação do Whisper ("e horas e horas e horas…") não é fala: não conta ritmo nem repetição', () => {
+  const loop = Array.from({ length: 10 }, () => 'e horas').join(' ');
+  const filler = Array.from({ length: 8 }, () => 'e aí').join(' ');
+  const cues = [cue(10, 13, `eu tenho ${loop}`), cue(30, 33, filler), cue(50, 53, 'Não, não, não, não, não!'), cue(70, 74, 'hoje a gente vai explorar essa região do mapa')];
+  const ev = extractEvents(cues, 100);
+  assert.equal(maxIn(ev.words, 8, 16), 0, 'o laço (22 palavras, 3 diferentes) não entra no ritmo');
+  assert.equal(maxIn(ev.words, 28, 36), 0, '"e aí e aí e aí…" também não');
+  assert.equal(sum(ev.repeat.slice(0, 40)), 0, 'nem na repetição');
+  assert.ok(maxIn(ev.words, 50, 53) > 0, 'reação curta repetida de verdade ("Não, não, não…") continua sendo fala');
+  assert.ok(maxIn(ev.words, 70, 74) > 0, 'fala comum continua');
+});
+
 test('extractEvents: marcas de risada seguidas são UMA risada (laços do reconhecimento não inflam) e não contam como fala', () => {
   const run = [];
   for (let t = 100; t < 120; t += 2) run.push(cue(t, t + 2, '*Risos*', { laugh: true })); // 10 marcas em laço

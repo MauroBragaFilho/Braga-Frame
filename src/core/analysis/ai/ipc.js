@@ -10,6 +10,9 @@
  *   analysis:aiEstimate { projectId, path, size, duration, params?, chatPath?, profile? } -> { windows, calls, tokens…, label, exceedsLimit }
  *   analysis:humorExamples { projectId } -> { examples: { approved, rejected, projects } }   (cortes aprovados/rejeitados do mesmo canal que iriam
  *       como exemplo do perfil de humor; a tela os mostra antes de qualquer envio. Não envia nada.)
+ *   analysis:aiSkill                      -> { skill: { source:'default'|'custom', text, chars, tokens, defaultText, minChars, maxChars } }   (o guia de cortes, skill.js)
+ *   analysis:aiSkillSave { text }         -> { skill }   (guarda o guia do usuário; texto igual ao padrão volta ao padrão)
+ *   analysis:aiSkillReset                 -> { skill }   (apaga o guia do usuário)
  *   analysis:transcriptStatus { projectId, path, size, duration, modelId? } -> { transcript, engine, running }   (engine = o Whisper e o modelo estão prontos?)
  *   analysis:transcriptImport { projectId, path (o vídeo), size, duration, subtitlePath?, defaultDir? } -> { status, warnings } | { canceled:true }  (sem `subtitlePath`, abre o seletor)
  *   analysis:transcriptGenerate { projectId, path, size, duration, modelId?, language?, engine? } -> { jobId }
@@ -26,6 +29,7 @@ const { TranscriptStore } = require('../transcript/store');
 const { TranscriptManager } = require('../transcript/manager');
 const { SubtitleFileError, MAX_BYTES } = require('../transcript/subtitleFile');
 const { AiAnalysisManager } = require('./manager');
+const { SkillStore } = require('./skill');
 const { AnalysisError } = require('../errors');
 
 function electronSafeStorage() {
@@ -60,8 +64,9 @@ function registerAiChannels(ctx) {
     });
   }
   const store = new TranscriptStore(path.join(ctx.paths.userData, 'transcripts'));
+  const skill = new SkillStore(path.join(ctx.paths.userData, 'ai', 'skill')); // o guia de cortes do usuário (o padrão vai com o app)
   const aiManager = new AiAnalysisManager({
-    runtime, store, projects: ctx.projectStore || null, getTools: () => ctx.tools,
+    runtime, store, skill, projects: ctx.projectStore || null, getTools: () => ctx.tools,
     readChat: opts.readChat, probe: opts.probe, sleep: opts.sleep, retry: opts.retry
   });
   const transcriptManager = new TranscriptManager({
@@ -79,11 +84,13 @@ function registerAiChannels(ctx) {
     return ctx.transcription;
   }
 
-  aiManager.on('progress', (ev) => ctx.send('analysis:progress', ev));
-  aiManager.on('done', (ev) => ctx.send('analysis:done', ev));
+  // a IA rodando dentro do modo "Algoritmo + IA" (combo.js) não fala direto com o renderer: quem fala é o combo (handlers/analysis.js)
+  const inner = (ev) => typeof ctx.isInnerAnalysisJob === 'function' && ctx.isInnerAnalysisJob(ev.jobId);
+  aiManager.on('progress', (ev) => { if (!inner(ev)) ctx.send('analysis:progress', ev); });
+  aiManager.on('done', (ev) => { if (!inner(ev)) ctx.send('analysis:done', ev); });
   aiManager.on('failed', (ev) => {
     if (ev.code !== 'CANCELLED') ctx.log('warn', `analysis(ia): ${ev.message} (${ev.code})`);
-    ctx.send('analysis:failed', ev);
+    if (!inner(ev)) ctx.send('analysis:failed', ev);
   });
   transcriptManager.on('progress', (ev) => ctx.send('analysis:transcriptProgress', ev));
   transcriptManager.on('done', (ev) => ctx.send('analysis:transcriptDone', ev));
@@ -98,7 +105,13 @@ function registerAiChannels(ctx) {
   ctx.handle('analysis:aiSave', (payload) => ({ ai: runtime.save(payload) }));
   ctx.handle('analysis:aiAccept', (payload) => ({ ai: runtime.accept(payload && payload.accepted !== false) }));
   ctx.handle('analysis:aiTest', async () => runtime.test({}));
+  // a lista de modelos que a chave guardada pode usar (Gemini, Groq, Personalizado/LM Studio); o OpenRouter tem a própria
+  ctx.handle('analysis:aiModels', async () => runtime.models({}));
   ctx.handle('analysis:aiEstimate', async (payload) => ({ estimate: await aiManager.estimate(payload || {}) }));
+  // guia de cortes (skill): o texto que ensina a IA a escolher; só texto do usuário, nada de segredo
+  ctx.handle('analysis:aiSkill', () => ({ skill: skill.describe() }));
+  ctx.handle('analysis:aiSkillSave', (payload) => ({ skill: skill.save(payload && payload.text) }));
+  ctx.handle('analysis:aiSkillReset', () => ({ skill: skill.reset() }));
   ctx.handle('analysis:humorExamples', (payload) => ({ examples: aiManager.humorExamples(payload || {}) }));
 
   ctx.handle('analysis:transcriptStatus', async (payload) => {
@@ -148,7 +161,7 @@ function registerAiChannels(ctx) {
     return { removed: transcriptManager.remove(payload.projectId) };
   });
 
-  return { aiManager, transcriptManager, runtime, store };
+  return { aiManager, transcriptManager, runtime, store, skill };
 }
 
 module.exports = { registerAiChannels };

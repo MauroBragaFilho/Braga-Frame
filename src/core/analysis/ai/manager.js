@@ -7,7 +7,7 @@ const { AiError } = require('../../ai/errors');
 const { sameSource } = require('../transcript/format');
 const { analyzeWithAi, ALGO_VERSION, MAX_CANDIDATES_PER_BLOCK } = require('./analyze');
 const { buildWindows, estimate, describeEstimate } = require('./chunking');
-const { profileBlock, profileSummary, estimateTokens } = require('./prompt');
+const { profileBlock, profileSummary, estimateTokens, systemPrompt, SYSTEM_PROMPT } = require('./prompt');
 const { selectExamples } = require('./humorExamples');
 const humor = require('../humor');
 const { probeMedia } = require('../../ffmpeg/probe');
@@ -26,7 +26,8 @@ const SWITCH_WHY = Object.freeze({
  * do mesmo jeito): 'progress' { jobId, p, stage, message }, 'done' { jobId, result }, 'failed' { jobId, code, message, details? }.
  * Não grava o projeto nem a chave; só devolve o resultado.
  *
- * deps: { runtime: AiRuntime, store: TranscriptStore, projects?: ProjectStore, getTools()->{ffmpeg,ffprobe}, readChat?, probe?, sleep?, retry? }
+ * deps: { runtime: AiRuntime, store: TranscriptStore, projects?: ProjectStore, skill?: SkillStore, getTools()->{ffmpeg,ffprobe}, readChat?, probe?, sleep?, retry? }
+ * Com `skill` (skill.js), o guia de cortes que o usuário escreveu vai na mensagem de sistema no lugar do padrão do app.
  * Só o texto da transcrição, do chat e dos metadados sai do computador: o áudio não é lido para a IA (nem como "dica de volume").
  * Com o PERFIL DE HUMOR do canal (humor.js) vão também os critérios e as listas dele e, se ele deixou, trechos da fala de alguns cortes que ele aprovou
  * e rejeitou antes (humorExamples.js, lidos dos projetos do mesmo canal em `projects`; sem `projects` não há exemplos).
@@ -103,6 +104,15 @@ class AiAnalysisManager extends EventEmitter {
     return this._examples(typeof projectId === 'string' ? projectId : null, true);
   }
 
+  /** O guia de cortes do usuário, se ele escreveu um: { body, extraTokens } (quanto ele pesa a mais que o padrão, por chamada). '' = vale o padrão. */
+  _skill() {
+    try {
+      const active = this.deps.skill ? this.deps.skill.active() : null;
+      if (!active || !active.custom) return { body: '', extraTokens: 0 };
+      return { body: active.body, extraTokens: Math.max(0, estimateTokens(systemPrompt(active.body)) - estimateTokens(SYSTEM_PROMPT)) };
+    } catch { return { body: '', extraTokens: 0 }; } // guia ilegível: segue com o padrão
+  }
+
   /** Estimativa honesta antes de rodar: { windows, calls, tokens, label, exceedsLimit, limit }. Não envia nada. */
   async estimate({ projectId, path: file, size, duration, chatPath, profile: rawProfile }) {
     const source = { path: file, size: Number(size) || 0, duration: Number(duration) || 0 };
@@ -110,25 +120,36 @@ class AiAnalysisManager extends EventEmitter {
     const limits = this.deps.runtime.limits();
     const chat = await this._loadChat(chatPath, []);
     const { blockText, pickText } = this.humorFor(projectId, rawProfile);
+    const skill = this._skill();
     const windows = buildWindows(doc.cues, source.duration || doc.source.duration, {
-      windowSec: limits.windowMinutes * 60, maxInputTokens: limits.maxInputTokens, chat, profileTokens: estimateTokens(blockText)
+      windowSec: limits.windowMinutes * 60, maxInputTokens: limits.maxInputTokens, chat, profileTokens: estimateTokens(blockText) + skill.extraTokens
     });
-    const est = estimate(windows, { candidatesPerBlock: MAX_CANDIDATES_PER_BLOCK, pickExtraTokens: estimateTokens(pickText) });
+    const est = estimate(windows, { candidatesPerBlock: MAX_CANDIDATES_PER_BLOCK, pickExtraTokens: estimateTokens(pickText) + skill.extraTokens });
     return { ...est, label: describeEstimate(est), limit: limits.maxCalls, exceedsLimit: est.calls > limits.maxCalls };
   }
 
-  /** Valida e começa em segundo plano. Lança AnalysisError/AiError se não puder começar. */
-  start({ projectId, path: file, size, duration, params, chatPath, meta, existingCuts, profile } = {}) {
+  /**
+   * Confere tudo o que a análise por IA precisa para começar (projeto, vídeo, provedor pronto, aceite do aviso, transcrição deste vídeo),
+   * sem começar nada. Lança AnalysisError/AiError com o motivo. O modo "Algoritmo + IA" (combo.js) chama antes de rodar o algoritmo, para
+   * não fazer a pessoa esperar o algoritmo e só então saber que a IA não pode rodar.
+   */
+  check({ projectId, path: file, size, duration } = {}) {
     if (typeof projectId !== 'string' || !projectId) throw new AnalysisError('INVALID_ARGS', 'Informe o projeto.');
     if (typeof file !== 'string' || !file) throw new AnalysisError('INVALID_ARGS', 'Informe o caminho do vídeo a analisar.');
     if (!(Number(duration) > 0)) throw new AnalysisError('INVALID_ARGS', 'Não sei a duração do vídeo. Abra o vídeo de novo.');
-    if (this.job) throw new AnalysisError('BUSY', 'Já existe uma análise em andamento. Espere terminar ou cancele-a.');
     const { runtime } = this.deps;
     const current = runtime.describe();
     if (!current.ready) throw new AiError(current.reasonCode || (current.hasKey || !current.keyRequired ? 'NOT_CONFIGURED' : 'NO_KEY'), current.reason || 'Configure o provedor de IA antes de analisar.'); // reasonCode: NOT_CONFIGURED (sem provedor, endereço ou modelo) ou NO_KEY
     if (!current.accepted) throw new AiError('CONSENT_REQUIRED', 'Antes de enviar qualquer trecho, confirme o aviso de privacidade do provedor de IA.');
     const source = { path: file, size: Number(size) || 0, duration: Number(duration) };
     const doc = this._transcriptFor(projectId, source);
+    return { current, source, doc };
+  }
+
+  /** Valida e começa em segundo plano. Lança AnalysisError/AiError se não puder começar. */
+  start({ projectId, path: file, size, duration, params, chatPath, meta, existingCuts, profile } = {}) {
+    if (this.job) throw new AnalysisError('BUSY', 'Já existe uma análise em andamento. Espere terminar ou cancele-a.');
+    const { current, source, doc } = this.check({ projectId, path: file, size, duration });
 
     this.seq += 1;
     const job = {
@@ -152,7 +173,7 @@ class AiAnalysisManager extends EventEmitter {
     const now = Date.now();
     if (!changed && now - job.lastEmit < PROGRESS_THROTTLE_MS && ev.p < 1) return;
     job.lastEmit = now;
-    this.emit('progress', { jobId: job.id, p: ev.p, stage: ev.stage, message: ev.message });
+    this.emit('progress', { jobId: job.id, p: ev.p, stage: ev.stage, message: ev.message, ...(typeof ev.stageP === 'number' ? { stageP: ev.stageP } : {}) });
   }
 
   async _run(job, { doc, source, params, chatPath, meta, existingCuts, provider, projectId, profile }) {
@@ -192,7 +213,7 @@ class AiAnalysisManager extends EventEmitter {
       // pedido pago ANTES de sair; se mesmo assim vier custo (ex.: um modelo que passou a ser pago depois da lista), a análise avisa.
       let reportedCost = 0;
       const result = await analyzeWithAi(
-        { duration, hasAudio, params, transcript: doc, chat, meta, existingCuts, profile: humorProfile.profile, examples: humorProfile.examples },
+        { duration, hasAudio, params, transcript: doc, chat, meta, existingCuts, profile: humorProfile.profile, examples: humorProfile.examples, skill: this._skill().body },
         {
           chat: async (p) => {
             const out = await this.deps.runtime.chat({ ...p, onSwitch });

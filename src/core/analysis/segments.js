@@ -7,9 +7,13 @@
  * instantes", "Encerramos por hoje"). Na tela de espera a imagem fica PARADA (diferença entre quadros ~0; numa câmera de verdade
  * nunca é zero, nem com a pessoa quieta) e o som some (silêncio digital) ou só toca música, sem fala.
  *
- * Por segundo há até três evidências: imagem parada, som em silêncio e ausência de fala na transcrição. Um segundo é de espera
- * quando as evidências disponíveis concordam: com as três, basta duas (a transcrição costuma "vazar" para dentro da espera, e a
- * música da espera tira o silêncio); com duas, as duas; com uma só (só imagem ou só som), ela basta. Só texto não decide nada.
+ * Por segundo há até três evidências: imagem parada, som em silêncio e ausência de fala na transcrição. Com a imagem lida, ela é
+ * OBRIGATÓRIA: a arte de espera é uma imagem parada, e silêncio sem fala com a imagem mexendo é outra coisa (16/11/2026, numa
+ * gameplay: o streamer calado numa conversa de câmera, menus e telas de carregamento, com o som em silêncio digital entre as falas,
+ * viraram 18 "esperas" e cortaram até um anúncio). Com a imagem parada, basta mais UMA das outras (silêncio ou falta de fala: a
+ * transcrição costuma "vazar" para dentro da espera, e a música da espera tira o silêncio); só a imagem lida, ela basta. Sem a
+ * imagem (desligada ou no modo rápido), som em silêncio e falta de fala precisam concordar; só o som, ele basta. Só texto não
+ * decide nada.
  * Trechos de espera com pelo menos BREAK_MIN_SEC (aceitando buracos de até BRIDGE_SEC) viram INTERVALOS; o que sobra entre eles são
  * os EPISÓDIOS. Se os intervalos somam mais que MAX_BREAK_SHARE do vídeo, o vídeo é parado por natureza (slides, tela estática) e
  * nada é marcado.
@@ -44,25 +48,19 @@ function findBreaks({ image = null, audio = null, cues = null, n }) {
   const perSec = useAudio ? 1 / audio.windowSec : 0;
   const wait = new Uint8Array(n);
   for (let k = 0; k < n; k += 1) {
-    let have = 0;
-    let yes = 0;
-    if (useImage) {
-      have += 1;
-      if (k < image.motion.length && image.motion[k] <= STILL_MOTION) yes += 1;
-    }
+    const still = useImage ? k < image.motion.length && image.motion[k] <= STILL_MOTION : null;
+    let quiet = null;
     if (useAudio) {
-      have += 1;
       const a = Math.floor(k * perSec);
       const b = Math.min(audio.db.length, Math.max(a + 1, Math.floor((k + 1) * perSec)));
       let loud = a >= audio.db.length; // depois do fim do áudio: sem dado, não é silêncio
       for (let i = a; i < b && !loud; i += 1) if (audio.db[i] > SILENT_DB) loud = true;
-      if (!loud) yes += 1;
+      quiet = !loud;
     }
-    if (useText) {
-      have += 1;
-      if (!speech[k]) yes += 1;
-    }
-    wait[k] = yes >= Math.min(have, 2) ? 1 : 0;
+    const mute = useText ? !speech[k] : null;
+    const others = [quiet, mute].filter((x) => x !== null);
+    // com a imagem: ela parada E (sem outra evidência, ou ao menos uma das outras); sem a imagem: todas as outras concordam
+    wait[k] = (useImage ? still && (!others.length || others.some(Boolean)) : others.every(Boolean)) ? 1 : 0;
   }
 
   const breaks = [];

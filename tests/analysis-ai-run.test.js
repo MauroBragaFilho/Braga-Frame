@@ -172,8 +172,8 @@ test('429 com Retry-After: espera o tempo pedido e tenta de novo; 5xx recua em e
   assert.equal(failed, undefined, failed && failed.message);
   assert.ok(s.sleeps.includes(7000), `esperou o Retry-After: ${s.sleeps}`);
   assert.equal(attempts.get(0), 2);
-  assert.equal(attempts.get(1), 3, 'tentativas limitadas (3)');
-  assert.deepEqual(s.sleeps.filter((x) => x !== 7000), [1000, 2000], 'escada 1 s, 2 s');
+  assert.equal(attempts.get(1), 6, 'tentativas limitadas: 3 na vez do bloco e mais 3 na segunda chance, no fim');
+  assert.deepEqual(s.sleeps.filter((x) => x !== 7000), [1000, 2000, 1000, 2000], 'escada 1 s, 2 s (nas duas vezes)');
   assert.equal(done.ai.failedBlocks, 1);
   assert.ok(done.warnings.some((w) => w.code === 'AI_BLOCKS_FAILED' && /1 bloco/.test(w.message)));
   assert.equal(done.suggestions.length, 2);
@@ -484,4 +484,105 @@ test('flags e layout viram dados da sugestão, mais um motivo visível "revisar"
   assert.equal(x.layout, 'jogo');
   assert.deepEqual(x.flags, ['revisar_sensivel']);
   assert.ok(x.reasons.includes('revisar: conteúdo sensível'));
+});
+
+test('segunda chance: o bloco que falhou é pedido de novo no fim e, se responder, entra normalmente (sem aviso de bloco de fora)', async (t) => {
+  const s = setup(t, { minutes: 80, moments: [{ at: 600, punch: 'o bicho nem dropou couro' }, { at: 3000, punch: 'vinte e um reais uma espada' }], retry: { baseDelayMs: 1000, maxDelayMs: 8000 } });
+  const [m1, m2] = s.tr.moments;
+  const attempts = new Map();
+  const order = [];
+  const mock = await F.startMockAi((call) => {
+    if (isPick(call.body)) return { json: F.chatBody('{"picks":[]}') };
+    const b = blockIndex(call.body);
+    const n = (attempts.get(b) || 0) + 1;
+    attempts.set(b, n);
+    order.push(b);
+    if (b === 1 && n <= 3) return { status: 503, json: { error: { message: 'overloaded' } } }; // sobrecarregado na vez dele; no fim já responde
+    return { json: F.chatBody(F.cutsJson((b === 0 ? [m1] : b === 1 ? [m2] : []).map((m) => ({ start: m.start, end: m.end, punchline: m.punch })))) };
+  });
+  t.after(() => mock.close());
+  const { manager } = s.make(mock);
+  const { done, failed } = await run(manager, {}, s.tr);
+  assert.equal(failed, undefined, failed && failed.message);
+  assert.deepEqual(order, [0, 1, 1, 1, 2, 1], 'o bloco 2 só volta depois de todos os outros');
+  assert.equal(done.ai.failedBlocks, 0);
+  assert.equal(done.ai.recoveredBlocks, 1);
+  assert.ok(!done.warnings.some((w) => w.code === 'AI_BLOCKS_FAILED'));
+  assert.equal(done.suggestions.length, 2, 'o corte do bloco recuperado entrou');
+});
+
+test('bloco com a resposta cortada no meio: é pedido de novo, uma vez, com mais espaço; se vier inteiro, vale o inteiro (sem aviso)', async (t) => {
+  const s = setup(t, { minutes: 20, moments: [{ at: 300, punch: 'o bicho nem dropou couro' }, { at: 800, punch: 'a espada custa vinte e um reais' }] });
+  const full = F.cutsJson(s.tr.moments.map((m) => ({ start: m.start, end: m.end, punchline: m.punch })));
+  const cut = full.slice(0, full.indexOf('{', 20) + 40); // cortada no meio do 2º corte
+  const limitsSeen = [];
+  const mock = await F.startMockAi((call) => {
+    if (isPick(call.body)) return { json: F.chatBody('{"picks":[]}') };
+    limitsSeen.push(call.body.max_tokens);
+    return limitsSeen.length === 1 ? { json: F.chatBody(cut, { finish: 'length' }) } : { json: F.chatBody(full) };
+  });
+  t.after(() => mock.close());
+  const a = await run(s.make(mock).manager, {}, s.tr);
+  assert.equal(a.failed, undefined, a.failed && a.failed.message);
+  assert.deepEqual(limitsSeen, [6000, 9600], 'o mesmo bloco de novo, com 1,6x do limite de saída');
+  assert.equal(a.done.suggestions.length, 2, 'os dois cortes, e não só o que coube na primeira resposta');
+  assert.ok(!a.done.warnings.some((w) => w.code === 'AI_TRUNCATED'), 'a resposta inteira substituiu a cortada');
+
+  // quantidade automática: o limite de saída do bloco já começa mais folgado (12 candidatos)
+  const seenAuto = [];
+  const mock2 = await F.startMockAi((call) => {
+    if (isPick(call.body)) return { json: F.chatBody('{"picks":[]}') };
+    seenAuto.push(call.body.max_tokens);
+    return { json: F.chatBody(full) };
+  });
+  t.after(() => mock2.close());
+  const s2 = setup(t, { minutes: 20, moments: [{ at: 300, punch: 'o bicho nem dropou couro' }, { at: 800, punch: 'a espada custa vinte e um reais' }] });
+  const b = await run(s2.make(mock2).manager, { params: { autoQuantity: true } }, s2.tr);
+  assert.equal(b.failed, undefined, b.failed && b.failed.message);
+  assert.deepEqual(seenAuto, [9000]);
+});
+
+test('caminho dos candidatos: o resultado diz quantos o modelo devolveu por bloco, quantos passaram na conferência e o que a escolha final deixou de fora', async (t) => {
+  const moments = [{ at: 600, punch: 'o bicho nem dropou couro' }, { at: 2500, punch: 'obrigado jogo eu morri afogado' }, { at: 4300, punch: 'vinte e um reais uma espada' }];
+  const blocks = (m1, m2, m3) => [
+    [{ start: m1.start + 2, end: m1.end - 1, punchline: m1.punch, title: 'Primeiro', relevance: 0.9 }, { start: m1.start + 100, end: m1.start + 130, punchline: 'isso nunca foi dito por ninguém aqui', title: 'Inventado' }],
+    [{ start: m2.start + 2, end: m2.end - 1, punchline: m2.punch, title: 'Segundo', relevance: 0.8 }],
+    [{ start: m3.start + 2, end: m3.end - 1, punchline: m3.punch, title: 'Terceiro', relevance: 0.6 }]
+  ];
+  const counts = (f) => ({ returned: f.returned, verified: f.verified, unique: f.unique, offered: f.offered, picked: f.picked, final: f.final });
+
+  // a escolha final fica com 2 dos 3 candidatos
+  const s = setup(t, { moments });
+  const lists = blocks(...s.tr.moments);
+  const mock = await F.startMockAi((call) => {
+    if (isPick(call.body)) {
+      const ids = [...userText(call.body).matchAll(/id=(c\d+)/g)].map((x) => x[1]);
+      return { json: F.chatBody(JSON.stringify({ picks: ids.slice(0, 2).map((id) => ({ id })) })) };
+    }
+    return { json: F.chatBody(F.cutsJson(lists[blockIndex(call.body)] || [])) };
+  });
+  t.after(() => mock.close());
+  const { done, failed } = await run(s.make(mock).manager, {}, s.tr);
+  assert.equal(failed, undefined, failed && failed.message);
+  const f = done.ai.funnel;
+  assert.deepEqual(counts(f), { returned: 4, verified: 3, unique: 3, offered: 3, picked: 2, final: 2 });
+  assert.deepEqual(f.perBlock.map((b) => [b.returned, b.verified]), [[2, 1], [1, 1], [1, 1]], 'por bloco: devolvidos e aprovados');
+  assert.ok(f.perBlock.every((b) => Number.isFinite(b.from) && b.to > b.from));
+  assert.equal(done.ai.candidates, 3);
+  assert.equal(done.ai.droppedTotal, 1, 'o candidato inventado caiu na conferência, não na escolha final');
+  assert.deepEqual(done.suggestions.map((x) => x.title), ['Primeiro', 'Segundo']);
+  assert.equal(done.ai.unpicked.length, 1);
+  assert.equal(done.ai.unpicked[0].title, 'Terceiro');
+  assert.equal(done.ai.unpicked[0].relevance, 0.6);
+  assert.ok(done.ai.unpicked[0].end > done.ai.unpicked[0].start && Object.keys(done.ai.unpicked[0]).sort().join() === 'end,relevance,start,title', 'só horários, título e nota');
+
+  // a escolha final falha: nada foi "deixado de fora" por ela, e a contagem diz que não houve escolha
+  const s2 = setup(t, { moments });
+  const lists2 = blocks(...s2.tr.moments);
+  const mock2 = await F.startMockAi((call) => (isPick(call.body) ? { json: F.chatBody('isto não é json nenhum') } : { json: F.chatBody(F.cutsJson(lists2[blockIndex(call.body)] || [])) }));
+  t.after(() => mock2.close());
+  const b = await run(s2.make(mock2).manager, {}, s2.tr);
+  assert.ok(b.done.warnings.some((w) => w.code === 'AI_PICK_FAILED'));
+  assert.deepEqual(counts(b.done.ai.funnel), { returned: 4, verified: 3, unique: 3, offered: 3, picked: null, final: 3 });
+  assert.deepEqual(b.done.ai.unpicked, []);
 });

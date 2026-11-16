@@ -5,9 +5,10 @@
  *
  * Um candidato só passa se:
  *   - tem horários numéricos, início < fim, dentro do vídeo e dentro do bloco que foi enviado;
- *   - há fala de verdade na transcrição naquele intervalo (a IA não "inventa" um horário no silêncio);
+ *   - há fala de verdade na transcrição naquele intervalo (a IA não "inventa" um horário no silêncio); num jogo, onde quase não se fala
+ *     durante o lance, a risada marcada também conta e basta menos do intervalo;
  *   - o texto de `punchline` EXISTE na transcrição do intervalo (cópia literal, tolerando pontuação, caixa e pequenas trocas);
- *   - cabe nas durações mínima/máxima das preferências (depois do ajuste);
+ *   - cabe nas durações mínima/máxima das preferências (depois do ajuste; o que passa do máximo por pouco perde o começo, não o desfecho);
  *   - não repete um corte que já existe (qualquer status, inclusive rejeitado) nem outro candidato melhor;
  *   - tem relevância igual ou maior que a mínima das preferências.
  * O que passa é AJUSTADO aos limites das falas (início no começo da fala, fim no fim da fala), ganha as margens das preferências
@@ -17,8 +18,10 @@
 const { normText, cuesInRange, round3 } = require('../transcript/format');
 
 const SNAP_SEC = 4;           // ajuste máximo de um horário até o limite de fala mais próximo
-const MIN_SPEECH_RATIO = 0.2; // fração do intervalo com fala
+const MIN_SPEECH_RATIO = 0.2; // conversa e podcast: fração do intervalo com fala
+const MIN_VOICE_RATIO = 0.1;  // jogo: fração do intervalo com fala OU risada marcada (num lance quase não se fala; a reação é a pista)
 const MIN_WORDS = 3;
+const MAX_START_TRIM_SEC = SNAP_SEC + 6; // quanto o começo pode ser adiantado para caber na duração máxima: o que o ajuste às falas pode ter somado
 const DUP_OVERLAP = 0.3;      // sobreposição (do menor) a partir da qual dois candidatos são o mesmo momento
 const FUZZY_MIN = 0.75;       // fração das palavras do desfecho que precisa aparecer, em ordem frouxa, para valer como "existe"
 
@@ -121,6 +124,13 @@ function shrinkToCueEnd(limit, minEnd, cues) {
   return best;
 }
 
+/** Começo adiantado: o início de fala mais cedo dentro de [from, to]; null se não há nenhum. */
+function trimStartToCue(from, to, cues) {
+  let best = null;
+  for (const c of cues) if (c.start >= from && c.start <= to && (best === null || c.start < best)) best = c.start;
+  return best;
+}
+
 /**
  * @param {object} c candidato já lido (parse.js): { start, end, title, category, relevance, hook, punchline, reasons, layout, flags }
  * @param {object} x { cues, duration, window:{from,to}, prefs, existing }
@@ -140,12 +150,17 @@ function verifyCandidate(c, x) {
   if (w && (start < w.from - 5 || end > w.to + 5)) return fail('window');
   if (end - start > prefs.maxDurationSec * 3) return fail('duration', 'bem mais longo que o máximo permitido');
 
-  // há fala de verdade ali?
+  // há fala de verdade ali? Em conversa e podcast: 20% do intervalo com fala. Num jogo quase não se fala durante o lance (na live de
+  // referência, metade das janelas de 45 s tem menos de 20% de fala e nenhum momento escolhido à mão tem menos de 10% de voz): a risada
+  // marcada conta como voz e bastam 10%. Nos dois casos, pelo menos 3 palavras ditas, e o desfecho ainda precisa existir na
+  // transcrição (logo abaixo): a IA continua sem poder inventar um horário no silêncio.
   const around = cuesInRange(cues, start - 2, end + 2);
   const spoken = around.filter((q) => !q.laugh);
   const speechSec = spoken.reduce((n, q) => n + overlapSec(q.start, q.end, start, end), 0);
   const wordCount = spoken.reduce((n, q) => n + words(q.text).length, 0);
-  if (speechSec / (end - start) < MIN_SPEECH_RATIO || wordCount < MIN_WORDS) return fail('nospeech');
+  const talk = prefs.profile === 'conversa';
+  const voiceSec = talk ? speechSec : around.reduce((n, q) => n + overlapSec(q.start, q.end, start, end), 0);
+  if (voiceSec / (end - start) < (talk ? MIN_SPEECH_RATIO : MIN_VOICE_RATIO) || wordCount < MIN_WORDS) return fail('nospeech');
 
   // o desfecho existe na transcrição do intervalo?
   if (!c.punchline) return fail('punchline', 'o corte não traz a frase do desfecho');
@@ -170,8 +185,14 @@ function verifyCandidate(c, x) {
   // duração máxima: encolhe o fim até o fim de uma fala que ainda inclui o desfecho
   if (end - start > prefs.maxDurationSec) {
     const cut = shrinkToCueEnd(start + prefs.maxDurationSec, where.end, around);
-    if (cut === null) return fail('duration', `passa de ${Math.round(prefs.maxDurationSec)} s e o desfecho fica depois disso`);
-    end = cut;
+    if (cut !== null) end = cut;
+    else {
+      // o desfecho está no fim e encolher por ali o cortaria: adianta o começo até o início de uma fala, no máximo o que o ajuste às
+      // falas pode ter somado (um corte de 60 s que ficou com 60,7 s não se perde por isso). O desfecho continua dentro.
+      const moved = trimStartToCue(end - prefs.maxDurationSec, Math.min(where.start, start + MAX_START_TRIM_SEC), around);
+      if (moved === null) return fail('duration', `passa de ${Math.round(prefs.maxDurationSec)} s e o desfecho fica depois disso`);
+      start = moved;
+    }
   }
   // duração mínima: estende (primeiro o fim, depois o começo), sempre dentro do vídeo
   if (end - start < prefs.minDurationSec) {

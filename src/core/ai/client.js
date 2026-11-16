@@ -6,7 +6,8 @@
  *
  * Segurança da chave:
  *   - só vai no cabeçalho `Authorization: Bearer …`, para o endereço do provedor escolhido (nunca em URL, corpo, log ou erro);
- *   - nunca por http:// para um servidor que não seja a própria máquina (KEY_INSECURE);
+ *   - nunca por http:// para um servidor que não seja a própria máquina ou a rede local do usuário (KEY_INSECURE; a rede local entrou
+ *     por decisão do dono em 16/11/2026, com aviso na tela de que ali a chave vai sem criptografia: providers.js, `isLocalNetworkHost`);
  *   - todo texto de erro passa por `redact`, que tira a chave e qualquer pedaço parecido com uma chave.
  *
  * Para o modo "só gratuitos" do OpenRouter (docs/recursos/openrouter-gratuito.md): `beforeSend(body)` dá a última palavra sobre o corpo que
@@ -15,7 +16,7 @@
  */
 
 const { AiError, cancelled } = require('./errors');
-const { isLoopbackHost } = require('./providers');
+const { keyOverHttpAllowed } = require('./providers');
 
 const DEFAULT_TIMEOUT_MS = 120000;
 const MAX_ERROR_BODY_KEPT = 2000; // quanto do corpo de um erro HTTP fica no erro (já sem a chave), para quem explica a falha ao usuário
@@ -48,6 +49,19 @@ function retryAfterOf(res) {
   return Number.isFinite(when) ? Math.max(0, Math.round((when - Date.now()) / 1000)) : null;
 }
 
+/**
+ * Corta em `max` caracteres sem deixar frase nem endereço pela metade (um link cortado não abre e confunde): fica até o fim da
+ * última frase inteira; sem frase inteira que valha, até a última palavra, com "…".
+ */
+function clip(text, max) {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const sentence = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '));
+  if (sentence >= max * 0.4) return cut.slice(0, sentence + 1);
+  const word = cut.lastIndexOf(' ');
+  return `${(word >= max * 0.4 ? cut.slice(0, word) : cut).replace(/[\s,;:(-]+$/, '')}…`;
+}
+
 /** Texto curto do erro devolvido pelo servidor (já sem chaves), só para ajudar quem lê a mensagem. */
 function serverDetail(body, apiKey) {
   let text = '';
@@ -56,7 +70,7 @@ function serverDetail(body, apiKey) {
     const e = Array.isArray(data) ? data[0] && data[0].error : data && data.error;
     text = (e && (e.message || (typeof e === 'string' ? e : ''))) || '';
   } catch { text = String(body || '').replace(/\s+/g, ' '); }
-  return redact(text, apiKey).replace(/\s+/g, ' ').trim().slice(0, 160);
+  return clip(redact(text, apiKey).replace(/\s+/g, ' ').trim(), 160);
 }
 
 /** Só os cabeçalhos de limite de uso (nunca cookie, autorização ou o que mais vier) como objeto simples. */
@@ -139,8 +153,8 @@ async function chatCompletion(o) {
   try { url = new URL(baseUrl); } catch { throw new AiError('NOT_CONFIGURED', 'O endereço do provedor de IA é inválido.'); }
   const headers = { 'content-type': 'application/json', accept: 'application/json' };
   if (apiKey) {
-    if (url.protocol === 'http:' && !isLoopbackHost(url.hostname)) {
-      throw new AiError('KEY_INSECURE', 'Por segurança, a chave não é enviada por http:// a um servidor que não seja o seu computador. Use um endereço https://.');
+    if (url.protocol === 'http:' && !keyOverHttpAllowed(url.hostname)) {
+      throw new AiError('KEY_INSECURE', 'Por segurança, a chave só é enviada por http:// ao seu computador ou a um endereço da sua rede local. Para um servidor na internet, use um endereço https://.');
     }
     headers.authorization = `Bearer ${apiKey}`;
   }
@@ -228,4 +242,64 @@ async function chatCompletion(o) {
   }
 }
 
-module.exports = { chatCompletion, redact, retryAfterOf, serverDetail };
+// o que não é modelo de conversa (a análise precisa de chat): embeddings, voz, transcrição, imagem, vídeo, moderação…
+const NOT_CHAT_RE = /(embed|tts|whisper|transcri|speech|audio|imagen|image-generation|dall-?e|veo|moderation|rerank|aqa|guard)/i;
+const MAX_LISTED_MODELS = 500;
+
+/**
+ * Lista de modelos que a chave pode usar: `GET {baseUrl}/models` (protocolo da OpenAI; o Gemini, a Groq e o LM Studio respondem igual).
+ * Mesmas regras do chat: a chave só no cabeçalho, nunca por http:// fora do próprio computador, erro explicado e sem a chave.
+ * Devolve { models: [ids], hidden: N } com os ids sem o prefixo "models/" (Gemini), sem repetição e sem os que não conversam (`hidden`).
+ * Servidor sem a lista (404) = NO_MODEL_LIST: o usuário digita o nome.
+ */
+async function listModels({ baseUrl, apiKey, signal, timeoutMs = 20000, fetchImpl } = {}) {
+  const doFetch = fetchImpl || globalThis.fetch;
+  if (!baseUrl) throw new AiError('NOT_CONFIGURED', 'O provedor de IA não tem endereço configurado.');
+  if (signal && signal.aborted) throw cancelled();
+  let url;
+  try { url = new URL(baseUrl); } catch { throw new AiError('NOT_CONFIGURED', 'O endereço do provedor de IA é inválido.'); }
+  const headers = { accept: 'application/json' };
+  if (apiKey) {
+    if (url.protocol === 'http:' && !keyOverHttpAllowed(url.hostname)) {
+      throw new AiError('KEY_INSECURE', 'Por segurança, a chave só é enviada por http:// ao seu computador ou a um endereço da sua rede local. Para um servidor na internet, use um endereço https://.');
+    }
+    headers.authorization = `Bearer ${apiKey}`;
+  }
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; controller.abort(); }, timeoutMs);
+  const onAbort = () => controller.abort();
+  if (signal) signal.addEventListener('abort', onAbort, { once: true });
+  try {
+    let res;
+    try {
+      res = await doFetch(`${baseUrl}/models`, { method: 'GET', headers, signal: controller.signal });
+    } catch (err) {
+      if (signal && signal.aborted) throw cancelled();
+      if (timedOut || (err && err.name === 'AbortError')) throw new AiError('TIMEOUT', 'O provedor de IA demorou demais para mandar a lista de modelos.');
+      throw new AiError('NETWORK', 'Não foi possível falar com o provedor de IA. Confira a internet e o endereço do provedor.');
+    }
+    let text = '';
+    try { text = await res.text(); } catch { text = ''; }
+    if (res.status === 404) throw new AiError('NO_MODEL_LIST', 'Este servidor não informa a lista de modelos. Digite o nome do modelo.');
+    if (!res.ok) throw httpError(res.status, res, serverDetail(text, apiKey), redact(text, apiKey).slice(0, MAX_ERROR_BODY_KEPT));
+    let data;
+    try { data = JSON.parse(text); } catch { throw new AiError('BAD_RESPONSE', 'O provedor respondeu algo que não é uma lista de modelos.'); }
+    const raw = Array.isArray(data && data.data) ? data.data : (Array.isArray(data && data.models) ? data.models : []);
+    const models = [];
+    let hidden = 0;
+    for (const m of raw) {
+      const id = String((m && (m.id || m.name)) || '').trim().replace(/^models\//, '');
+      if (!id || id.length > 200 || models.includes(id)) continue;
+      if (NOT_CHAT_RE.test(id)) { hidden += 1; continue; }
+      models.push(id);
+      if (models.length >= MAX_LISTED_MODELS) break;
+    }
+    return { models, hidden };
+  } finally {
+    clearTimeout(timer);
+    if (signal) signal.removeEventListener('abort', onAbort);
+  }
+}
+
+module.exports = { chatCompletion, listModels, redact, retryAfterOf, serverDetail, NOT_CHAT_RE };
