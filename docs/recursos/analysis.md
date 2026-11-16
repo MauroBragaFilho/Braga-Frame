@@ -403,6 +403,27 @@ Algoritmo sozinho: automática 76 sugestões e 34% de acerto; 6 por hora, 26 e 5
 
 Limites: uma live de um jogo só e uma seleção feita por quem já tinha visto resultados do motor. Com a IA a medição usou a lista dela de uma rodada em quantidade automática; uma rodada inteira com "Só os melhores" ligado ainda não foi feita. Teste: `analysis-ui` ("Só os melhores").
 
+## Teste contra dados do público (16/11/2026)
+
+Preocupação do dono: o motor precisa achar trechos que funcionem publicados; a medição na live de gameplay era contra uma seleção feita à mão. Este teste usa dado do público.
+
+**Como foi.** 17 lives de três canais de jogos e variedades (31 horas), em 240p. Só o **algoritmo** (sem IA, sem chat), no perfil de gameplay, com a legenda automática do YouTube como transcrição (`[risadas]` vira risada; o palavrão censurado vira palavra de reação; não há pontuação). Régua: o gráfico de "mais reassistidos" do YouTube (100 faixas por vídeo, no `heatmap` dos metadados; a primeira faixa fica de fora). Referência: as mesmas sugestões sorteadas em outros pontos da mesma live, mil vezes. "Sorte" é a parte dos sorteios que empata ou ganha do motor.
+
+| Medida | Automática (642 sugestões) | Acaso | Sorte | Só os melhores (152) | Acaso | Sorte |
+|---|---|---|---|---|---|---|
+| posição média no gráfico (0 a 100) | 56 | 51 | < 0,1% | 58 | 51 | < 0,1% |
+| sugestões nos 20% mais reassistidos | 25% | 19% | < 0,1% | 28% | 19% | 0,5% |
+| trechos mais reassistidos tocados (5 por live, 85 no total) | 62 | 37,6 | < 0,1% | 24 | 11,5 | < 0,1% |
+| shorts publicados achados (13, de um canal só) | 7 | 4,6 | 15% | 2 | 1,3 | 37% |
+
+- **Acima do acaso nos três canais, com margem modesta**: 25% das sugestões caem num trecho muito reassistido, contra 19% do sorteio.
+- **Contra os shorts publicados nada se pode afirmar** (13 shorts). E as duas réguas discordam: os shorts publicados ficam na posição 44 do gráfico. O que o canal publica não é o que o público mais reassiste dentro da live.
+- **A nota do motor ordena bem**: o terço de nota mais alta fica na posição 61 (30% nos 20% de cima), o do meio em 58 e o de baixo em 49, igual ao acaso. Vale em dois dos três canais.
+- **O sinal de momentos calmos aponta para o lado errado nessas lives**: as 42 sugestões desse tipo ficam na posição 34, nos três canais (32, 36 e 35). Na live de gameplay medida à mão, 1 de 7 era boa. O sinal foi feito para jogos de história; em jogo competitivo e live de conversa ele traz o que o público pula.
+- **Por pista** (com e sem): risada 62 e 54; mudança de cena 63 e 52; volume acima do normal 61 e 53; exclamação 59 e 51; repetição 58 e 49. Subida brusca de volume (56 e 56) e fala sobre o próprio momento (53 e 57) não se separam.
+
+Limites: o gráfico mede o que se reassiste na live inteira, não o que funciona como vídeo curto; as faixas são largas (de meio minuto a dois minutos); um dos canais é de variedades; sem pontuação na legenda. **Nada foi mudado no motor por causa deste teste.**
+
 ## Cache e cancelamento
 
 - **Onde**: `userData/cache/analysis/` (arquivos nossos; apagar ali nunca toca em arquivo do usuário). Dois níveis: `sig-audio-*` / `sig-image-*` (o que o ffmpeg extraiu, a parte cara) e `res-*` (resultado final). Mudar sensibilidade, pesos ou margens reaproveita os `sig-*` e só refaz a combinação (instantâneo). A chave do resultado inclui a **impressão digital da transcrição**: outra transcrição recalcula (sem reler o vídeo). No máximo 80 arquivos (os usados há mais tempo saem); gravação atômica (tmp + rename); arquivo ilegível ou de outra versão do algoritmo conta como ausente.

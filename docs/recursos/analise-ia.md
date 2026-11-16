@@ -388,7 +388,7 @@ Canal novo: `analysis:humorExamples { projectId }` → `{ examples: { approved, 
 **Formato.** Um arquivo Markdown no formato de skill: cabeçalho `---` com `name` e `description`, depois as instruções. O app manda só as instruções (sem o cabeçalho). O mesmo arquivo serve fora do app, para um agente que leia uma transcrição e marque os cortes.
 
 **Onde fica.**
-- Padrão: `src/core/analysis/ai/skill/SKILL.md` (vai com o app; sem nome de canal nem fala de live; cerca de 5 mil caracteres, ~1.600 tokens por chamada).
+- Padrão: `src/core/analysis/ai/skill/SKILL.md` (vai com o app; sem nome de canal nem fala de live; cerca de 7,4 mil caracteres, ~2.300 tokens por chamada).
 - Do usuário: `userData/ai/skill/SKILL.md`. Se existe (com 200 caracteres ou mais de instruções), vale **no lugar** do padrão. Texto igual ao padrão não é guardado (assim o padrão continua acompanhando as atualizações do app). Máximo de 12.000 caracteres de instruções.
 
 **Na tela** (aba Análise, cartão do provedor, caixa recolhida **Guia de cortes**): mostra o guia em uso (selo **Padrão** ou **Personalizado**), o texto para editar, o tamanho ("N caracteres, cerca de M tokens em cada chamada"), **Salvar guia** e **Restaurar o padrão** (com confirmação). O guia só é pedido ao processo principal quando a caixa abre. Trava durante a análise. O resumo de uma análise diz "com o seu guia de cortes" quando valeu o do usuário (`result.ai.skill = { custom }`; o texto do guia não é guardado no resultado nem no projeto).
@@ -561,3 +561,29 @@ Para qualquer outro endereço continua valendo só `https://` (`KEY_INSECURE`, e
 - **O que não mudou:** o endereço de teste do OpenRouter e os downloads de ferramentas continuam aceitando `http://` só na própria máquina.
 - **Testes:** `ai-cloud` (a regra, o cliente e o estado do provedor), `ai-models` (a lista de modelos) e `analysis-ui` (o aviso junto do endereço).
 - **Não verificado:** nenhuma análise foi feita por esse caminho ainda. Só se conferiu que um gateway de verdade responde 401 sem chave, pela rede local e pela VPN.
+
+### 17.9 O que os shorts publicados mostram (16/11/2026)
+
+Pedido do dono: analisar shorts publicados e dizer à IA como procurar. Foram medidos **331 shorts com legenda** de seis canais brasileiros: três de jogos, um de lives de variedades e jogo, e dois de podcast. Só metadados e legenda automática; nenhum vídeo foi baixado para isso. Em cada canal a metade mais vista foi comparada com a menos vista.
+
+| Canal | Shorts | Duração mediana | Dos mais vistos | Dos menos vistos | Fala em até 2 s | Com risada | Risada nos últimos 10 s |
+|---|---|---|---|---|---|---|---|
+| lives de variedades e jogo | 59 | 89 s | 73 s | 97 s | 95% | 42% | 12% |
+| jogos A | 50 | 38 s | 27 s | 42 s | 90% | 10% | 4% |
+| jogos B | 45 | 23 s | 21 s | 28 s | 100% | 2% | 2% |
+| jogos C | 58 | 39 s | 38 s | 39 s | 100% | 2% | 0% |
+| podcast A | 59 | 59 s | 48 s | 66 s | 92% | 53% | 19% |
+| podcast B | 60 | 50 s | 54 s | 47 s | 100% | 18% | 12% |
+
+**Medido:**
+
+- A fala começa nos 2 primeiros segundos em 90% a 100% dos shorts de todos os canais.
+- Os mais vistos são mais curtos em 4 dos 6 canais (empate em um, invertido em um). No conjunto, 34% dos mais vistos têm até 30 s, contra 23% dos menos vistos; passam de 90 s 9% contra 13%.
+- Terminar em risada é raro: de 0% a 19% têm risada nos últimos 10 segundos.
+- **Não se confirmou** que abrir com cumprimento ou palavra de enchimento atrapalhe: 12% dos mais vistos começam assim, contra 7% dos menos vistos.
+
+**Lido, não medido** (o começo e o fim da legenda dos mais e dos menos vistos de quatro canais, cerca de 45 shorts): os mais vistos armam a situação nas primeiras frases e mostram gente com gente (trote, desafio, aposta, cobrança) ou algo fora do comum com reação; entre os menos vistos ficam conversa cheia de termos do jogo, aviso, divulgação, tutorial e opinião longa sem história.
+
+**O que entrou no guia padrão:** a seção "O que os shorts publicados mostram", com seis itens e 786 caracteres. A mensagem de sistema padrão ficou em 2.597 tokens estimados (o teste `ai-skill` exige menos de 2.600), então a seção precisou ser curta.
+
+**Limites:** nenhum short dos três canais de jogos casou com as 30 lives mais recentes do próprio canal (vêm de vídeos gravados ou de lives antigas); visualização depende do canal e da plataforma, não só do corte; a leitura é de quem escreveu o guia. **O efeito no resultado da IA não foi medido.**

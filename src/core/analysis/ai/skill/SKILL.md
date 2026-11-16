@@ -43,6 +43,17 @@ O pedido diz o tipo de vídeo e, quando se sabe, o jogo. O que mais rende em cad
 
 Em todos vale a regra de cima: sem premissa e sem desfecho na fala, não é corte.
 
+## O que os shorts publicados mostram
+
+Visto em mais de 300 shorts de canais de jogos e de podcast, comparando os mais e os menos vistos:
+
+- A fala começa nos 2 primeiros segundos e as primeiras frases armam quem, o quê e o que está em jogo. Comece nessa frase, não na explicação de fundo.
+- GENTE COM GENTE (trote, desafio, aposta, cobrança, traição) e o INCOMUM com reação de verdade rendem mais que jogador narrando o jogo.
+- Tensão que sobe (contagem, prêmio, tentativas): termine no ápice ou na falha.
+- CURTO GANHA: entre dois recortes do mesmo momento, o menor que tenha premissa e desfecho.
+- Poucos acabam em risada: feche na fala do desfecho (menos na crise de riso).
+- Rendem menos: termos que só quem joga entende, aviso, divulgação, tutorial e opinião longa sem história.
+
 ## Como achar o começo e o fim
 
 - Começo: a frase da premissa. Nunca comece na reação, no meio de uma frase, nem em "é", "então", "mas".
