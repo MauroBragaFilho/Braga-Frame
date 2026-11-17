@@ -124,9 +124,12 @@ test('layouts do canal herdam por escopo: o do canal vence o do jogo, que vence 
 test('nada fictício: toda preferência do catálogo é lida por alguma aba (ou pelo processo principal) fora da própria tela de Preferências', () => {
   const featuresDir = path.join(ROOT, 'renderer', 'features');
   const sources = [];
-  for (const name of fs.readdirSync(featuresDir)) {
+  // inclui as subpastas das telas divididas (features/analysis/, features/export/): a leitura da preferência pode estar numa parte
+  const walkFeatures = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walkFeatures(path.join(d, e.name)) : [path.join(d, e.name)]));
+  for (const file of walkFeatures(featuresDir)) {
+    const name = path.relative(featuresDir, file);
     if (!name.endsWith('.js') || name === 'prefs.js') continue;
-    sources.push([name, fs.readFileSync(path.join(featuresDir, name), 'utf8')]);
+    sources.push([name, fs.readFileSync(file, 'utf8')]);
   }
   for (const dir of ['src/core', 'src/ipc']) {
     const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : (e.name.endsWith('.js') ? [path.join(d, e.name)] : [])));

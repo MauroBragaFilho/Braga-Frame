@@ -86,6 +86,19 @@ Eventos do `BF.bus` (nome → payload):
 
 Eventos que **vêm do processo principal** chegam por `BF.on(canal, cb)` (e não pelo `BF.bus`): `queue:*`, `sources:progress`, `subtitles:progress`, `subtitles:modelProgress`, `analysis:*`, `tools:progress`, `review:waveformProgress`, `export:progress` (legado). A tabela completa está em 5.12.
 
+#### Telas divididas em partes (Etapa 2, 17/11/2026)
+
+Duas telas passaram de mil linhas e foram divididas **sem mudar o comportamento**: `features/analysis.js` (2512 -> ~730 linhas) e `features/export.js` (1732 -> ~490). O arquivo com o nome da tela continua sendo o **controlador**: estado, montagem da raiz, ligação dos eventos e registro da aba (`BF.ui.registerTab`). O resto mora em subpastas, carregadas por `<script>` **antes** do controlador:
+
+| Tela | Pasta | Arquivos |
+|---|---|---|
+| Análise | `renderer/features/analysis/` | `logic.js` (puro: `window.BFAnalysisLogic`, também roda no Node), `humor.js`, `engine.js` (motor e transcrição), `results.js`, `controls.js`, `provider.js` (provedor de IA, OpenRouter, guia de cortes, estimativa) |
+| Exportar | `renderer/features/export/` | `logic.js` (`window.BFExportLogic`), `profile.js`, `framing.js`, `preview.js` (prévia, QC, fila, saída), `view.js` (sincronização da tela), `layouts.js` (layouts do canal e detecção) |
+
+Contrato de cada parte: `window.BFAnalysisParts.<parte>` / `window.BFExportParts.<parte>` é uma **fábrica** `(A) => ({ ...funções que ela oferece })`. `A` é o que o controlador entrega: o estado (`state`/`S`) e as funções de outras partes e do controlador, chamadas **só em tempo de execução** (por isso não importa a ordem em que as fábricas rodam). Uma variável que o controlador reatribui (`ui` da tela Exportar) é lida pela parte por `A.ui`, nunca por cópia. A lógica pura (`logic.js`) não depende de nada além de `window.BFFraming`/`BFLayouts`. `renderer/util.js` (`window.BFUtil`: `el`, `debounce`, caminhos) saiu do `app.js` do mesmo jeito e carrega antes dele.
+
+Regras para quem mexer: não criar estado fora de `state`/`S`; uma parte nunca chama outra diretamente (passa por `A`); parte nova entra no `index.html` antes do controlador (`tests/renderer-base.test.js` confere). Os testes da Análise carregam os scripts na ordem do `index.html` (`tests/analysis-scripts.js`). **Não divididos de propósito**: `bridge.js` (268 linhas, uma só responsabilidade e sensível à segurança) e o resto do `app.js` (núcleo `window.BF`: eventos, avisos, menu, player e gravação do projeto formam um bloco coeso que as demais telas usam).
+
 ### 1.4 Menu, abas e telas
 
 O menu lateral tem **5 itens**: **Início · Projetos · Cortes · Exportações · Configurações** (`src/core/ui/menuLayout.js`, `window.BFMenu`; também módulo CommonJS, testado em `tests/menu-layout.test.js`: o `LAYOUT` diz que telas cada item abriga). As telas continuam sendo as **abas** que cada feature registra com `BF.ui.registerTab` (mesmo contrato de antes, com os mesmos `id`, `order`, `title` e `view`): **Cortes** abriga as abas internas Cortes · Análise · Legendas · Áudio · Exportar e **Configurações** abriga Geral · Preferências · Ferramentas (as abas internas ficam em cima do painel, em `#subTabs`). **Novo projeto** (`sources`) não tem item nem aba: abre pelos botões "Novo projeto" da Início e de Projetos e acende o item Projetos. Os ids das telas **não mudam** (`#tabpanel-<id>`, `BF.ui.selectTab(id)` abre qualquer uma); uma tela que o layout não conhece (recurso novo) ganha um item próprio, na posição do `order`. O desenho tem ainda um item "Biblioteca" que o app não tem (não existe biblioteca para mostrar): ele não foi criado. DOM, teclado e selos: `docs/recursos/interface.md`.

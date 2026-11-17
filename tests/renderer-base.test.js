@@ -10,6 +10,19 @@ const RENDERER = path.join(__dirname, '..', 'renderer');
 const html = fs.readFileSync(path.join(RENDERER, 'index.html'), 'utf8');
 const FEATURE_IDS = ['shell', 'cuts', 'export', 'queue', 'subtitles', 'audio', 'analysis', 'sources', 'general', 'prefs', 'timeline', 'tools'];
 
+/** Arquivos .js e .css de renderer/features/, inclusive das subpastas das telas divididas (features/analysis/, features/export/), como "features/x/y.js". */
+function featureFiles() {
+  const out = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(path.join(RENDERER, dir), { withFileTypes: true })) {
+      const rel = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) walk(rel); else out.push(rel);
+    }
+  };
+  walk('features');
+  return out;
+}
+
 const refs = (re) => [...html.matchAll(re)].map((m) => m[1]);
 const scripts = refs(/<script[^>]*\ssrc="([^"]+)"/g);
 const styles = refs(/<link[^>]*rel="stylesheet"[^>]*href="([^"]+)"/g);
@@ -21,6 +34,14 @@ test('index.html referencia app.js, app.css e todos os arquivos de features (arq
   assert.ok(styles.indexOf('app.css') < styles.indexOf('features/shell.css'), 'app.css (tokens) antes dos estilos das features');
   for (const script of ['theme-init.js', 'slider-sync.js']) assert.ok(scripts.includes(script), `falta <script> de ${script}`);
   assert.ok(scripts.indexOf('theme-init.js') < scripts.indexOf('app.js') && html.indexOf('theme-init.js') < html.indexOf('app.css'), 'o tema é escolhido antes da primeira pintura');
+  assert.ok(scripts.indexOf('util.js') > -1 && scripts.indexOf('util.js') < scripts.indexOf('app.js'), 'util.js (el, debounce, caminhos) antes do app.js');
+  // as telas divididas: cada parte carrega antes do controlador da tela
+  for (const [screen, parts] of [['analysis', ['logic', 'humor', 'engine', 'results', 'controls', 'provider']], ['export', ['logic', 'profile', 'framing', 'preview', 'view', 'layouts']]]) {
+    for (const part of parts) {
+      const i = scripts.indexOf(`features/${screen}/${part}.js`);
+      assert.ok(i > -1 && i < scripts.indexOf(`features/${screen}.js`), `features/${screen}/${part}.js antes de features/${screen}.js`);
+    }
+  }
   for (const id of FEATURE_IDS) {
     assert.ok(scripts.includes(`features/${id}.js`), `falta <script> de features/${id}.js`);
     assert.ok(styles.includes(`features/${id}.css`), `falta <link> de features/${id}.css`);
@@ -31,7 +52,7 @@ test('tudo que o index.html referencia existe e nada em features/ fica sem refer
   for (const file of [...scripts, ...styles]) {
     assert.ok(fs.existsSync(path.join(RENDERER, file)), `arquivo referenciado não existe: ${file}`);
   }
-  const onDisk = fs.readdirSync(path.join(RENDERER, 'features')).map((f) => `features/${f}`);
+  const onDisk = featureFiles();
   const orphans = onDisk.filter((f) => !scripts.includes(f) && !styles.includes(f));
   assert.deepEqual(orphans, [], 'arquivos em renderer/features/ ausentes do index.html (só a base edita o index.html)');
 });
@@ -69,7 +90,7 @@ test('a CSP tem exatamente a política esperada (fecha também object-src, base-
     'form-action': ["'none'"]
   });
   // e nada no renderer depende do que foi fechado
-  for (const file of ['app.js', ...fs.readdirSync(path.join(RENDERER, 'features')).filter((f) => f.endsWith('.js')).map((f) => `features/${f}`)]) {
+  for (const file of ['app.js', 'util.js', ...featureFiles().filter((f) => f.endsWith('.js'))]) {
     const code = fs.readFileSync(path.join(RENDERER, file), 'utf8');
     assert.doesNotMatch(code, /createElement\(\s*['"](?:form|base|object|embed|iframe)['"]/, `${file} cria elemento que a CSP bloqueia`);
   }

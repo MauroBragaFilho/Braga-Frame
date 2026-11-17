@@ -50,6 +50,8 @@
     try { return new URLSearchParams(window.location.search).get('hostOrigin') || null; } catch { return null; }
   })();
 
+  const TARGET_ORIGIN = expectedOrigin && /^https?:\/\/[^/]+$/.test(expectedOrigin) ? expectedOrigin : '*';
+
   const pending = new Map(); // id -> { resolve, reject }
   const subscribers = new Map(); // canal -> Set(callback)
   let nextId = 0;
@@ -65,8 +67,9 @@
   }
 
   function post(message) {
-    // '*' porque a página que embute pode ter origem opaca (file:); o destino é sempre window.parent, nunca outra janela
-    window.parent.postMessage({ source: SOURCE, version: VERSION, ...message }, expectedOrigin || '*');
+    // o destino é sempre window.parent, nunca outra janela. Com uma origem http(s) conhecida (?hostOrigin=) a mensagem só sai para ela;
+    // página file:// tem origem opaca ("null" não é um destino válido de postMessage): aí vale '*', e quem confere é o lado de lá (event.source)
+    window.parent.postMessage({ source: SOURCE, version: VERSION, ...message }, TARGET_ORIGIN);
   }
 
   function rejectAll(error) {
