@@ -26,9 +26,5 @@ jobs:
           Add-Content $env:GITHUB_PATH $bin
           & "$bin\ffmpeg.exe" -version | Select-Object -First 1
       - run: npm ci
-      - name: Diagnóstico icacls pelo Node (temporário)
-        shell: pwsh
-        run: |
-          node -e "const {execFileSync}=require('child_process');const os=require('os');const fs=require('fs');const p=require('path').join(os.tmpdir(),'y.json');fs.writeFileSync(p,'{}');console.log('USERNAME='+process.env.USERNAME+' file='+p);try{execFileSync('icacls',[p,'/inheritance:r','/grant:r',process.env.USERNAME+':F'],{encoding:'utf8',timeout:5000,windowsHide:true})}catch(e){console.log('ERR',e.message,'|',e.stderr,'|',e.stdout)};console.log(execFileSync('icacls',[p],{encoding:'utf8'}))"
       - run: npm run lint
       - run: npm test
