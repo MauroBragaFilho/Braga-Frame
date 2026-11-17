@@ -15,7 +15,7 @@ Esta etapa é, por natureza, de **avaliação e decisão**: quase tudo o que fal
 | FFmpeg | **Resolvido**: botão "Instalar o FFmpeg" (baixa a compilação de terceiros, GPL v3, só no clique, com SHA-256 conferido). A instalação real do pacote **não foi executada** aqui (veja o fim deste item) | não |
 | Aviso de versão nova | **Entregue** ([atualizacao.md](atualizacao.md)): só avisa e abre a página da Release; atualizar sozinho depende da assinatura | não |
 | Assinatura digital do instalador | Não existe; o Windows avisa ao instalar | **sim** (decisão 3) |
-| Licença do Braga Frame | Não definida | **sim** (decisão 4) |
+| Licença do Braga Frame | **GPL v3 ou posterior**, com `LICENSE` no repositório e no instalador | não (falta só a política de contribuições) |
 | Hardware: AMD, Intel, Windows 10, ARM | Não verificado | precisa de máquinas/testadores |
 
 ## 1. Atualização
@@ -78,7 +78,7 @@ Esta etapa é, por natureza, de **avaliação e decisão**: quase tudo o que fal
 
 ## 5. Política de licenciamento
 
-**Estado.** O repositório é **público** e **não tem arquivo de licença** (`"license": "UNLICENSED"` no `package.json`). Na prática, todos os direitos ficam reservados: qualquer pessoa pode ler o código no GitHub, mas ninguém tem permissão de usar, copiar ou redistribuir. Os componentes de terceiros estão inventariados em [`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md) (que agora vai dentro do instalador, com os textos das licenças das fontes), e as licenças declaradas no GitHub foram conferidas hoje (yt-dlp Unlicense; Deno, TwitchDownloader, whisper.cpp, Whisper e Electron MIT; Inter e Montserrat OFL 1.1).
+**Decidido: GNU GPL v3 ou posterior (`GPL-3.0-or-later`), código aberto** (veja a decisão 4). O texto abaixo é a avaliação original. **Estado antes:** o repositório era público e **não tinha arquivo de licença** (`"license": "UNLICENSED"`): todos os direitos reservados, ou seja, ninguém tinha permissão de usar, copiar ou redistribuir. Os componentes de terceiros estão inventariados em [`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md) (que agora vai dentro do instalador, com os textos das licenças das fontes), e as licenças declaradas no GitHub foram conferidas hoje (yt-dlp Unlicense; Deno, TwitchDownloader, whisper.cpp, Whisper e Electron MIT; Inter e Montserrat OFL 1.1).
 
 **Opções para o Braga Frame.**
 
@@ -99,9 +99,9 @@ Esta etapa é, por natureza, de **avaliação e decisão**: quase tudo o que fal
 
 **2. Atualização. DECIDIDO (A, só avisar) e entregue.** B (instalar sozinho) fica para depois da assinatura.
 
-**3. Assinatura. Direção decidida: código aberto (SignPath Foundation, gratuita para projetos abertos).** Depende da decisão 4: a SignPath exige uma licença de código aberto reconhecida e um pedido de inscrição do projeto. O fluxo de releases já existe ([publicar-release.md](publicar-release.md)); o ponto de encaixe da assinatura está marcado nele.
+**3. Assinatura. Direção decidida: código aberto, com a SignPath Foundation (gratuita para projetos abertos). A licença (GPL v3+) já existe; falta pedir a inscrição.** O BDS já passou por isso e deixou o caminho pronto no repositório dele: `CODE_SIGNING_POLICY.md`, `.signpath/artifact-configuration.xml`, `release-sign.yml` e o guia `.docs/ASSINATURA_SIGNPATH.md` (pedido no portal, projeto, política de assinatura, token e variáveis no GitHub). O Braga Frame seguiria o mesmo molde, no ponto de encaixe marcado em [publicar-release.md](publicar-release.md). Dois cuidados: a SignPath pede um **projeto já lançado** (então é preciso ao menos uma Release publicada antes de se inscrever) e uma política de assinatura pública; e **não verifiquei as regras atuais da SignPath nem se uma mesma organização aceita dois projetos** (o BDS e o Braga Frame): confirme no portal (signpath.org). Não implementei nada disso ainda.
 
-**4. Licença do Braga Frame. EM ABERTO.** Direção: código aberto; a GPL v3 foi proposta pelo autor e recebeu parecer favorável (compatível com o FFmpeg GPL v3 que o app baixa e com a SignPath). Falta confirmar para eu criar o `LICENSE` e ajustar o `package.json` (`GPL-3.0-or-later` ou `GPL-3.0-only`). Sem isso o repositório público segue com todos os direitos reservados.
+**4. Licença do Braga Frame. DECIDIDO e entregue: GNU GPL v3 ou posterior (`GPL-3.0-or-later`).** O `LICENSE` (texto oficial, sem alterações) está na raiz e vai no instalador como `LICENSE.bragaframe.txt`; o `package.json` e o `package-lock.json` declaram a mesma licença e o cartão Sobre a mostra. O BDS já é `GPL-3.0-only`, então os dois são compatíveis (o BDS pode incluir o Braga Frame como módulo). Continua em aberto uma política para **contribuições de terceiros** (DCO ou acordo de contribuição): enquanto só o autor escreve o código, ele pode relicenciar o que é dele; com código de terceiros isso exige a concordância deles.
 
 ## Testes de instalação e atualização
 

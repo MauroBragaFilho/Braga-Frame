@@ -40,6 +40,6 @@ O aviso de versão nova ([atualizacao.md](atualizacao.md)) lê a **última Relea
 
 ## O que ainda não existe
 
-- **Assinatura digital**: o instalador sai sem assinatura. O ponto de encaixe é entre "Compilar o instalador" e "Publicar a Release" (o BDS assina pela SignPath; veja `release-bds.yml` no repositório dele). Depende da licença de código aberto (decisão pendente).
+- **Assinatura digital**: o instalador sai sem assinatura. O ponto de encaixe é entre "Compilar o instalador" e "Publicar a Release" (o BDS assina pela SignPath; veja `release-bds.yml` no repositório dele). A licença de código aberto (GPL v3 ou posterior) já existe; falta pedir a inscrição na SignPath Foundation, que pede um projeto já lançado, então **a primeira Release (sem assinatura) vem antes** ([comercial.md](comercial.md), decisão 3).
 - **Teste do instalador publicado**: o job `installer` do CI testa um instalador gerado do mesmo código e da mesma configuração, com outra identidade; o arquivo que vai para a Release não é instalado nem aberto pelo workflow.
 - **Execução real do workflow**: ele foi escrito e validado só quanto à sintaxe e aos trechos que dá para rodar localmente (nome do instalador, texto da Release). A primeira tag enviada é o primeiro teste de verdade.

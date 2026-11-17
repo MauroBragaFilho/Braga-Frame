@@ -169,15 +169,19 @@ async function main() {
     const exe = path.join(installDir, `${IDENT.productName}.exe`);
     // o que a distribuição precisa levar: programa, desinstalador, código empacotado e os avisos de licença (Electron, Chromium, fontes e o inventário)
     for (const rel of [`${IDENT.productName}.exe`, `Uninstall ${IDENT.productName}.exe`, path.join('resources', 'app.asar'), 'LICENSE.electron.txt', 'LICENSES.chromium.html',
-      'THIRD-PARTY-NOTICES.md', path.join('licenses', 'fonts', 'OFL-Inter.txt'), path.join('licenses', 'fonts', 'OFL-Montserrat.txt'),
+      'THIRD-PARTY-NOTICES.md', 'LICENSE.bragaframe.txt', path.join('licenses', 'fonts', 'OFL-Inter.txt'), path.join('licenses', 'fonts', 'OFL-Montserrat.txt'),
       path.join('licenses', 'fonts', 'APACHE-MaterialSymbols.txt'), path.join('licenses', 'fonts', 'FONTES_ORIGEM.md')]) {
       assert.ok(fs.existsSync(path.join(installDir, rel)), `instalado: ${rel}`);
     }
+    // a licença do app (GPL v3) acompanha o instalador, igual à do repositório
+    const shipped = fs.readFileSync(path.join(installDir, 'LICENSE.bragaframe.txt'), 'utf8');
+    assert.ok(shipped.includes('GNU GENERAL PUBLIC LICENSE') && shipped.includes('Version 3, 29 June 2007'), 'LICENSE.bragaframe.txt é o texto da GPL v3');
+    assert.equal(shipped.replace(/\r\n/g, '\n'), fs.readFileSync(path.join(ROOT, 'LICENSE'), 'utf8').replace(/\r\n/g, '\n'), 'e é o mesmo do repositório');
     const key = findUninstallKey(IDENT.productName);
     assert.ok(key, 'o app aparece em "Adicionar ou remover programas"');
     assert.equal(parseRegValue(regQuery(['query', key, '/v', 'DisplayVersion']).stdout, 'DisplayVersion'), v1, 'a versão listada é a instalada');
     assert.ok(fs.existsSync(startMenuShortcut(IDENT.productName)), 'atalho no Menu Iniciar');
-    log(`instalação limpa (${v1}): arquivos, avisos de licença (Electron, Chromium, fontes e inventário), "Adicionar ou remover programas" e atalho do Menu Iniciar`);
+    log(`instalação limpa (${v1}): arquivos, avisos de licença (a GPL do app, Electron, Chromium, fontes e inventário), "Adicionar ou remover programas" e atalho do Menu Iniciar`);
 
     // ---- o programa instalado abre, mostra a versão e grava um projeto
     app = await h.launchApp(userData, { exe, timeout: 60000 });

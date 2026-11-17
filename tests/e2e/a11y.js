@@ -45,6 +45,12 @@ const SMALL = `(() => {
 const FOCUS = `(() => {
   const sig = (el) => { const out = []; for (let n = el, i = 0; n && i < 4; n = n.parentElement, i += 1) { const s = getComputedStyle(n); out.push([s.outlineStyle, s.outlineWidth, s.outlineColor, s.boxShadow, s.borderTopColor, s.backgroundColor, s.color, s.textDecorationLine, s.transform].join('|')); } return out.join('#'); };
   const visible = (el) => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none' && !el.closest('[hidden]') && !el.closest('[inert]'); };
+  // sem transições durante a medição: um controle com transition ainda está no começo da animação logo depois de receber o foco, e o estilo
+  // lido parece igual ao de antes (falso "sem foco visível", intermitente conforme o instante da leitura)
+  // (folha construída por script: a CSP do app proíbe <style> inline)
+  const quiet = new CSSStyleSheet();
+  quiet.replaceSync('*, *::before, *::after { transition: none !important; animation: none !important; }');
+  document.adoptedStyleSheets = [...document.adoptedStyleSheets, quiet];
   const bad = [];
   const list = [...document.querySelectorAll('button, a[href], input, select, textarea, summary, [tabindex="0"]')].filter((el) => visible(el) && !el.disabled && el.tabIndex >= 0);
   for (const el of list.slice(0, 80)) {
@@ -56,6 +62,7 @@ const FOCUS = `(() => {
     if (before === after) bad.push(el.tagName + '#' + el.id + '.' + String(el.className).slice(0, 30) + ' "' + (el.getAttribute('aria-label') || el.textContent || el.placeholder || '').trim().slice(0, 20) + '"');
     el.blur();
   }
+  document.adoptedStyleSheets = document.adoptedStyleSheets.filter((sheet) => sheet !== quiet);
   return JSON.stringify({ checked: Math.min(list.length, 80), bad });
 })()`;
 

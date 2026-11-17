@@ -253,6 +253,7 @@ test('Sobre: nome, versão e a frase do app, e quem desenvolveu; atualiza quando
   assert.equal(env.q('.gen-about-version').textContent, 'Versão 0.1.0');
   assert.equal(env.q('.gen-about-tagline').textContent, 'Cortes verticais para criadores.');
   assert.match(env.q('.gen-credit').textContent, /Desenvolvido por Braga Dev/);
+  assert.match(env.q('.gen-license').textContent, /Software livre: licença GPL v3 ou posterior, sem garantia/, 'diz a licença e que não há garantia (GPL v3, seção 5)');
   assert.equal(env.all('.gen-about a').length, 0, 'sem links: o app não tem site, suporte, Discord nem GitHub');
 
   const late = load({ app: {} });

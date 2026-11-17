@@ -2,7 +2,7 @@
 
 O Braga Frame usa programas e fontes de terceiros. Este arquivo diz **o que vai dentro do instalador**, **o que o app baixa por escolha do usuário** (e de onde) e **o que o usuário instala por conta própria**, com a licença que cada projeto declara. Os textos completos das licenças acompanham o instalador (veja abaixo) ou o próprio programa baixado.
 
-> Este arquivo é um inventário técnico, não parecer jurídico. A licença do Braga Frame em si ainda não foi definida pelo autor: até lá valem todos os direitos reservados (`"license": "UNLICENSED"` no `package.json`). Ver [docs/comercial.md](docs/comercial.md).
+> O Braga Frame em si é distribuído sob a **GNU GPL v3 ou posterior** (arquivo [LICENSE](LICENSE); no instalador, `LICENSE.bragaframe.txt`). Este arquivo é um inventário técnico dos componentes de terceiros, não parecer jurídico. Compatibilidade, em linhas gerais: Electron e Chromium (MIT e BSD) e os ícones (Apache 2.0) são compatíveis com a GPL v3; as fontes (OFL 1.1) vão como arquivos de dados separados, cada uma com a sua licença; os programas das seções 2 e 3 são baixados e **executados como programas separados**, não são ligados ao código do app. Ver [docs/comercial.md](docs/comercial.md).
 
 ## 1. Dentro do instalador (distribuído junto com o app)
 

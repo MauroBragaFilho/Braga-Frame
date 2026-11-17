@@ -96,6 +96,9 @@ async function main() {
     // ---- Sobre
     assert.deepEqual(await ev("JSON.stringify([document.querySelector('.gen-about-name').textContent, document.querySelector('.gen-about-version').textContent, document.querySelector('.gen-about-tagline').textContent, document.querySelector('.gen-credit').textContent])").then(JSON.parse),
       [appInfo.name, `Versão ${pkg.version}`, appInfo.tagline, 'Desenvolvido por Braga Dev']);
+    assert.equal(await ev("document.querySelector('.gen-license').textContent"), 'Software livre: licença GPL v3 ou posterior, sem garantia. O texto da licença acompanha o instalador.');
+    assert.equal(pkg.license, 'GPL-3.0-or-later', 'o package.json declara a mesma licença que o app mostra');
+    assert.ok(fs.readFileSync(path.join(__dirname, '..', '..', 'LICENSE'), 'utf8').includes('GNU GENERAL PUBLIC LICENSE'), 'o LICENSE é o texto da GPL');
     const sides = await ev("(() => { const a = document.querySelector('.gen-about').getBoundingClientRect(); const m = document.querySelector('.gen-main').getBoundingClientRect(); return { right: a.left >= m.right - 1, sameTop: Math.abs(a.top - m.top) < 2, w: Math.round(a.width) }; })()").then((r) => r);
     assert.deepEqual(sides, { right: true, sameTop: true, w: 280 }, 'o Sobre fica ao lado, em coluna de 280 px');
     step('Sobre: nome, versão e frase do app, e o crédito, ao lado dos outros cartões');

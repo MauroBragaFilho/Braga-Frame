@@ -73,6 +73,7 @@
           el('h3', {}, 'Sobre'),
           el('span', { class: 'gen-mark', 'aria-hidden': 'true' }, 'BF'),
           box.name, box.version, box.tagline,
+          el('p', { class: 'muted small gen-license' }, 'Software livre: licença GPL v3 ou posterior, sem garantia. O texto da licença acompanha o instalador.'),
           el('p', { class: 'muted small gen-credit' }, 'Desenvolvido por ', el('strong', {}, 'Braga Dev')))));
   }
 

@@ -70,10 +70,18 @@ Arquitetura e contratos: [docs/arquitetura.md](docs/arquitetura.md); como acresc
 - **Para usar o app** (sem mexer em código): [docs/guia-do-usuario.md](docs/guia-do-usuario.md).
 - **`npm run test:installer`** gera o instalador de duas versões com uma identidade de teste ("Braga Frame Teste", que não toca numa instalação real), instala em silêncio, abre o programa instalado, atualiza por cima, confere que os projetos ficaram e desinstala (Windows; uns 4 minutos, ou 1 com `-- --reuse`). Roda também na CI (job `installer`).
 - **Publicar uma versão**: enviar uma tag (`git tag v0.2.0` e `git push origin v0.2.0`) faz o GitHub Actions compilar o instalador e criar a Release, com um arquivo só e sem artefatos nem cache guardados. Detalhes em [docs/publicar-release.md](docs/publicar-release.md).
-- **Licenças de terceiros**: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) (vai dentro do instalador, com os textos das licenças das fontes). A licença do próprio Braga Frame **ainda não foi definida** (`UNLICENSED`).
+- **Licenças de terceiros**: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) (vai dentro do instalador, com os textos das licenças das fontes). O Braga Frame em si é software livre sob a **GPL v3 ou posterior** (veja [Licença](#licença)).
 - **Aviso de versão nova**: o app consulta a última Release do GitHub ao abrir (dá para desligar) e avisa; não instala sozinho. [docs/atualizacao.md](docs/atualizacao.md).
 - **Assinatura digital e licença**: decisões pendentes em [docs/comercial.md](docs/comercial.md). Nada de pagamento ou licenciamento comercial foi implementado.
 - **Suporte**: Configurações > Geral > Suporte copia as informações do computador (sem segredos nem o nome de usuário do Windows) e mostra o registro.
+
+## Licença
+
+O Braga Frame é software livre: você pode redistribuí-lo e/ou modificá-lo sob os termos da **GNU General Public License, versão 3 ou (a seu critério) qualquer versão posterior**, publicada pela Free Software Foundation. Ele é distribuído **sem nenhuma garantia**, nem mesmo de comercialização ou de adequação a um fim específico. O texto completo está em [LICENSE](LICENSE) e acompanha o instalador (`LICENSE.bragaframe.txt`).
+
+Copyright (C) 2026 Mauro Braga Filho
+
+Os componentes de terceiros e as licenças deles estão em [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Ainda **não há política para contribuições de terceiros** (DCO ou acordo de contribuição): combine antes de enviar código.
 
 ## Estado do projeto
 
