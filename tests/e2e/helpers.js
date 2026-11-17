@@ -254,9 +254,10 @@ async function launchApp(userDataDir, opts = {}) {
   const portFile = path.join(userDataDir, 'DevToolsActivePort');
   removeFileQuietly(portFile); // de uma execução anterior com o mesmo perfil
 
-  const electron = require('electron');
-  const proc = spawn(electron, ['.', `--user-data-dir=${userDataDir}`, '--remote-debugging-port=0', ...ANTI_THROTTLE_FLAGS, ...(opts.args || [])], {
-    cwd: ROOT, stdio: 'ignore', windowsHide: false,
+  // `opts.exe`: o programa instalado (teste do instalador); sem ele, o Electron do projeto abrindo a pasta do código
+  const electron = opts.exe || require('electron');
+  const proc = spawn(electron, [...(opts.exe ? [] : ['.']), `--user-data-dir=${userDataDir}`, '--remote-debugging-port=0', ...ANTI_THROTTLE_FLAGS, ...(opts.args || [])], {
+    cwd: opts.exe ? path.dirname(opts.exe) : ROOT, stdio: 'ignore', windowsHide: false,
     // BF_VIDEOS_DIR: o app de teste nunca enxerga a pasta Vídeos de verdade (só uma pasta dentro do perfil temporário)
     env: mergeEnv(process.env, { BF_VIDEOS_DIR: path.join(userDataDir, 'videos'), ...(opts.env || {}) })
   });

@@ -1,6 +1,10 @@
 'use strict';
 
+const fs = require('node:fs');
+const path = require('node:path');
 const appInfo = require('../../appInfo');
+const diagnostics = require('../../diagnostics');
+const encoders = require('../../core/export/encoders');
 const controls = require('../../windowControls');
 
 /** Informações do app e utilidades de janela/sistema. */
@@ -14,6 +18,25 @@ function register(ctx) {
     tools: { ...ctx.tools },
     loadErrors: (ctx.handlers && ctx.handlers.failed) || []
   }));
+
+  // O que o usuário copia e manda para o suporte (tela Geral > Suporte): versão, sistema, placas de vídeo, ferramentas e o que o FFmpeg codifica.
+  // Sem segredos nem conteúdo de projetos; a pasta pessoal sai como "~". `logFile` só vem se o arquivo de registro existe (a tela o mostra na pasta).
+  ctx.handle('app:support', async () => {
+    let gpus = [];
+    try {
+      if (typeof ctx.app.getGPUInfo === 'function') gpus = diagnostics.summarizeGpus(await ctx.app.getGPUInfo('basic'));
+    } catch (err) { ctx.log('warn', `app:support: placas de vídeo indisponíveis (${err && err.message})`); }
+    let detection = null;
+    try {
+      if (ctx.tools.ffmpeg) detection = await encoders.detectEncoders({ ffmpeg: ctx.tools.ffmpeg });
+    } catch (err) { ctx.log('warn', `app:support: codificadores indisponíveis (${err && err.message})`); }
+    const candidate = path.join(ctx.paths.userData, 'logs', 'bragaframe.log');
+    const logFile = fs.existsSync(candidate) ? candidate : null;
+    const report = diagnostics.collectDiagnostics({
+      appName: appInfo.name, version: ctx.app.getVersion(), userDataDir: ctx.paths.userData, isPackaged: ctx.app.isPackaged
+    });
+    return { text: diagnostics.formatSupportReport(report, { gpus, encoders: detection, logFile }), logFile };
+  });
 
   // o usuário instalou o FFmpeg (ou outra ferramenta) com o app aberto: procura de novo
   ctx.handle('app:refreshTools', () => ({ tools: { ...ctx.refreshTools() } }));

@@ -29,6 +29,13 @@
 .gen-folder button { flex: none; display: inline-flex; align-items: center; gap: 6px; }
 .gen-folder .material-symbols-rounded { font-size: 18px; }
 
+/* suporte */
+.gen-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.gen-actions button { display: inline-flex; align-items: center; gap: 6px; }
+.gen-actions .material-symbols-rounded { font-size: 18px; }
+.gen-report { width: 100%; box-sizing: border-box; resize: vertical; font-family: ui-monospace, Consolas, monospace; font-size: 12px; line-height: 1.5; }
+.gen-report[hidden] { display: none; }
+
 /* sobre */
 .gen-about { align-items: center; text-align: center; }
 .gen-about h3 { align-self: flex-start; }

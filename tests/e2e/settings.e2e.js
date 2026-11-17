@@ -5,11 +5,13 @@
  *  - Configurações abre pela Geral, com Preferências e Ferramentas ao lado; só o que o app tem (sem idioma, notificações, envio de dados nem links);
  *  - Aparência: Escuro e Claro trocam o tema de verdade (e o botão do rodapé do menu acompanha), cada opção mostra uma janelinha no tema dela;
  *  - Pasta de projetos: o caminho real da pasta do perfil e "Mostrar na pasta" (aqui interceptado: não abre o Explorer);
+ *  - Suporte: "Copiar informações" gera o relatório (versão, sistema, placa de vídeo, codificação) sem o nome de usuário e "Mostrar o registro" aponta o arquivo;
  *  - Sobre: nome, versão e frase do app; janela estreita (uma coluna); dentro do Braga Digital Studio o tema é dele e as opções ficam desabilitadas.
  * Uso: node tests/e2e/settings.e2e.js     (BF_E2E_SHOTDIR=C:\pasta guarda capturas da janela)
  */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const h = require('./helpers');
 const appInfo = require('../../src/appInfo');
@@ -34,12 +36,12 @@ async function main() {
     await ev("document.getElementById('tab-settings').click()");
     assert.deepEqual(await ev("[document.getElementById('app').dataset.activeTab, document.getElementById('app').dataset.activeMenu, document.getElementById('pageTitle').textContent]"), ['general', 'settings', 'Configurações']);
     assert.deepEqual(await ev("[...document.querySelectorAll('#subTabs .subtabs:not([hidden]) .subtab-label')].map((n) => n.textContent)"), ['Geral', 'Preferências', 'Ferramentas']);
-    assert.deepEqual(await ev("[...document.querySelectorAll('#tabpanel-general .gen-card h3')].map((n) => n.textContent)"), ['Aparência', 'Pasta de projetos', 'Sobre']);
+    assert.deepEqual(await ev("[...document.querySelectorAll('#tabpanel-general .gen-card h3')].map((n) => n.textContent)"), ['Aparência', 'Pasta de projetos', 'Suporte', 'Sobre']);
     const text = await ev("document.getElementById('tabpanel-general').textContent");
-    for (const missing of ['Idioma', 'Notificações', 'Salvar automaticamente', 'Enviar dados', 'Discord', 'GitHub', 'Suporte']) assert.ok(!text.includes(missing), `"${missing}" não existe no app`);
+    for (const missing of ['Idioma', 'Notificações', 'Salvar automaticamente', 'Enviar dados', 'Discord', 'GitHub', 'Chat de suporte', 'Atualizações']) assert.ok(!text.includes(missing), `"${missing}" não existe no app`);
     assert.equal(await ev("document.querySelectorAll('#tabpanel-general a').length"), 0, 'sem links');
     await shot('settings-geral');
-    step('Configurações abre pela Geral (Geral · Preferências · Ferramentas) e mostra só Aparência, Pasta de projetos e Sobre');
+    step('Configurações abre pela Geral (Geral · Preferências · Ferramentas) e mostra só Aparência, Pasta de projetos, Suporte e Sobre');
 
     // ---- Aparência
     assert.deepEqual(await themes(), [['dark', 'true', false], ['light', 'false', false]]);
@@ -69,6 +71,27 @@ async function main() {
     await ev("document.querySelector('#tabpanel-general [data-act=reveal]').click()");
     assert.deepEqual(await ev('window.__reveals'), [{ path: folder }], '"Mostrar na pasta" pede para mostrar a pasta de projetos');
     step('Pasta de projetos: o caminho real do perfil, somente leitura, e "Mostrar na pasta" a revela');
+
+    // ---- Suporte: o relatório vem do app de verdade (o Explorer continua interceptado)
+    await ev("window.__toasts = []; const toast = BF.ui.toast; BF.ui.toast = (message, kind) => { window.__toasts.push([message, kind]); return toast(message, kind); }; true");
+    await ev("document.querySelector('#tabpanel-general [data-act=copy-support]').click()");
+    await waitFor(page, 'window.__toasts.length > 0', 30000, 'aviso de "informações copiadas"');
+    const copied = await ev("(async () => { try { return await navigator.clipboard.readText(); } catch (e) { return null; } })()");
+    const shown = await ev("(() => { const t = document.querySelector('#tabpanel-general .gen-report'); return t.hidden ? null : t.value; })()");
+    const report = String(copied || shown || '').replace(/\r\n/g, '\n'); // a área de transferência do Windows devolve \r\n
+    assert.ok(report, 'o relatório foi para a área de transferência ou ficou à vista, selecionado, para copiar à mão');
+    assert.match(report, new RegExp(`^${appInfo.name} ${pkg.version.replace(/\./g, '\\.')}`), 'começa pelo nome e a versão');
+    assert.match(report, /Electron .* Chromium/);
+    assert.match(report, /Placas de vídeo:\n {2}\S/, 'lista a placa de vídeo (ou diz que o sistema não informou)');
+    assert.match(report, /Codificação: H\.264 por software: (sim|não)/, 'diz o que o FFmpeg codifica');
+    assert.match(report, /Registro: ~.*bragaframe\.log/, 'aponta o arquivo de registro, com a pasta pessoal como ~');
+    assert.ok(!report.toLowerCase().includes(os.userInfo().username.toLowerCase()), 'o nome de usuário do Windows não vai no relatório');
+    assert.ok(!/sk-|api[_-]?key|authorization/i.test(report), 'nenhuma chave ou segredo no relatório');
+    await ev("document.querySelector('#tabpanel-general [data-act=show-log]').click()");
+    await waitFor(page, "window.__reveals.some((r) => /bragaframe\\.log$/.test(r.path))", 15000, 'registro mostrado na pasta');
+    assert.equal(fs.existsSync(await ev("window.__reveals.filter((r) => /bragaframe\\.log$/.test(r.path)).pop().path")), true, '"Mostrar o registro" aponta um arquivo que existe');
+    assert.equal(await ev("document.querySelectorAll('#tabpanel-general [data-section=support] button').length"), 2, 'só dois botões: copiar e mostrar o registro');
+    step(`Suporte: "Copiar informações" gera o relatório (${copied ? 'na área de transferência' : 'à vista, para copiar à mão'}) sem o nome de usuário nem segredos, e "Mostrar o registro" aponta o arquivo`);
 
     // ---- Sobre
     assert.deepEqual(await ev("JSON.stringify([document.querySelector('.gen-about-name').textContent, document.querySelector('.gen-about-version').textContent, document.querySelector('.gen-about-tagline').textContent, document.querySelector('.gen-credit').textContent])").then(JSON.parse),

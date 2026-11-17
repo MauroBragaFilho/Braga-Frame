@@ -28,3 +28,28 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm test
+
+  # O instalador de verdade (Etapa 6): gera duas versões, instala em silêncio, abre o programa instalado, atualiza por cima,
+  # confere que os dados ficaram, desinstala e confere que nada sobrou. Usa uma identidade própria ("Braga Frame Teste").
+  installer:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # o teste abre um vídeo no programa instalado, e quem gera esse vídeo é o FFmpeg
+      - name: Instalar FFmpeg
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP 'ffmpeg.zip'
+          Invoke-WebRequest 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip' -OutFile $zip
+          Expand-Archive $zip -DestinationPath (Join-Path $env:RUNNER_TEMP 'ffmpeg')
+          $bin = (Get-ChildItem (Join-Path $env:RUNNER_TEMP 'ffmpeg') -Directory | Select-Object -First 1).FullName + '\bin'
+          Add-Content $env:GITHUB_PATH $bin
+          & "$bin\ffmpeg.exe" -version | Select-Object -First 1
+      - run: npm ci
+      - name: Instalar, atualizar e desinstalar
+        run: npm run test:installer

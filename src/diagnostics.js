@@ -47,4 +47,58 @@ function formatDiagnostics(d) {
   return lines.join('\n');
 }
 
-module.exports = { collectDiagnostics, formatDiagnostics };
+const GPU_VENDORS = Object.freeze({ 0x10de: 'NVIDIA', 0x8086: 'Intel', 0x1002: 'AMD', 0x1022: 'AMD', 0x1414: 'Microsoft' });
+
+/** As placas de vídeo de `app.getGPUInfo('basic')` do Electron, sem repetição: [{ name, vendor, driver }]. */
+function summarizeGpus(info) {
+  const devices = info && Array.isArray(info.gpuDevice) ? info.gpuDevice : [];
+  const seen = new Set();
+  const out = [];
+  for (const d of devices) {
+    if (!d || typeof d !== 'object') continue;
+    const name = String(d.deviceString || '').trim() || `Placa ${Number(d.vendorId || 0).toString(16)}:${Number(d.deviceId || 0).toString(16)}`;
+    const driver = d.driverVersion ? String(d.driverVersion) : null;
+    const key = `${name}|${driver}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ name, vendor: GPU_VENDORS[d.vendorId] || null, driver });
+  }
+  return out;
+}
+
+/** O que o FFmpeg consegue codificar (resultado de encoders.detectEncoders) em uma linha; sem FFmpeg diz isso. */
+function describeEncoders(detection) {
+  if (!detection || !detection.ffmpeg) return 'FFmpeg não encontrado: sem exportação.';
+  const yes = (ok) => (ok ? 'sim' : 'não');
+  const nv = (kind) => {
+    const e = detection.nvenc && detection.nvenc[kind];
+    return e && e.available ? 'sim' : `não${e && e.reason ? ` (${String(e.reason).split('\n')[0].slice(0, 90)})` : ''}`;
+  };
+  const sw = detection.software || {};
+  return `H.264 por software: ${yes(sw.h264)} · H.265 por software: ${yes(sw.h265)} · H.264 NVENC (placa NVIDIA): ${nv('h264')} · H.265 NVENC: ${nv('h265')}`;
+}
+
+/** Troca a pasta pessoal (que carrega o nome do usuário do Windows) por `~`, sem diferenciar maiúsculas no Windows. */
+function redactHome(text, home) {
+  const dir = String(home || '').replace(/[\\/]+$/, '');
+  if (dir.length < 4) return String(text);
+  // cada trecho do caminho vira texto literal e as barras (\ ou /) casam com qualquer uma das duas
+  const pattern = dir.split(/[\\/]/).map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[\\\\/]');
+  return String(text).replace(new RegExp(pattern, process.platform === 'win32' ? 'gi' : 'g'), '~');
+}
+
+/**
+ * O relatório que o usuário copia e manda para o suporte (tela Geral > Suporte): o diagnóstico de sempre mais as placas de vídeo e o que o
+ * FFmpeg codifica. Sem segredos nem conteúdo de projetos; a pasta pessoal sai como "~" (o nome de usuário do Windows não vai junto).
+ */
+function formatSupportReport(diagnostics, { gpus = [], encoders = null, logFile = null, home = os.homedir(), now = new Date() } = {}) {
+  const lines = [formatDiagnostics(diagnostics), 'Placas de vídeo:'];
+  if (gpus.length) for (const g of gpus) lines.push(`  ${g.name}${g.driver ? ` (driver ${g.driver})` : ''}`);
+  else lines.push('  não informadas pelo sistema');
+  lines.push(`Codificação: ${describeEncoders(encoders)}`);
+  if (logFile) lines.push(`Registro: ${logFile}`);
+  lines.push(`Gerado em ${now.toISOString()}`);
+  return redactHome(lines.join('\n'), home);
+}
+
+module.exports = { collectDiagnostics, formatDiagnostics, summarizeGpus, describeEncoders, redactHome, formatSupportReport };

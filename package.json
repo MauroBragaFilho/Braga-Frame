@@ -11,6 +11,7 @@
     "test:e2e": "node scripts/run-e2e.js",
     "test:network": "node scripts/run-network-tests.js",
     "test:perf": "node scripts/run-perf-tests.js",
+    "test:installer": "node scripts/testar-instalador.js",
     "lint": "eslint . --ignore-pattern \".tmp/**\"",
     "dist": "electron-builder --win nsis",
     "dist:dir": "electron-builder --win --dir"
@@ -39,6 +40,18 @@
       "assets/**/*",
       "package.json",
       "!**/*.test.js"
+    ],
+    "extraFiles": [
+      "THIRD-PARTY-NOTICES.md",
+      {
+        "from": "renderer/assets/fonts",
+        "to": "licenses/fonts",
+        "filter": [
+          "OFL-*.txt",
+          "APACHE-*.txt",
+          "FONTES_ORIGEM.md"
+        ]
+      }
     ],
     "asar": true,
     "win": {

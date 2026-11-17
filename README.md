@@ -65,6 +65,14 @@ npm run lint
 
 Arquitetura e contratos: [docs/arquitetura.md](docs/arquitetura.md); como acrescentar um recurso: [docs/recursos/base.md](docs/recursos/base.md); um documento por recurso em [docs/recursos/](docs/recursos/).
 
+## Instalador, atualização e licenças
+
+- **Para usar o app** (sem mexer em código): [docs/guia-do-usuario.md](docs/guia-do-usuario.md).
+- **`npm run test:installer`** gera o instalador de duas versões com uma identidade de teste ("Braga Frame Teste", que não toca numa instalação real), instala em silêncio, abre o programa instalado, atualiza por cima, confere que os projetos ficaram e desinstala (Windows; uns 4 minutos, ou 1 com `-- --reuse`). Roda também na CI (job `installer`).
+- **Licenças de terceiros**: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) (vai dentro do instalador, com os textos das licenças das fontes). A licença do próprio Braga Frame **ainda não foi definida** (`UNLICENSED`).
+- **Atualização automática, assinatura digital, FFmpeg no instalador e licença**: avaliação e decisões pendentes em [docs/comercial.md](docs/comercial.md). Nada de pagamento ou licenciamento comercial foi implementado.
+- **Suporte**: Configurações > Geral > Suporte copia as informações do computador (sem segredos nem o nome de usuário do Windows) e mostra o registro.
+
 ## Estado do projeto
 
 Todas as telas estão implementadas e verificadas com ffmpeg e Electron reais. Requisitos confirmados, **decisões provisórias a confirmar com a Liz** e o estado real de cada etapa: [docs/requisitos-e-etapas.md](docs/requisitos-e-etapas.md).
