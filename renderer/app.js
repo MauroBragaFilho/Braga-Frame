@@ -598,6 +598,8 @@
   video.addEventListener('pause', () => { if (rangeEnd !== null) stopRange(); });
   video.addEventListener('error', () => {
     if (!video.getAttribute('src')) return;
+    // features/proxy.js: em vez de só avisar, cria uma cópia leve para o player (devolve true quando cuida do assunto)
+    if (typeof BF.player.onUnplayable === 'function' && BF.player.onUnplayable()) return;
     ui.toast(UNPLAYABLE_MESSAGE, 'error', 10000);
   });
 

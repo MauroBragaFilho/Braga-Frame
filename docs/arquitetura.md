@@ -86,6 +86,8 @@ Eventos do `BF.bus` (nome → payload):
 
 Eventos que **vêm do processo principal** chegam por `BF.on(canal, cb)` (e não pelo `BF.bus`): `queue:*`, `sources:progress`, `subtitles:progress`, `subtitles:modelProgress`, `analysis:*`, `tools:progress`, `review:waveformProgress`, `export:progress` (legado). A tabela completa está em 5.12.
 
+**Proxy de visualização (Etapa 3):** quando o Chromium não toca o vídeo (erro do player, HEVC sem decodificador, áudio AC-3/DTS), `features/proxy.js` pede `proxy:ensure` e o player troca para uma cópia leve H.264 720p em `<cache>/proxy`; `BF.player.onUnplayable()` é o gancho que `app.js` chama no erro do `<video>`. O projeto, a análise e a exportação seguem no arquivo original. Detalhes: [recursos/proxy.md](recursos/proxy.md).
+
 #### Telas divididas em partes (Etapa 2, 17/11/2026)
 
 Duas telas passaram de mil linhas e foram divididas **sem mudar o comportamento**: `features/analysis.js` (2512 -> ~730 linhas) e `features/export.js` (1732 -> ~490). O arquivo com o nome da tela continua sendo o **controlador**: estado, montagem da raiz, ligação dos eventos e registro da aba (`BF.ui.registerTab`). O resto mora em subpastas, carregadas por `<script>` **antes** do controlador:
