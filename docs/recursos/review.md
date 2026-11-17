@@ -27,7 +27,7 @@ Dono: **review**. Contrato geral em [`docs/arquitetura.md`](../arquitetura.md) (
 - **Clique posiciona** o player (arrastar no vazio faz "scrub"). **Arrastar as bordas** de um corte muda início/fim (valor provisório na tela, grava ao soltar; `Esc` cancela). Passa pelo mesmo caminho dos botões: histórico, revisão (+1), "alterado" e desfazer.
 - Sem áudio, sem ffmpeg ou erro: a timeline explica o motivo na própria faixa, continua mostrando as regiões e arrastando bordas.
 
-**Atalhos** (documentados também na aba, em "Atalhos do teclado"): `I` / `O` marcam início e fim na barra do player (clicam nos botões da base); `Espaço` toca/pausa (só com o foco fora de campos, botões e do próprio vídeo); `Ctrl+Z` / `Ctrl+Y` (ou `Ctrl+Shift+Z`) desfazem/refazem **só com a aba Cortes à vista** (painel `#tabpanel-cuts` não escondido). **`J`/`K`/`L` não foram implementados**: o `<video>` do Chromium não tem avanço/retrocesso por tecla confiável e inventar um comportamento aproximado seria pior que não ter.
+**Atalhos** (documentados também na aba, em "Atalhos do teclado"): `I` / `O` marcam início e fim na barra do player (clicam nos botões da base); `Espaço` toca/pausa (só com o foco fora de campos, botões e do próprio vídeo); `Ctrl+Z` / `Ctrl+Y` (ou `Ctrl+Shift+Z`) desfazem/refazem **só com a aba Cortes à vista** (painel `#tabpanel-cuts` não escondido). **Revisão pelo teclado (Etapa 5)**, também só com a aba Cortes à vista e fora de campos: `A` aprova e `R` rejeita o corte aberto e já abrem o próximo pendente (sem pendente depois, o primeiro pendente antes; tudo decidido avisa no registro), `J`/`K` (ou `↓`/`↑`, só com o foco fora dos controles) abrem o próximo e o anterior da lista, `V` toca o trecho do corte aberto. As letras vêm das preferências `review.key.*` (grupo Revisão, Avançado; `I` e `O` reservadas; conflito entre duas ações resolvido em `src/core/review/shortcuts.js`) e o quadro "Atalhos do teclado" mostra as em vigor. `J`/`K` aqui andam pela **lista**; o avanço e retrocesso do **vídeo** (`J`/`K`/`L` de editor) continuam não implementados: o `<video>` do Chromium não tem isso por tecla de forma confiável. Detalhes e auditoria: [../usabilidade.md](../usabilidade.md).
 
 ## Cabeçalho do editor (item Cortes do menu)
 
@@ -42,6 +42,7 @@ No item Cortes o cabeçalho (`renderer/features/shell.js`) troca o título e o c
 | `src/core/review/similarity.js` | IoU, proximidade, título parecido, grupos, `bestToKeep`. Universal |
 | `src/core/review/titles.js` | Sugestões locais, `isCustomTitle`, `mergeSuggestions`. Universal |
 | `src/core/review/batch.js` | Itens de mudança, planos em lote, descrição antes → depois. Universal |
+| `src/core/review/shortcuts.js` | Letras dos atalhos de revisão (sem conflito), ação da tecla, próximo pendente e vizinho. Universal |
 | `src/core/review/engine.js` | Aplica tudo de forma única (`commit`), eventos, desfazer/refazer, restaurar, coalescência de decisões externas. Universal, sem DOM |
 | `src/core/history/log.js` | Grupos/itens do histórico, inversão, plano de restauração. Universal |
 | `src/core/history/store.js` | Arquivo `userData/history/<projectId>.json` (só Node): atômico, só acrescenta, `.corrupt`, limite |
@@ -121,7 +122,7 @@ Evento do main: `review:waveformProgress { sourcePath, p }`. Erros (`{ ok:false,
 ## Testes
 
 ```bash
-node --test tests/review-logic.test.js tests/review-engine.test.js tests/history-store.test.js tests/review-waveform.test.js tests/review-ipc.test.js tests/review-renderer.test.js
+node --test tests/review-logic.test.js tests/review-shortcuts.test.js tests/review-engine.test.js tests/history-store.test.js tests/review-waveform.test.js tests/review-ipc.test.js tests/review-renderer.test.js
 node tests/e2e/review.e2e.js        # abre o app Electron de verdade (BF_E2E_SHOTDIR=<pasta> guarda capturas)
 npx eslint src/core/review src/core/history src/ipc/handlers/review.js renderer/features/cuts.js renderer/features/timeline.js tests/review-*.test.js tests/history-store.test.js tests/e2e/review.e2e.js
 ```

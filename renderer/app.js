@@ -398,11 +398,20 @@
     (sub ? sub.button : entry.button).focus();
   }
 
+  // As telas dividem UM painel que rola: sem isto, a rolagem de uma aba passava para a seguinte (a Análise e o Exportar abriam no meio da página).
+  // Cada tela lembra onde estava e abre no topo da primeira vez; trocar de projeto zera a lembrança.
+  const tabScroll = new Map();
+  BF.bus.on('project:loaded', () => tabScroll.clear());
+
   function activateTab(id, focus) {
     const target = tabs.get(id);
     if (!target) return false;
+    const scroller = $('tabPanels');
+    const changing = selectedTab !== id;
+    if (changing && selectedTab && tabs.has(selectedTab) && scroller) tabScroll.set(selectedTab, scroller.scrollTop);
     selectedTab = id;
     for (const tab of tabs.values()) tab.panel.hidden = tab !== target;
+    if (changing && scroller) scroller.scrollTop = tabScroll.get(id) || 0;
     const entry = entryOf(id);
     if (entry && entry.strip && entry.item.tabs.includes(id)) lastTab.set(entry.item.id, id);
     syncMenu();

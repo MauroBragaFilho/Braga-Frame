@@ -27,6 +27,8 @@ const MAX_DURATION_RANGE = analysisRange('maxDurationSec', [5, 180]);
 const PAD_BEFORE_RANGE = analysisRange('padBeforeSec', [0, 60]);
 const PAD_AFTER_RANGE = analysisRange('padAfterSec', [0, 60]);
 
+const KEY_OPTIONS = Object.freeze('abcdefghjklmnpqrstuvwxyz'.split('').map((c) => Object.freeze([c, c.toUpperCase()])));
+
 const GROUPS = Object.freeze([
   { id: 'export', label: 'Exportação' },
   { id: 'analysis', label: 'Análise' },
@@ -60,6 +62,12 @@ const DEFS = Object.freeze([
   { key: 'review.defaultSort', group: 'review', label: 'Ordem da lista de cortes', type: 'enum', default: 'chrono',
     options: [['chrono', 'Ordem da live'], ['relevance', 'Relevância']] },
   { key: 'review.categories', group: 'review', label: 'Categorias sugeridas', type: 'list', default: [...DEFAULT_CATEGORIES], learnable: true, hint: 'Separadas por vírgula.' },
+  // atalhos de teclado da revisão (src/core/review/shortcuts.js): uma letra por ação; I e O (marcar início e fim) ficam de fora
+  { key: 'review.key.approve', group: 'review', label: 'Atalho: aprovar o corte aberto', type: 'enum', default: 'a', advanced: true, options: KEY_OPTIONS, hint: 'Aprova e já abre o próximo corte pendente.' },
+  { key: 'review.key.reject', group: 'review', label: 'Atalho: rejeitar o corte aberto', type: 'enum', default: 'r', advanced: true, options: KEY_OPTIONS, hint: 'Rejeita e já abre o próximo corte pendente.' },
+  { key: 'review.key.view', group: 'review', label: 'Atalho: tocar o trecho do corte aberto', type: 'enum', default: 'v', advanced: true, options: KEY_OPTIONS },
+  { key: 'review.key.next', group: 'review', label: 'Atalho: abrir o próximo corte', type: 'enum', default: 'j', advanced: true, options: KEY_OPTIONS, hint: 'A seta para baixo também funciona.' },
+  { key: 'review.key.prev', group: 'review', label: 'Atalho: abrir o corte anterior', type: 'enum', default: 'k', advanced: true, options: KEY_OPTIONS, hint: 'A seta para cima também funciona. Duas ações na mesma letra: vale a primeira da lista.' },
   { key: 'queue.parallel', group: 'queue', label: 'Exportações em paralelo', type: 'int', default: 1, min: 1, max: 4, advanced: true },
   { key: 'subtitles.enabled', group: 'subtitles', label: 'Ligar a legenda nos cortes novos', type: 'bool', default: false, advanced: true, hint: 'A caixa "Legendar este corte" já nasce ligada; as falas são geradas na aba Legendas.' },
   { key: 'subtitles.mode', group: 'subtitles', label: 'Legendas no arquivo', type: 'enum', default: 'burn', advanced: true,

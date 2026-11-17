@@ -533,7 +533,7 @@ async function step3() {
   await selectTab('cuts');
   await wf("!document.querySelector('#cuts').closest('.cuts-main').hidden", 20000, 'central de revisão carregada');
   await wf('window.BF.review && window.BF.review.engine', 20000, 'motor da revisão');
-  // as três sugestões da análise ganham nomes curtos (S1 = 14-29, S2 = 44,5-59,5, S3 = 89-104)
+  // as três sugestões da análise ganham nomes curtos (S1 = 12-29, S2 = 44-59,5, S3 = 87-103,5; os instantes que o passo "3 sugestões nos instantes conhecidos" confere)
   const auto = (await ev('BF.state.project.cuts.map((c) => ({ id: c.id, start: c.start }))')).sort((a, b) => a.start - b.start);
   [ID.S1, ID.S2, ID.S3] = auto.map((c) => c.id);
   await ev("window.__dec = []; BF.bus.on('decision', (d) => window.__dec.push(JSON.parse(JSON.stringify(d)))); window.__chg = []; BF.bus.on('cuts:changed', (d) => window.__chg.push(d && d.from)); true");
@@ -557,7 +557,8 @@ async function step3() {
   }
   await setValue(`#cuts .cut[data-id="${ID.S1}"] .cut-title`, 'Ace na rodada', ['change']);
   await wf(`BF.project.cut(${J(ID.S1)}).title === 'Ace na rodada'`, 10000, 'título de S1');
-  const chrono = [ID.M5, ID.M1, ID.S1, ID.S2, ID.M2, ID.M3, ID.S3, ID.M4];
+  // S1 (12-29) e M1 (12-30) começam juntos: a ordem da live desempata pelo fim, então a sugestão (que termina 1 s antes) vem primeiro
+  const chrono = [ID.M5, ID.S1, ID.M1, ID.S2, ID.M2, ID.M3, ID.S3, ID.M4];
 
   // ---- ordem cronológica (padrão) e por relevância ----
   assert.deepEqual(await order(), chrono, 'ordem da live por padrão');

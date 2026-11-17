@@ -12,7 +12,7 @@
   const BF = window.BF;
   const { el, fmt, parseTime, secs } = BF.util;
 
-  const LOGIC = ['review/core', 'review/order', 'review/similarity', 'review/titles', 'review/batch', 'history/log', 'review/engine'];
+  const LOGIC = ['review/core', 'review/order', 'review/similarity', 'review/titles', 'review/batch', 'review/shortcuts', 'history/log', 'review/engine'];
   const DEFAULT_CATEGORIES = ['Jogada', 'Clutch', 'Engraçado', 'Fail', 'Hype', 'Dica'];
   const HISTORY_PAGE = 30;
   const STATUS_TEXT = { approved: 'aprovado', rejected: 'rejeitado' };
@@ -215,6 +215,57 @@
     const res = engine.redo();
     if (!res) { BF.ui.toast('Não há nada para refazer.'); return; }
     BF.ui.log(`Refeito: ${res.target.label}.`, 'ok');
+  }
+
+  // ---------- atalhos da revisão (src/core/review/shortcuts.js) ----------
+
+  /** As letras em vigor: as das preferências, sem conflito (duas ações na mesma letra: vale a primeira). */
+  function reviewKeys() {
+    return R.shortcuts.resolveKeys({
+      approve: BF.prefs.get('review.key.approve', 'a'), reject: BF.prefs.get('review.key.reject', 'r'), view: BF.prefs.get('review.key.view', 'v'),
+      next: BF.prefs.get('review.key.next', 'j'), prev: BF.prefs.get('review.key.prev', 'k')
+    });
+  }
+
+  /** O quadro "Atalhos do teclado": mostra as letras que valem agora (mudam em Preferências). */
+  function renderShortcutsHelp() {
+    if (!refs.shortcutsList) return;
+    const keys = R && R.shortcuts ? reviewKeys() : { approve: 'a', reject: 'r', view: 'v', next: 'j', prev: 'k' };
+    const K = (letter) => (letter ? el('kbd', {}, letter.toUpperCase()) : '—');
+    refs.shortcutsList.replaceChildren(
+      el('li', {}, K(keys.approve), ' / ', K(keys.reject), ': aprovam e rejeitam o corte aberto e já abrem o próximo pendente (ou clique em Aprovar e Rejeitar).'),
+      el('li', {}, K(keys.next), ' / ', K(keys.prev), ' (ou ', el('kbd', {}, '↓'), ' / ', el('kbd', {}, '↑'), '): abrem o próximo e o anterior da lista. ', K(keys.view), ': toca o trecho do corte aberto.'),
+      el('li', {}, el('kbd', {}, 'I'), ' / ', el('kbd', {}, 'O'), ': marcam início e fim na barra do player.'),
+      el('li', {}, el('kbd', {}, 'Espaço'), ': toca ou pausa (com o foco fora de campos e botões).'),
+      el('li', {}, el('kbd', {}, 'Ctrl+Z'), ' / ', el('kbd', {}, 'Ctrl+Y'), ': na aba Cortes, desfaz e refaz a última decisão.'),
+      el('li', {}, 'Na timeline: arraste as bordas dos cortes; clique para posicionar; Ctrl + roda para o zoom. As letras mudam em Preferências > Revisão (Avançado).'));
+  }
+
+  /** Decide o corte aberto (aprova ou rejeita) e abre o próximo pendente da lista, para revisar uma sugestão atrás da outra sem tirar a mão do teclado. */
+  function decideActive(status) {
+    const cut = cutById(view.active);
+    if (!cut) return;
+    const ids = computeView().visibleIds;
+    setStatus(cut, status);
+    const statusOf = (id) => (cutById(id) || {}).status;
+    const next = R.shortcuts.nextUndecided(ids, cut.id, statusOf);
+    if (next) selectCut(next);
+    else BF.ui.log('Todos os cortes da lista já foram decididos.', 'ok');
+  }
+
+  /** Executa a ação de uma tecla de revisão (a mesma coisa que os botões fazem). */
+  function runShortcut(action) {
+    const cut = cutById(view.active);
+    if (action === 'approve') decideActive('approved');
+    else if (action === 'reject') decideActive('rejected');
+    else if (action === 'view') {
+      if (!cut) return;
+      BF.bus.emit('cut:selected', { id: cut.id });
+      BF.player.playRange(cut.start, cut.end);
+    } else {
+      const target = R.shortcuts.neighbor(computeView().visibleIds, view.active, action === 'next' ? 1 : -1);
+      if (target) selectCut(target);
+    }
   }
 
   // ---------- seleção ----------
@@ -1058,13 +1109,9 @@
     refs.history = el('details', { class: 'history' }, refs.historySummary, refs.historyNote, refs.historyEmpty, refs.historyList, refs.historyMore);
     refs.history.addEventListener('toggle', renderHistory);
 
-    refs.shortcuts = el('details', { class: 'shortcuts' },
-      el('summary', {}, 'Atalhos do teclado'),
-      el('ul', {},
-        el('li', {}, el('kbd', {}, 'I'), ' / ', el('kbd', {}, 'O'), ': marcam início e fim na barra do player.'),
-        el('li', {}, el('kbd', {}, 'Espaço'), ': toca ou pausa (com o foco fora de campos e botões).'),
-        el('li', {}, el('kbd', {}, 'Ctrl+Z'), ' / ', el('kbd', {}, 'Ctrl+Y'), ': na aba Cortes, desfaz e refaz a última decisão.'),
-        el('li', {}, 'Na timeline: arraste as bordas dos cortes; clique para posicionar; Ctrl + roda para o zoom.')));
+    refs.shortcutsList = el('ul', {});
+    refs.shortcuts = el('details', { class: 'shortcuts' }, el('summary', {}, 'Atalhos do teclado'), refs.shortcutsList);
+    renderShortcutsHelp();
 
     refs.loading = el('p', { class: 'muted' }, 'Carregando a central de revisão…');
     root.append(refs.loading, refs.main, refs.preview, refs.history, refs.shortcuts, refs.datalist);
@@ -1113,6 +1160,17 @@
       return;
     }
     if (mod || event.altKey || typing) return;
+    // revisão pelo teclado: só com a aba Cortes à vista (nas outras, as mesmas letras não fazem nada)
+    const action = tabIsShown() && !event.shiftKey ? R.shortcuts.actionFor(key, reviewKeys()) : null;
+    if (action) {
+      const arrow = key === 'ArrowDown' || key === 'ArrowUp';
+      // as setas só valem com o foco fora dos controles (num campo, controle deslizante ou no player elas têm outro uso)
+      if (arrow && target.closest(INTERACTIVE) && !(refs.list && refs.list.contains(target) && !target.closest('input, select, textarea, video, [role=slider]'))) return;
+      if (!cutById(view.active) && (action === 'approve' || action === 'reject' || action === 'view')) return;
+      event.preventDefault();
+      runShortcut(action);
+      return;
+    }
     if (key === 'i' || key === 'I' || key === 'o' || key === 'O') {
       const button = document.getElementById(key.toLowerCase() === 'i' ? 'btnMarkIn' : 'btnMarkOut');
       if (!button || button.disabled) return;
@@ -1193,6 +1251,7 @@
       }, 0);
     });
     BF.bus.on('prefs:changed', ({ keys } = {}) => {
+      if (!Array.isArray(keys) || keys.some((key) => String(key).startsWith('review.key.'))) renderShortcutsHelp();
       // só interessa o que a revisão lê (review.*); o aprendizado de análise.* etc. não precisa refazer a lista
       if (Array.isArray(keys) && !keys.some((key) => String(key).startsWith('review.'))) return;
       // a ordem padrão só vale ao abrir o vídeo; mudar a preferência com o vídeo aberto também passa a valer na hora

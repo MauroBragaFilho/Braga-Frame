@@ -137,6 +137,9 @@ async function main() {
     assert.equal(await text('#tabpanel-export .exp-ctl strong'), '2,00×');
 
     // arrastar o retângulo com o mouse (eventos reais de mouse)
+    // o painel rola e cada aba abre no topo: leva o quadro da fonte ao meio da janela, como o usuário faria, antes de medir e arrastar
+    await ev("document.querySelector('.exp-src').scrollIntoView({ block: 'center' })");
+    await sleep(150);
     const box = await rectOf('.exp-src');
     const r0 = await rectOf('.exp-rect');
     await mouse('mouseMoved', r0.x + r0.w / 2, r0.y + r0.h / 2);

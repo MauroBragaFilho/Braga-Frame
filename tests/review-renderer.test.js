@@ -46,7 +46,7 @@ test('os módulos universais carregam num "navegador" sem module/require, na ord
     vm.runInContext(read('src', 'core', `${name}.js`), sandbox, { filename: `${name}.js` });
   }
   const R = sandbox.BFReview;
-  assert.deepEqual(Object.keys(R).sort(), ['batch', 'core', 'engine', 'history', 'order', 'similarity', 'titles']);
+  assert.deepEqual(Object.keys(R).sort(), ['batch', 'core', 'engine', 'history', 'order', 'shortcuts', 'similarity', 'titles']);
   for (const fn of ['sortCuts', 'filterCuts']) assert.equal(typeof R.order[fn], 'function');
   for (const fn of ['findGroups', 'comparePair', 'bestToKeep']) assert.equal(typeof R.similarity[fn], 'function');
   for (const fn of ['suggestTitles', 'isCustomTitle']) assert.equal(typeof R.titles[fn], 'function');
