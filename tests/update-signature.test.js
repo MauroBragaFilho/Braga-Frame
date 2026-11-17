@@ -61,9 +61,11 @@ test('readSignature com o PowerShell de mentira: lê o JSON, e qualquer falha vi
 });
 
 test('PowerShell de verdade: um arquivo assinado do Windows dá Valid com emissor; um arquivo sem assinatura dá NotSigned', { skip: process.platform !== 'win32' && 'só no Windows', timeout: 120000 }, async (t) => {
-  const signed = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'notepad.exe');
+  // cmd.exe existe em TODO Windows (o notepad.exe não: no Windows Server da CI ele não está em System32) e é assinado pela Microsoft
+  const signed = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'cmd.exe');
+  assert.ok(fs.existsSync(signed), `o arquivo de exemplo existe: ${signed}`);
   const sig = await S.readSignature(signed);
-  assert.equal(sig.status, 'Valid', `notepad.exe: ${JSON.stringify(sig)}`);
+  assert.equal(sig.status, 'Valid', `cmd.exe: ${JSON.stringify(sig)}`);
   assert.match(S.signerName(sig.subject) || '', /Microsoft/i);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bf-sig-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
