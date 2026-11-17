@@ -47,7 +47,7 @@ test('signerName e describeSignature: o nome do emissor e o texto para a tela, s
 });
 
 test('readSignature com o PowerShell de mentira: lê o JSON, e qualquer falha vira Unknown (nunca lança)', async () => {
-  const ok = (stdout) => (cmd, args, opts, cb) => { assert.equal(cmd, 'powershell.exe'); assert.ok(args.includes('-NoProfile')); cb(null, stdout); };
+  const ok = (stdout) => (cmd, args, opts, cb) => { assert.match(cmd, /System32[\\/]WindowsPowerShell[\\/]v1\.0[\\/]powershell\.exe$/i, 'o Windows PowerShell 5.1 pelo caminho completo'); assert.ok(args.includes('-NoProfile')); cb(null, stdout); };
   assert.deepEqual(await S.readSignature('C:\\a.exe', { exec: ok('{"status":"Valid","subject":"CN=X"}') }), { status: 'Valid', subject: 'CN=X' });
   assert.deepEqual(await S.readSignature('C:\\a.exe', { exec: ok('{"status":"NotSigned","subject":null}') }), { status: 'NotSigned', subject: null });
   for (const bad of ['', 'não é json', '{"status":""}', '[]', 'null']) assert.equal((await S.readSignature('C:\\a.exe', { exec: ok(bad) })).status === 'Valid', false, bad);
@@ -60,12 +60,25 @@ test('readSignature com o PowerShell de mentira: lê o JSON, e qualquer falha vi
   assert.equal(seenEnv, 'C:\\a "b" $(calc).exe');
 });
 
+test('powershellPath e powershellEnv: caminho completo do 5.1; o ambiente leva o arquivo e NÃO leva o PSModulePath herdado (qualquer caixa)', () => {
+  assert.equal(S.powershellPath({ SystemRoot: 'D:\\Win' }), path.join('D:\\Win', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'));
+  assert.equal(S.powershellPath({}), path.join('C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'));
+  const env = S.powershellEnv('C:\\a.exe', { PATH: 'x', PSModulePath: 'C:\\Program Files\\PowerShell\\7\\Modules', psmodulepath: 'outro', BF_SIG_FILE: 'velho' });
+  assert.deepEqual(env, { PATH: 'x', BF_SIG_FILE: 'C:\\a.exe' });
+});
+
 test('PowerShell de verdade: um arquivo assinado do Windows dá Valid com emissor; um arquivo sem assinatura dá NotSigned', { skip: process.platform !== 'win32' && 'só no Windows', timeout: 120000 }, async (t) => {
   // cmd.exe existe em TODO Windows (o notepad.exe não: no Windows Server da CI ele não está em System32) e é assinado pela Microsoft
   const signed = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'cmd.exe');
   assert.ok(fs.existsSync(signed), `o arquivo de exemplo existe: ${signed}`);
   const sig = await S.readSignature(signed);
-  assert.equal(sig.status, 'Valid', `cmd.exe: ${JSON.stringify(sig)}`);
+  let why = '';
+  if (sig.status !== 'Valid') { // se falhar, diz o que o PowerShell respondeu (a leitura normal engole o erro de propósito: nunca lança)
+    why = await new Promise((resolve) => require('node:child_process').execFile(S.powershellPath(), ['-NoProfile', '-NonInteractive', '-Command',
+      '$PSVersionTable.PSVersion.ToString(); "PSModulePath=" + $env:PSModulePath; Get-Command Get-AuthenticodeSignature | Format-List Name,Source,Version | Out-String; Get-AuthenticodeSignature -LiteralPath $env:BF_SIG_FILE | Format-List Status,StatusMessage,SignerCertificate | Out-String'],
+    { env: S.powershellEnv(signed), timeout: 60000, windowsHide: true }, (err, out, errOut) => resolve(`\n--- diagnóstico ---\n${err ? `erro: ${err.message}\n` : ''}${out}\n${errOut}`)));
+  }
+  assert.equal(sig.status, 'Valid', `cmd.exe: ${JSON.stringify(sig)}${why}`);
   assert.match(S.signerName(sig.subject) || '', /Microsoft/i);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bf-sig-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
