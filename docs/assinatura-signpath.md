@@ -83,6 +83,14 @@ Recomendado: proteger a `main` e restringir quem cria tags `v*` (Settings → Ru
 3. Confira a Release: o texto diz "Instalador assinado digitalmente" e, no Windows, *Propriedades → Assinaturas Digitais* do `.exe` mostra a SignPath Foundation. O SmartScreen ainda pode avisar por um tempo: a reputação de um certificado novo se constrói com o uso.
 4. **Atualize o README**: troque o texto "ainda não é assinado" da seção Assinatura de código pelo texto exigido, "Free code signing provided by SignPath.io, certificate by SignPath Foundation", e o `CODE_SIGNING_POLICY.md` (tire o aviso de "ainda não é assinado").
 
+## Depois da primeira Release assinada: o que muda para os apps instalados
+
+O sistema de atualização ([atualizacao.md](atualizacao.md)) confere a assinatura do instalador baixado contra a do app em uso. Na prática:
+
+- Quem instalou a **primeira versão assinada** passa a aceitar **só** atualizações assinadas **pelo mesmo emissor**. Uma Release sem assinatura (por exemplo, se você apagar `SIGNPATH_ORGANIZATION_ID` para publicar sem assinar, ou se a assinatura falhar) **não chega** a esses usuários pela atualização: o app recusa como rebaixamento.
+- Trocar o certificado por outro de **outro emissor** também é recusado (`SIGNER_CHANGED`). Renovações do mesmo emissor passam.
+- A atualização **de uma versão sem assinatura para a primeira assinada** é aceita (o app em uso não tem assinatura para comparar).
+
 ## Se der errado
 
 | Sintoma | Causa provável |

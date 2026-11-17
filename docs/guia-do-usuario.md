@@ -8,7 +8,7 @@ O Braga Frame transforma gravações e lives em **cortes verticais prontos para 
 2. **O aviso do Windows.** Enquanto o instalador não tiver assinatura digital, o Windows pode mostrar "O Windows protegeu o computador". Isso acontece com qualquer programa novo sem assinatura. Só continue se você baixou do endereço oficial do Braga Frame: clique em **Mais informações** e depois em **Executar assim mesmo**.
 3. Abra pelo **Menu Iniciar** (Braga Frame).
 
-Para atualizar, é só instalar a versão nova por cima: **seus projetos continuam como estavam**. Antes, feche o Braga Frame. O app **avisa** quando sai uma versão nova (uma faixa no topo, com o botão **Ver e baixar**); dá para desligar o aviso em **Configurações › Geral › Atualizações**. Ele só avisa: nunca instala sozinho.
+Para atualizar, é só instalar a versão nova por cima: **seus projetos continuam como estavam**. Antes, feche o Braga Frame. O app **avisa** quando sai uma versão nova (uma faixa no topo), **baixa a atualização em segundo plano** e confere o arquivo. Quando ela está pronta, **você escolhe**: **Instalar e reiniciar** (o app fecha, atualiza e abre de novo) ou **Instalar quando eu fechar**. Nada é instalado sem essa escolha, e seus projetos continuam como estão. Dá para desligar o aviso e o download sozinho em **Configurações › Geral › Atualizações**.
 
 ## 2. Primeiro uso: instalar o FFmpeg
 
@@ -55,7 +55,7 @@ As letras podem ser trocadas em **Configurações › Preferências** (opções 
 - Os **projetos** (cortes, decisões, ajustes) ficam em `%APPDATA%\braga-frame`. Para abrir: aperte `Win + R`, digite `%APPDATA%\braga-frame` e Enter. **Configurações › Geral** mostra a pasta e abre ela para você.
 - Seus **vídeos** e os **cortes exportados** ficam onde sempre estiveram: o app não mexe neles.
 - **Desinstalar não apaga seus projetos.** Se quiser apagar tudo mesmo, depois de desinstalar apague a pasta `%APPDATA%\braga-frame`. Para apagar só um projeto, use a lixeira em **Projetos**.
-- O app **não envia seus vídeos** para a internet e só usa a rede quando você pede: baixar uma ferramenta, baixar um vídeo ou usar a **IA na nuvem**. A única consulta por conta própria é a do aviso de versão nova, ao abrir (leva só o nome e a versão do app; dá para desligar em Configurações › Geral › Atualizações). A IA na nuvem recebe texto (a transcrição), só depois que você aceita o aviso de privacidade da tela de Análise, que diz o que vai. A chave do provedor fica só neste computador.
+- O app **não envia seus vídeos** para a internet e só usa a rede quando você pede: baixar uma ferramenta, baixar um vídeo ou usar a **IA na nuvem**. A única coisa que o app faz por conta própria é ver se saiu versão nova, ao abrir (leva só o nome e a versão do app) e, achando, baixar a atualização do GitHub; dá para desligar tudo isso em Configurações › Geral › Atualizações. A IA na nuvem recebe texto (a transcrição), só depois que você aceita o aviso de privacidade da tela de Análise, que diz o que vai. A chave do provedor fica só neste computador.
 
 ## 6. Quando algo não funciona
 

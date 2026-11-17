@@ -297,6 +297,41 @@ test('todo o estado fica em userDataDir: projeto, fila e preferências nunca sae
   } finally { t.cleanup(); }
 });
 
+test('fachada do app: os handlers do módulo conseguem fechar o app (quit) e pedir a placa de vídeo (getGPUInfo); a pasta de dados continua a do módulo', async () => {
+  const hdir = tmp('host-facade');
+  fs.writeFileSync(path.join(hdir, 'usa.js'), `exports.register = (ctx) => {
+    ctx.handle('usa:sair', () => { ctx.app.quit(); return { saiu: true }; });
+    ctx.handle('usa:placa', async () => ({ gpu: await ctx.app.getGPUInfo('basic'), dados: ctx.app.getPath('userData'), versao: ctx.app.getVersion() }));
+  };`);
+  const ipc = fakeIpc();
+  const t = setup({ ipcMain: ipc, channelPrefix: 'bf:', handlersDir: hdir });
+  try {
+    let quits = 0;
+    t.app.quit = () => { quits += 1; };
+    t.app.getGPUInfo = async (type) => ({ type, gpuDevice: [{ deviceString: 'GPU de teste' }] });
+    t.bf.register();
+    assert.equal((await t.bf.invoke('usa:sair')).saiu, true);
+    assert.equal(quits, 1, 'ctx.app.quit chegou ao app de verdade');
+    const gpu = await t.bf.invoke('usa:placa');
+    assert.deepEqual([gpu.gpu.type, gpu.gpu.gpuDevice[0].deviceString, gpu.dados, gpu.versao], ['basic', 'GPU de teste', t.userDataDir, require('../package.json').version]); // a versão é a do MÓDULO, não a do hospedeiro
+  } finally { t.cleanup(); rm(hdir); }
+});
+
+test('fachada do app sem quit/getGPUInfo no app real (outro hospedeiro): não quebra, só não faz nada', async () => {
+  const hdir = tmp('host-facade2');
+  fs.writeFileSync(path.join(hdir, 'usa.js'), `exports.register = (ctx) => {
+    ctx.handle('usa:sair', () => { ctx.app.quit(); return { saiu: true }; });
+    ctx.handle('usa:placa', async () => ({ gpu: await ctx.app.getGPUInfo('basic') }));
+  };`);
+  const ipc = fakeIpc();
+  const t = setup({ ipcMain: ipc, channelPrefix: 'bf:', handlersDir: hdir });
+  try {
+    t.bf.register();
+    assert.equal((await t.bf.invoke('usa:sair')).saiu, true);
+    assert.equal((await t.bf.invoke('usa:placa')).gpu, null);
+  } finally { t.cleanup(); rm(hdir); }
+});
+
 test('dispose: fecha cada recurso uma vez, solta canais e ouvintes e a instância deixa de responder', async () => {
   const hdir = tmp('host-handlers');
   fs.writeFileSync(path.join(hdir, 'vida.js'), `exports.register = (ctx) => {

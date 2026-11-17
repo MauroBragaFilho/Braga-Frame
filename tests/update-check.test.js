@@ -15,7 +15,10 @@ const release = (patch = {}) => ({
   draft: false,
   prerelease: false,
   published_at: '2026-11-17T12:00:00Z',
-  assets: [{ name: 'braga-frame-0.2.0-windows-x64-setup.exe', size: 114356807, digest: 'sha256:abc' }],
+  assets: [{
+    name: 'braga-frame-0.2.0-windows-x64-setup.exe', size: 114356807, digest: `sha256:${'ab'.repeat(32)}`,
+    browser_download_url: `https://github.com/${REPO}/releases/download/v0.2.0/braga-frame-0.2.0-windows-x64-setup.exe`
+  }],
   ...patch
 });
 
@@ -48,12 +51,47 @@ test('isReleaseUrl: só páginas de Releases do repositório, em https no github
 
 test('parseRelease: versão, tag, endereço, data e tamanho do instalador; rascunho, pré-lançamento e tag fora do padrão viram null', () => {
   assert.deepEqual(U.parseRelease(release(), REPO), {
-    version: '0.2.0', tag: 'v0.2.0', url: `https://github.com/${REPO}/releases/tag/v0.2.0`, publishedAt: '2026-11-17T12:00:00Z', sizeBytes: 114356807
+    version: '0.2.0', tag: 'v0.2.0', url: `https://github.com/${REPO}/releases/tag/v0.2.0`, publishedAt: '2026-11-17T12:00:00Z', sizeBytes: 114356807,
+    asset: { name: 'braga-frame-0.2.0-windows-x64-setup.exe', url: `https://github.com/${REPO}/releases/download/v0.2.0/braga-frame-0.2.0-windows-x64-setup.exe`, size: 114356807, sha256: 'ab'.repeat(32) }
   });
   for (const patch of [{ draft: true }, { prerelease: true }, { tag_name: 'nightly' }, { tag_name: 'v1.0' }, { tag_name: undefined }]) assert.equal(U.parseRelease(release(patch), REPO), null, JSON.stringify(patch));
   for (const bad of [null, undefined, 'x', 5, []]) assert.equal(U.parseRelease(bad, REPO), null);
   assert.equal(U.parseRelease(release({ assets: [{ name: 'outro.zip', size: 5 }] }), REPO).sizeBytes, null, 'sem o instalador no padrão, sem tamanho');
   assert.equal(U.parseRelease(release({ assets: undefined }), REPO).sizeBytes, null);
+});
+
+test('isAssetUrl: só o endereço de download do arquivo da Release do repositório; em teste, a origem do servidor local no lugar do github.com', () => {
+  const ok = { repo: REPO, tag: 'v0.2.0', name: 'braga-frame-0.2.0-windows-x64-setup.exe' };
+  assert.equal(U.isAssetUrl(`https://github.com/${REPO}/releases/download/v0.2.0/${ok.name}`, ok), true);
+  assert.equal(U.isAssetUrl(`https://GitHub.com/${REPO.toLowerCase()}/releases/download/V0.2.0/${ok.name}`, ok), true, 'sem diferenciar maiúsculas');
+  const bad = [
+    `http://github.com/${REPO}/releases/download/v0.2.0/${ok.name}`, `https://evil.example/${REPO}/releases/download/v0.2.0/${ok.name}`,
+    `https://github.com.evil.example/${REPO}/releases/download/v0.2.0/${ok.name}`, `https://github.com/${REPO}/releases/download/v0.2.1/${ok.name}`,
+    `https://github.com/${REPO}/releases/download/v0.2.0/outro.exe`, `https://github.com/outro/repo/releases/download/v0.2.0/${ok.name}`,
+    `https://github.com/${REPO}/releases/tag/v0.2.0`, `https://user:pw@github.com/${REPO}/releases/download/v0.2.0/${ok.name}`,
+    `https://github.com:8443/${REPO}/releases/download/v0.2.0/${ok.name}`, `https://github.com/${REPO}/releases/download/v0.2.0/../v0.2.1/${ok.name}`, 'nao e url', '', null
+  ];
+  for (const url of bad) assert.equal(U.isAssetUrl(url, ok), false, String(url));
+  const local = { ...ok, origin: 'http://127.0.0.1:4567' };
+  assert.equal(U.isAssetUrl(`http://127.0.0.1:4567/${REPO}/releases/download/v0.2.0/${ok.name}`, local), true);
+  assert.equal(U.isAssetUrl(`https://github.com/${REPO}/releases/download/v0.2.0/${ok.name}`, local), false, 'com origem de teste só vale a origem de teste');
+});
+
+test('pickInstaller: só com nome da versão da tag, tamanho, digest sha256 e endereço de download conferidos; senão null (o aviso segue, o download não)', () => {
+  const good = release();
+  assert.equal(U.pickInstaller(good, REPO, '0.2.0').sha256, 'ab'.repeat(32));
+  const mut = (fn) => { const r = JSON.parse(JSON.stringify(good)); fn(r.assets[0]); return U.pickInstaller(r, REPO, '0.2.0'); };
+  assert.equal(mut((a) => { delete a.digest; }), null, 'sem digest não há como conferir');
+  assert.equal(mut((a) => { a.digest = 'md5:abc'; }), null);
+  assert.equal(mut((a) => { a.digest = `sha256:${'zz'.repeat(32)}`; }), null, 'hexadecimal inválido');
+  assert.equal(mut((a) => { a.size = 0; }), null);
+  assert.equal(mut((a) => { a.size = '5'; }), null);
+  assert.equal(mut((a) => { a.browser_download_url = 'https://evil.example/x.exe'; }), null);
+  assert.equal(mut((a) => { a.name = 'braga-frame-0.1.9-windows-x64-setup.exe'; }), null, 'nome de outra versão');
+  assert.equal(mut((a) => { a.name = 'setup.exe'; }), null);
+  assert.equal(U.pickInstaller({ ...good, assets: [] }, REPO, '0.2.0'), null);
+  assert.equal(U.pickInstaller({ tag_name: 'v0.2.0' }, REPO, '0.2.0'), null);
+  assert.equal(U.pickInstaller(null, REPO, '0.2.0'), null);
 });
 
 test('parseRelease: um html_url de fora do repositório é descartado e o endereço é montado pela tag (nunca se abre o que veio de fora)', () => {

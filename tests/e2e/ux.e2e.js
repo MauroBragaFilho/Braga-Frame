@@ -31,6 +31,9 @@ async function main() {
     const video = path.join(tmp, 'Minecraft - Aventura no deserto.mp4');
     h.makeSampleVideo(ffmpeg, video, { seconds: 40, size: '1280x720', rate: 15 });
     app = await h.launchApp(path.join(tmp, 'ud'), {});
+    // a janela do Electron pode perder o foco do Windows no meio do teste (outro programa em uso): sem foco o navegador não aplica :focus e todo controle pareceria
+    // "sem foco visível". A emulação mantém a página sempre focada, e o que se mede é o CSS do app, não o estado do computador.
+    await app.page.send('Emulation.setFocusEmulationEnabled', { enabled: true });
     const { page } = app;
     const ev = (x) => page.eval(x);
     const typeKey = async (key, code, vk) => {

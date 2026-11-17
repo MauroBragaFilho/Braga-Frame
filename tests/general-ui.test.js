@@ -21,15 +21,23 @@ const CSS = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'features', '
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 const idle = async () => { for (let i = 0; i < 5; i += 1) await tick(); };
 
-/** BF.update de mentira: guarda o que a tela pediu e deixa o teste escolher o resultado. */
-function makeUpdate(result = null) {
+/** BF.update de mentira: guarda o que a tela pediu e deixa o teste escolher o que `view()` devolve. */
+function makeUpdate() {
+  const idleView = () => ({ text: '', sub: '', kind: '', busy: false, show: { download: false, install: false, open: false, cancel: false } });
   const u = {
-    state: { result, checking: false }, on: true, calls: [],
+    state: { result: null, checking: false, phase: 'idle', installOnQuit: false },
+    on: true, auto: true, calls: [], current: idleView(),
     enabled() { return u.on; },
+    autoDownload() { return u.auto; },
     setEnabled(value) { u.on = value; u.calls.push(['setEnabled', value]); },
+    setAutoDownload(value) { u.auto = value; u.calls.push(['setAutoDownload', value]); },
     async check(opts) { u.calls.push(['check', opts]); },
+    async download() { u.calls.push(['download']); },
+    async install(when) { u.calls.push(['install', when]); },
+    async cancel() { u.calls.push(['cancel']); },
     async open() { u.calls.push(['open']); },
-    describe: (r) => (r ? { text: `resultado:${r.status}`, kind: r.status === 'available' ? 'info' : 'ok', canOpen: r.status === 'available' } : { text: '', kind: '', canOpen: false })
+    view() { return u.current; },
+    show(patch) { u.current = { ...idleView(), ...patch, show: { ...idleView().show, ...(patch.show || {}) } }; }
   };
   return u;
 }
@@ -131,50 +139,95 @@ test('pasta de projetos: mostra o caminho do app:info e "Mostrar na pasta" a rev
   assert.equal(none.q('[data-section="folder"]').hidden, true);
 });
 
-test('atualizações: o cartão mostra o interruptor, o resultado e os botões; só "Ver e baixar" quando há versão nova', async () => {
+test('atualizações: o cartão diz o que consulta, o que envia, o que confere e que nada é instalado sem escolha; só o "Verificar agora" aparece de início', async () => {
   const env = load();
   await idle();
+  const note = env.q('[data-section="updates"] .gen-note').textContent;
+  assert.match(note, /GitHub/, 'diz o que consulta');
+  assert.match(note, /só o nome e a versão do app, nada seu/, 'diz o que envia');
+  assert.match(note, /SHA-256 da Release/, 'diz o que confere');
+  assert.match(note, /assinatura digital/);
+  assert.match(note, /nada é instalado sem você escolher/, 'a promessa que o gerenciador cumpre');
+  const hidden = (act) => env.q(`[data-act="${act}"]`).hidden;
   assert.equal(env.q('#genUpdateSwitch').checked, true);
+  assert.equal(env.q('#genUpdateAutoSwitch').checked, true);
   assert.equal(env.q('#genUpdateSwitch').attrs.role, 'switch');
-  assert.equal(env.q('[data-act="open-update"]').hidden, true, 'sem versão nova não há o que baixar');
+  assert.equal(env.q('#genUpdateAutoSwitch').attrs.role, 'switch');
+  for (const act of ['download-update', 'install-update', 'install-update-quit', 'cancel-update', 'open-update']) assert.equal(hidden(act), true, `${act} escondido`);
   assert.equal(env.q('[data-act="check-update"]').disabled, false);
-  assert.match(env.q('[data-section="updates"] .gen-note').textContent, /GitHub/, 'diz o que consulta');
-  assert.match(env.q('[data-section="updates"] .gen-note').textContent, /só o nome e a versão do app, nada seu/, 'diz o que envia');
-  assert.match(env.q('[data-section="updates"] .gen-note').textContent, /Ele só avisa/, 'diz que não instala');
-
-  env.upd.state.result = { status: 'available', current: '0.1.0', latest: { version: '0.2.0' } };
-  env.redraw();
-  assert.equal(env.q('.gen-update-status').textContent, 'resultado:available');
-  assert.equal(env.q('.gen-update-status').dataset.kind, 'info');
-  assert.equal(env.q('[data-act="open-update"]').hidden, false);
-  env.q('[data-act="open-update"]').click();
-  assert.deepEqual(env.upd.calls, [['open']]);
-
-  env.upd.state.result = { status: 'current', current: '0.2.0', latest: { version: '0.2.0' } };
-  env.redraw();
-  assert.equal(env.q('[data-act="open-update"]').hidden, true);
-  assert.equal(env.q('.gen-update-status').dataset.kind, 'ok');
+  assert.equal(env.q('.gen-update-sub').hidden, true);
+  assert.equal(env.all('[data-section="updates"] .primary').length, 0, 'tela de ajustes: nenhum botão principal solto');
 });
 
-test('atualizações: o interruptor liga e desliga o aviso; "Verificar agora" força a consulta; verificando, o botão fica parado', async () => {
+test('atualizações: nova versão → "Baixar a atualização" e "Ver novidades"; cada botão pede a coisa certa', async () => {
+  const env = load();
+  await idle();
+  env.upd.show({ text: 'Nova versão 0.2.0 disponível (você usa a 0.1.0).', kind: 'info', show: { download: true, open: true } });
+  env.redraw();
+  assert.equal(env.q('.gen-update-status').textContent, 'Nova versão 0.2.0 disponível (você usa a 0.1.0).');
+  assert.equal(env.q('.gen-update-status').dataset.kind, 'info');
+  assert.equal(env.q('[data-act="download-update"]').hidden, false);
+  assert.equal(env.q('[data-act="open-update"]').hidden, false);
+  assert.equal(env.q('[data-act="install-update"]').hidden, true, 'ainda não há o que instalar');
+  env.q('[data-act="download-update"]').click();
+  env.q('[data-act="open-update"]').click();
+  assert.deepEqual(plain(env.upd.calls), [['download'], ['open']]);
+});
+
+test('atualizações: baixando → barra de estado e "Cancelar o download", "Verificar agora" parado, sem outros botões', async () => {
+  const env = load();
+  await idle();
+  env.upd.show({ text: 'Baixando a versão 0.2.0… 40%', kind: 'info', busy: true, show: { cancel: true, download: true, open: true } });
+  env.redraw();
+  assert.equal(env.q('.gen-update-status').textContent, 'Baixando a versão 0.2.0… 40%');
+  assert.equal(env.q('[data-act="cancel-update"]').hidden, false);
+  assert.equal(env.q('[data-act="check-update"]').disabled, true);
+  assert.equal(env.q('[data-act="download-update"]').hidden, true, 'ocupado: sem "baixar" nem "ver novidades"');
+  assert.equal(env.q('[data-act="open-update"]').hidden, true);
+  env.q('[data-act="cancel-update"]').click();
+  assert.deepEqual(plain(env.upd.calls), [['cancel']]);
+});
+
+test('atualizações: pronta → a assinatura em palavras, "Instalar e reiniciar" e "Instalar quando eu fechar" (que vira "Não instalar ao fechar" depois de escolhido)', async () => {
+  const env = load();
+  await idle();
+  env.upd.show({ text: 'A versão 0.2.0 está pronta e verificada (tamanho e SHA-256 conferidos).', sub: 'Sem assinatura digital: a conferência é o SHA-256, que bate com o da Release.', kind: 'info', show: { install: true, open: true } });
+  env.redraw();
+  assert.equal(env.q('.gen-update-sub').hidden, false);
+  assert.match(env.q('.gen-update-sub').textContent, /Sem assinatura digital/);
+  assert.equal(env.q('[data-act="install-update"]').hidden, false);
+  assert.equal(env.q('[data-act="install-update-quit"]').hidden, false);
+  assert.match(env.q('[data-act="install-update-quit"]').textContent, /Instalar quando eu fechar/);
+  env.q('[data-act="install-update"]').click();
+  env.q('[data-act="install-update-quit"]').click();
+  assert.deepEqual(plain(env.upd.calls), [['install', 'now'], ['install', 'quit']]);
+  env.upd.state.installOnQuit = true;
+  env.upd.show({ text: 'A versão 0.2.0 está pronta e verificada.', sub: 'Será instalada quando você fechar o Braga Frame.', show: { install: true, open: true } });
+  env.redraw();
+  assert.match(env.q('[data-act="install-update-quit"]').textContent, /Não instalar ao fechar/);
+  env.q('[data-act="install-update-quit"]').click();
+  assert.deepEqual(plain(env.upd.calls.at(-1)), ['install', 'none']);
+});
+
+test('atualizações: os dois interruptores; "baixar sozinho" só vale com o aviso ligado; "Verificar agora" força a consulta', async () => {
   const env = load();
   await idle();
   const sw = env.q('#genUpdateSwitch');
   sw.checked = false;
   sw.dispatch('change');
-  assert.deepEqual(env.upd.calls, [['setEnabled', false]]);
-  env.upd.on = false;
+  assert.deepEqual(plain(env.upd.calls), [['setEnabled', false]]);
   env.redraw();
   assert.equal(env.q('#genUpdateSwitch').checked, false, 'a tela acompanha o estado guardado');
-
+  assert.equal(env.q('#genUpdateAutoSwitch').disabled, true, 'sem aviso, "baixar sozinho" não faz sentido');
+  env.upd.on = true;
+  env.redraw();
+  assert.equal(env.q('#genUpdateAutoSwitch').disabled, false);
+  const auto = env.q('#genUpdateAutoSwitch');
+  auto.checked = false;
+  auto.dispatch('change');
+  assert.deepEqual(plain(env.upd.calls.at(-1)), ['setAutoDownload', false]);
   env.q('[data-act="check-update"]').click();
   assert.deepEqual(plain(env.upd.calls.at(-1)), ['check', { force: true }], '"Verificar agora" nunca usa a consulta guardada');
-
-  env.upd.state.checking = true;
-  env.redraw();
-  assert.equal(env.q('[data-act="check-update"]').disabled, true);
-  assert.equal(env.q('.gen-update-status').textContent, 'Verificando…');
-  assert.equal(env.q('[data-act="open-update"]').hidden, true);
 });
 
 test('atualizações: dentro de outro aplicativo (BDS) ou sem o módulo de atualização o cartão nem existe', async () => {

@@ -6,8 +6,8 @@ const appInfo = require('../../appInfo');
 const diagnostics = require('../../diagnostics');
 const encoders = require('../../core/export/encoders');
 const update = require('../../core/update/check');
-
-const UPDATE_CACHE_MS = 6 * 60 * 60 * 1000;
+const signature = require('../../core/update/signature');
+const { UpdateManager } = require('../../core/update/UpdateManager');
 const controls = require('../../windowControls');
 
 /** Informações do app e utilidades de janela/sistema. */
@@ -41,33 +41,46 @@ function register(ctx) {
     return { text: diagnostics.formatSupportReport(report, { gpus, encoders: detection, logFile }), logFile };
   });
 
-  // Aviso de versão nova (docs/atualizacao.md): consulta a última Release do projeto no GitHub e compara com a versão instalada. SÓ AVISA.
-  // Sem erro, o resultado vale por 6 horas (abrir o app várias vezes não consulta várias vezes); `force` (o botão "Verificar agora") sempre consulta.
-  // Dentro de outro aplicativo (BDS) o hospedeiro é quem atualiza: não consulta.
-  let lastUpdate = null; // { at, result }
-  ctx.handle('app:updateCheck', async (payload) => {
-    const current = ctx.app.getVersion();
-    if (ctx.host && ctx.host.embedded) return { status: 'disabled', reason: 'embedded', current };
-    const force = Boolean(payload && payload.force === true);
-    if (!force && lastUpdate && Date.now() - lastUpdate.at < UPDATE_CACHE_MS) return { ...lastUpdate.result, cached: true };
-    const result = await update.checkForUpdate({
-      currentVersion: current, repo: appInfo.repo, fetchImpl: ctx.fetch || undefined,
-      base: update.apiBase(ctx.env, ctx.app.isPackaged)
-    });
-    if (result.status !== 'error') lastUpdate = { at: Date.now(), result };
-    if (result.status === 'error') ctx.log('warn', `app:updateCheck: ${result.reason}`);
-    return result;
+  // Atualização (docs/atualizacao.md): o UpdateManager consulta a última Release do projeto no GitHub, baixa o instalador em segundo plano, CONFERE (tamanho,
+  // SHA-256 da Release e assinatura digital) e instala quando o USUÁRIO escolhe (agora, ou quando fechar o app). Nunca instala sozinho. O resultado da
+  // consulta vale 6 horas (`force`, o botão "Verificar agora", ignora). Dentro de outro aplicativo (BDS) o hospedeiro é quem atualiza: nada disto existe.
+  const testMode = update.testMode(ctx.env, ctx.app.isPackaged);
+  const updates = new UpdateManager({
+    currentVersion: ctx.app.getVersion(), repo: appInfo.repo, dir: path.join(ctx.paths.userData, 'updates'),
+    fetchImpl: ctx.fetch || undefined, base: update.apiBase(ctx.env, ctx.app.isPackaged), embedded: Boolean(ctx.host && ctx.host.embedded), testMode,
+    allowHost: testMode ? (host) => ['127.0.0.1', 'localhost', '[::1]'].includes(host) : undefined, // o "GitHub" local do e2e
+    quitApp: () => ctx.app.quit(),
+    runningSignature: ctx.app.isPackaged ? () => signature.readSignature(process.execPath) : null, // em desenvolvimento o app em uso é o electron.exe: não vale
+    busy: () => (ctx.toolUsage ? ctx.toolUsage.inUse('ffmpeg', 'ffmpeg') : null), // exportação, análise, legendas, cópia leve ou download em andamento
+    log: (level, message) => ctx.log(level, message)
+  });
+  ctx.updates = updates;
+  updates.on('state', (snapshot) => ctx.send('update:state', snapshot));
+  updates.load().catch(() => {}); // a atualização já baixada de uma execução anterior, se ainda vale
+  if (ctx.app && typeof ctx.app.on === 'function') {
+    ctx.app.on('before-quit', () => { updates.cancel(); });
+    ctx.app.on('quit', () => { updates.onQuit(); }); // "instalar quando eu fechar": abre o instalador em silêncio
+  }
+
+  ctx.handle('app:updateCheck', async (payload) => updates.check({ force: Boolean(payload && payload.force === true) }));
+  ctx.handle('app:updateState', () => updates.snapshot());
+  ctx.handle('app:updateDownload', () => { updates.download().catch(() => {}); return { started: true }; }); // o andamento e o resultado vêm por update:state
+  ctx.handle('app:updateCancel', () => ({ cancelled: updates.cancel() }));
+  ctx.handle('app:updateInstall', async (payload) => {
+    const when = payload && ['now', 'quit', 'none'].includes(payload.when) ? payload.when : 'now';
+    return updates.install({ when }); // BUSY, TAMPERED, NO_READY, INSTALL_FAILED viram { ok:false, code, message }
   });
 
   // abre no navegador a página da Release achada pela última consulta (o endereço NUNCA vem do renderer: o main só abre o que ele mesmo conferiu)
   ctx.handle('app:updateOpen', async () => {
-    const url = lastUpdate && lastUpdate.result.status === 'available' ? lastUpdate.result.url : null;
+    const last = updates.snapshot().check;
+    const url = last && last.status === 'available' ? last.url : null;
     if (!url || !update.isReleaseUrl(url, appInfo.repo)) {
       const err = new Error('Não há versão nova para abrir. Use "Verificar agora".');
       err.code = 'NO_UPDATE';
       throw err;
     }
-    if (update.testMode(ctx.env, ctx.app.isPackaged)) return { opened: false, url, test: true }; // e2e: não abre o navegador da máquina
+    if (testMode) return { opened: false, url, test: true }; // e2e: não abre o navegador da máquina
     await ctx.shell.openExternal(url);
     return { opened: true };
   });

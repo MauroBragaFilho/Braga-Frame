@@ -40,22 +40,56 @@ function isReleaseUrl(url, repo) {
 }
 
 /**
- * Release da API do GitHub -> { version, tag, url, publishedAt, sizeBytes } ou null (rascunho, pré-lançamento, tag que não é X.Y.Z).
- * `url` é a da própria Release se for do repositório; senão monta a da tag (nunca confia num endereço de fora).
+ * O endereço de DOWNLOAD de um arquivo da Release é o esperado? https://github.com/<repo>/releases/download/<tag>/<nome>, sem usuário nem porta. `origin` (só no
+ * modo de teste) é a origem do servidor local que faz o papel do GitHub: ali o caminho é o mesmo, a origem é a dele.
  */
-function parseRelease(json, repo) {
+function isAssetUrl(url, { repo, tag, name, origin = null } = {}) {
+  let u;
+  try { u = new URL(String(url)); } catch { return false; }
+  if (u.username || u.password) return false;
+  const expected = `/${String(repo).toLowerCase()}/releases/download/${encodeURIComponent(String(tag)).toLowerCase()}/${encodeURIComponent(String(name)).toLowerCase()}`;
+  if (u.pathname.toLowerCase() !== expected) return false;
+  if (origin) return u.origin === origin;
+  return u.protocol === 'https:' && u.hostname === 'github.com' && !u.port;
+}
+
+/**
+ * O instalador da Release, pronto para baixar e conferir: { name, url, size, sha256 } ou null. Só vale com o nome no padrão da versão da tag
+ * (braga-frame-<versão>-windows-x64-setup.exe), tamanho inteiro, o `digest` sha256 que o GitHub calcula do arquivo e o endereço de download do próprio
+ * repositório. Sem o digest não há como conferir o arquivo: então não há instalador baixável (o aviso continua funcionando).
+ */
+function pickInstaller(json, repo, version, { origin = null } = {}) {
+  if (!json || !Array.isArray(json.assets)) return null;
+  const tag = String(json.tag_name).trim();
+  const want = `braga-frame-${version}-windows-x64-setup.exe`;
+  const a = json.assets.find((x) => x && x.name === want && INSTALLER_RE.test(String(x.name)));
+  if (!a || !Number.isSafeInteger(a.size) || a.size <= 0) return null;
+  const m = /^sha256:([0-9a-f]{64})$/i.exec(String(a.digest || ''));
+  if (!m) return null;
+  if (!isAssetUrl(a.browser_download_url, { repo, tag, name: a.name, origin })) return null;
+  // `href`: o endereço JÁ normalizado ("..", maiúsculas…), o mesmo que isAssetUrl conferiu e que o fetch vai pedir
+  return { name: a.name, url: new URL(String(a.browser_download_url)).href, size: a.size, sha256: m[1].toLowerCase() };
+}
+
+/**
+ * Release da API do GitHub -> { version, tag, url, publishedAt, sizeBytes, asset } ou null (rascunho, pré-lançamento, tag que não é X.Y.Z).
+ * `url` é a da própria Release se for do repositório; senão monta a da tag (nunca confia num endereço de fora). `asset`: veja pickInstaller (ou null).
+ */
+function parseRelease(json, repo, opts = {}) {
   if (!json || typeof json !== 'object' || json.draft === true || json.prerelease === true) return null;
   const parts = parseVersion(json.tag_name);
   if (!parts) return null;
   const tag = String(json.tag_name).trim();
   const url = isReleaseUrl(json.html_url, repo) ? String(json.html_url) : `https://github.com/${repo}/releases/tag/${encodeURIComponent(tag)}`;
   const installer = Array.isArray(json.assets) ? json.assets.find((a) => a && INSTALLER_RE.test(String(a.name))) : null;
+  const version = parts.join('.');
   return {
-    version: parts.join('.'),
+    version,
     tag,
     url,
     publishedAt: typeof json.published_at === 'string' ? json.published_at : null,
-    sizeBytes: installer && Number.isSafeInteger(installer.size) && installer.size > 0 ? installer.size : null
+    sizeBytes: installer && Number.isSafeInteger(installer.size) && installer.size > 0 ? installer.size : null,
+    asset: pickInstaller(json, repo, version, opts)
   };
 }
 
@@ -95,6 +129,7 @@ const ERRORS = Object.freeze({
  *   error: não deu para saber (reason: network | timeout | rate | http | format; message em português).
  */
 async function checkForUpdate({ currentVersion, repo, fetchImpl = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS, base = API, now = () => new Date() } = {}) {
+  const origin = base === API ? null : base; // só o modo de teste troca a base (apiBase): o download vem dessa mesma origem
   const out = { current: String(currentVersion), checkedAt: now().toISOString() };
   const fail = (reason) => ({ ...out, status: 'error', reason, message: ERRORS[reason] });
   if (typeof fetchImpl !== 'function') return fail('network');
@@ -110,7 +145,7 @@ async function checkForUpdate({ currentVersion, repo, fetchImpl = globalThis.fet
     if (!res.ok) return fail('http');
     let json;
     try { json = await res.json(); } catch { return fail('format'); }
-    const release = parseRelease(json, repo);
+    const release = parseRelease(json, repo, { origin });
     if (!release) return { ...out, status: 'none' }; // a última é rascunho, pré-lançamento ou tem tag fora do padrão X.Y.Z
     const cmp = compareVersions(release.version, currentVersion);
     if (cmp === null) return fail('format');
@@ -122,4 +157,4 @@ async function checkForUpdate({ currentVersion, repo, fetchImpl = globalThis.fet
   }
 }
 
-module.exports = { testMode, API, DEFAULT_TIMEOUT_MS, ERRORS, parseVersion, compareVersions, isReleaseUrl, parseRelease, apiBase, checkForUpdate };
+module.exports = { isAssetUrl, pickInstaller, testMode, API, DEFAULT_TIMEOUT_MS, ERRORS, parseVersion, compareVersions, isReleaseUrl, parseRelease, apiBase, checkForUpdate };

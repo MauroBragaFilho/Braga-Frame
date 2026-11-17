@@ -111,7 +111,7 @@ function requireObject(options, key) {
 
 /**
  * @param {object} options
- * @param {object}   options.app            `app` do Electron (usa-se só getPath('videos'), on/removeListener('before-quit') e isPackaged)
+ * @param {object}   options.app            `app` do Electron (usa-se getPath('videos'), on/removeListener('before-quit'), isPackaged, quit e getGPUInfo)
  * @param {object}   options.dialog         `dialog` do Electron (escolher vídeo/pasta)
  * @param {object}   options.shell          `shell` do Electron (mostrar no Explorer)
  * @param {string}   options.userDataDir    pasta PRÓPRIA do módulo (absoluta). Ex.: <userData do hospedeiro>/braga-frame
@@ -197,6 +197,10 @@ function createBfModule(options = {}) {
   const appFacade = {
     get isPackaged() { return app.isPackaged; },
     getVersion: () => version,
+    // fechar o app: só o app avulso usa (o instalador da atualização pede para o app sair); dentro de outro aplicativo a atualização nem existe
+    quit: () => { if (typeof app.quit === 'function') app.quit(); },
+    // informações da placa de vídeo (o relatório de suporte, app:support)
+    getGPUInfo: (type) => (typeof app.getGPUInfo === 'function' ? app.getGPUInfo(type) : Promise.resolve(null)),
     // a pasta de dados é sempre a do módulo; as demais (ex.: 'videos', usada como sugestão de onde salvar downloads) são do sistema
     getPath: (name) => (name === 'userData' ? userDataDir : app.getPath(name)),
     on(event, listener) {

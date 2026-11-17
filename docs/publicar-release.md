@@ -36,7 +36,7 @@ Nenhum segredo: a Release é criada com o `GITHUB_TOKEN` do próprio workflow (`
 
 ## Como o app fica sabendo
 
-O aviso de versão nova ([atualizacao.md](atualizacao.md)) lê a **última Release publicada** (`/releases/latest`) e compara a tag com a versão instalada. Por isso a tag precisa ser `vX.Y.Z`; rascunhos e pré-lançamentos são ignorados. Enquanto não houver nenhuma Release, o app mostra "O projeto ainda não publicou nenhuma versão". **O primeiro teste de verdade do aviso é a primeira tag**: instale uma versão mais antiga e veja a faixa aparecer.
+A atualização do app ([atualizacao.md](atualizacao.md)) lê a **última Release publicada** (`/releases/latest`), compara a tag com a versão instalada e **baixa o instalador** conferindo o tamanho e o `digest` sha256 que o próprio GitHub calcula do arquivo. Por isso a tag precisa ser `vX.Y.Z`; rascunhos e pré-lançamentos são ignorados; o arquivo precisa se chamar `braga-frame-<versão da tag>-windows-x64-setup.exe` (o `release.yml` já faz isso); e **não se deve trocar o arquivo de uma Release já publicada** sem refazer a tag: quem já baixou tem o SHA-256 antigo. Enquanto não houver nenhuma Release, o app mostra "O projeto ainda não publicou nenhuma versão". **Depois da primeira Release assinada**, os apps que a instalaram passam a **recusar** uma Release sem assinatura (rebaixamento) e uma assinada por outro emissor.
 
 ## O que ainda não existe
 

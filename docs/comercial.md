@@ -13,14 +13,14 @@ Esta etapa é, por natureza, de **avaliação e decisão**: quase tudo o que fal
 | Suporte: informações do computador e registro | **Entregue** (Configurações > Geral > Suporte) | não |
 | Guia do usuário | **Entregue** ([guia-do-usuario.md](guia-do-usuario.md)); falta um atalho dentro do app | não |
 | FFmpeg | **Resolvido**: botão "Instalar o FFmpeg" (baixa a compilação de terceiros, GPL v3, só no clique, com SHA-256 conferido). A instalação real do pacote **não foi executada** aqui (veja o fim deste item) | não |
-| Aviso de versão nova | **Entregue** ([atualizacao.md](atualizacao.md)): só avisa e abre a página da Release; atualizar sozinho depende da assinatura | não |
+| Atualização (aviso, download e instalação) | **Entregue** ([atualizacao.md](atualizacao.md)): baixa em segundo plano, confere (SHA-256 da Release e assinatura) e o **usuário escolhe** instalar agora ou ao fechar; nunca instala sozinho | não |
 | Assinatura digital do instalador | **Preparada** (política, configuração do artefato, passos no workflow, guia). A v0.1.0 saiu sem assinatura; falta a **sua** inscrição e aprovação na SignPath ([assinatura-signpath.md](assinatura-signpath.md)) | **sim** (decisão 3) |
 | Licença do Braga Frame | **GPL v3 ou posterior**, com `LICENSE` no repositório e no instalador | não (falta só a política de contribuições) |
 | Hardware: AMD, Intel, Windows 10, ARM | Não verificado | precisa de máquinas/testadores |
 
 ## 1. Atualização
 
-**Decidido e entregue: A (só avisar).** Detalhes, privacidade e segurança em [atualizacao.md](atualizacao.md). A opção B (instalar sozinho, `electron-updater`) continua para **depois da assinatura**. O texto abaixo é a avaliação original.
+**Decidido e entregue (B, com salvaguardas).** O app avisa, baixa em segundo plano, confere e instala quando o **usuário escolhe** (agora, ou ao fechar o app), sem a dependência `electron-updater` e com a Release de um arquivo só. Instalar **sem pergunta nenhuma** continua de fora enquanto o instalador não for assinado: sem assinatura, quem controla a conta do GitHub controla a Release e o SHA-256 dela. Detalhes, política de assinatura e o que não foi verificado em [atualizacao.md](atualizacao.md). O texto abaixo é a avaliação original.
 
 **Estado antes.** Não existia. `build.publish` é `null`, não há nenhum release no GitHub e a versão é `0.1.0`. O instalador é NSIS **por usuário** (sem administrador), o que é bom para atualizar: o teste mostra que instalar uma versão nova por cima mantém a mesma entrada em "Adicionar ou remover programas" e os projetos.
 
@@ -97,7 +97,7 @@ Esta etapa é, por natureza, de **avaliação e decisão**: quase tudo o que fal
 
 **O que foi e o que NÃO foi verificado no FFmpeg real.** Verificado: o pacote (`ffmpeg-9.0.2-full_build-shared.zip`, 99.899.672 bytes, SHA-256 `8d31e162…`) tem tamanho e hash iguais aos que o GitHub informa (o teste de rede `tests/ffmpeg-network.test.js` confere isso na API); a estrutura do zip (uma pasta de topo, `bin/ffmpeg.exe`, `bin/ffprobe.exe` e as DLLs ao lado); e, **lendo as DLLs como dados**, a configuração GPL v3 sem `nonfree` com libx264, libx265, libass e NVENC. O fluxo do botão (confirmação, progresso, os dois programas, aviso que some, remover) foi testado de ponta a ponta com **pacotes de mentira** num servidor local. **Não foi verificado: executar o `ffmpeg.exe` baixado** (o sistema bloqueou, com razão, que eu rodasse um programa de terceiros baixado, e eu não contornei). Para fechar essa lacuna, rode você: `BF_NETWORK_TESTS=1 BF_NETWORK_FFMPEG=1 node --test tests/ffmpeg-network.test.js` (baixa ~100 MB, instala pela mesma entrada, executa o programa, confere versão, filtros, codificadores, um encode real e que o app o enxerga).
 
-**2. Atualização. DECIDIDO (A, só avisar) e entregue.** B (instalar sozinho) fica para depois da assinatura.
+**2. Atualização. DECIDIDO e entregue: automática, com a instalação sempre por escolha do usuário.** O texto original da pergunta: DECIDIDO (A, só avisar) e entregue; B (instalar sozinho) ficava para depois da assinatura. Depois do pedido do autor, o download e a instalação em silêncio foram feitos, mantendo a escolha do usuário como gatilho.
 
 **3. Assinatura. Direção decidida: código aberto, com a SignPath Foundation (gratuita para projetos abertos). PREPARADA no repositório; falta a inscrição e a aprovação.** Seguindo o molde do BDS, o repositório agora tem `CODE_SIGNING_POLICY.md`, `.signpath/artifact-configuration.xml`, os passos de assinatura no `release.yml` (que **ligam sozinhos** quando a variável `SIGNPATH_ORGANIZATION_ID` existe e, sem ela, publicam sem assinar como a v0.1.0) e o guia [assinatura-signpath.md](assinatura-signpath.md) com o pedido no portal, os segredos e a primeira Release assinada. O artefato intermediário que a SignPath precisa ler dura 1 dia e é apagado logo depois. **Nada disso rodou de ponta a ponta** (depende da aprovação) e **não verifiquei as regras atuais da SignPath** nem se uma mesma organização aceita dois projetos (BDS e Braga Frame). A política afirma coisas que só você confirma (2FA na conta, revisão das contribuições de terceiros): a lista está no guia.
 

@@ -43,6 +43,8 @@ const SMALL = `(() => {
 
 /** Controles focáveis cuja aparência NÃO muda ao receber o foco do teclado (nem o deles nem a dos 3 ancestrais mais próximos). */
 const FOCUS = `(() => {
+  // sem o foco da janela o navegador não aplica :focus (todos os controles pareceriam "sem foco visível"); isso é o ambiente, não o app: diz com todas as letras
+  if (!document.hasFocus()) return JSON.stringify({ checked: 0, bad: ['(a janela do app não está em foco: o foco visível não pôde ser medido)'] });
   const sig = (el) => { const out = []; for (let n = el, i = 0; n && i < 4; n = n.parentElement, i += 1) { const s = getComputedStyle(n); out.push([s.outlineStyle, s.outlineWidth, s.outlineColor, s.boxShadow, s.borderTopColor, s.backgroundColor, s.color, s.textDecorationLine, s.transform].join('|')); } return out.join('#'); };
   const visible = (el) => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none' && !el.closest('[hidden]') && !el.closest('[inert]'); };
   // sem transições durante a medição: um controle com transition ainda está no começo da animação logo depois de receber o foco, e o estilo

@@ -82,7 +82,8 @@ async function main() {
     assert.ok(report, 'o relatório foi para a área de transferência ou ficou à vista, selecionado, para copiar à mão');
     assert.match(report, new RegExp(`^${appInfo.name} ${pkg.version.replace(/\./g, '\\.')}`), 'começa pelo nome e a versão');
     assert.match(report, /Electron .* Chromium/);
-    assert.match(report, /Placas de vídeo:\n {2}\S/, 'lista a placa de vídeo (ou diz que o sistema não informou)');
+    assert.match(report, /Placas de vídeo:\n {2}\S/, 'lista a placa de vídeo');
+    assert.doesNotMatch(report, /não informadas pelo sistema/, 'a fachada do app deixa o relatório pedir a placa de vídeo de verdade (antes o texto de reserva escondia a falta)');
     assert.match(report, /Codificação: H\.264 por software: (sim|não)/, 'diz o que o FFmpeg codifica');
     assert.match(report, /Registro: ~.*bragaframe\.log/, 'aponta o arquivo de registro, com a pasta pessoal como ~');
     assert.ok(!report.toLowerCase().includes(os.userInfo().username.toLowerCase()), 'o nome de usuário do Windows não vai no relatório');

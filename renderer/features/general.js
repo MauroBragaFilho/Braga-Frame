@@ -37,18 +37,27 @@
       el('h3', {}, 'Pasta de projetos'),
       el('div', { class: 'gen-folder' }, box.path, box.reveal),
       el('p', { class: 'muted small gen-note' }, 'Cada vídeo que você abre vira um projeto guardado aqui, e o app salva sozinho a cada mudança. Os vídeos e os cortes exportados ficam onde estão: aqui ficam só os dados do projeto.'));
-    // Atualizações: só avisa de versão nova (BF.update, features/update.js); dentro de outro aplicativo (BDS) o cartão nem existe
+    // Atualizações (BF.update, features/update.js): avisa, baixa em segundo plano e confere; instalar é SEMPRE escolha do usuário. Dentro de outro
+    // aplicativo (BDS) o cartão nem existe. Os botões são todos secundários: a tela de ajustes não tem ação principal solta.
+    const act = (name, label, iconName, onclick) => el('button', { type: 'button', class: 'secondary sm', dataset: { act: name }, hidden: true, onclick }, icon(iconName), label);
     box.updSwitch = el('input', { type: 'checkbox', id: 'genUpdateSwitch', class: 'bds-switch', role: 'switch', onchange: () => BF.update.setEnabled(box.updSwitch.checked) });
+    box.updAutoSwitch = el('input', { type: 'checkbox', id: 'genUpdateAutoSwitch', class: 'bds-switch', role: 'switch', onchange: () => BF.update.setAutoDownload(box.updAutoSwitch.checked) });
     box.updCheck = el('button', { type: 'button', class: 'secondary sm', dataset: { act: 'check-update' }, onclick: () => BF.update.check({ force: true }) }, icon('refresh'), 'Verificar agora');
-    box.updOpen = el('button', { type: 'button', class: 'secondary sm', dataset: { act: 'open-update' }, hidden: true, onclick: () => BF.update.open() }, icon('open_in_new'), 'Ver e baixar');
+    box.updDownload = act('download-update', 'Baixar a atualização', 'download', () => BF.update.download());
+    box.updInstall = act('install-update', 'Instalar e reiniciar', 'system_update_alt', () => BF.update.install('now'));
+    box.updInstallQuit = act('install-update-quit', 'Instalar quando eu fechar', 'schedule', () => BF.update.install(BF.update.state.installOnQuit ? 'none' : 'quit'));
+    box.updCancel = act('cancel-update', 'Cancelar o download', 'close', () => BF.update.cancel());
+    box.updOpen = act('open-update', 'Ver novidades', 'open_in_new', () => BF.update.open());
     box.updStatus = el('p', { class: 'gen-update-status small', role: 'status' });
+    box.updSub = el('p', { class: 'gen-update-sub muted small', hidden: true });
     box.updates = BF.update && !BF.embedded
       ? el('section', { class: 'card gen-card', dataset: { section: 'updates' } },
         el('h3', {}, 'Atualizações'),
-        el('p', { class: 'muted small gen-note' }, 'O Braga Frame pode avisar quando sai uma versão nova. Para isso ele consulta a página de versões do projeto no GitHub ao abrir e envia só o nome e a versão do app, nada seu. Ele só avisa: você baixa e instala a nova por cima, e seus projetos continuam como estão.'),
+        el('p', { class: 'muted small gen-note' }, 'O Braga Frame pode avisar quando sai uma versão nova e baixá-la em segundo plano. Para isso ele consulta a página de versões do projeto no GitHub ao abrir e envia só o nome e a versão do app, nada seu. O arquivo baixado é conferido (tamanho, SHA-256 da Release e, quando houver, a assinatura digital) e nada é instalado sem você escolher: instalar e reiniciar agora, ou quando você fechar o app. Seus projetos continuam como estão.'),
         el('label', { class: 'gen-switch-row', for: 'genUpdateSwitch' }, box.updSwitch, el('span', {}, 'Avisar quando houver versão nova')),
-        el('div', { class: 'gen-actions' }, box.updCheck, box.updOpen),
-        box.updStatus)
+        el('label', { class: 'gen-switch-row', for: 'genUpdateAutoSwitch' }, box.updAutoSwitch, el('span', {}, 'Baixar a atualização sozinho (você escolhe quando instalar)')),
+        el('div', { class: 'gen-actions' }, box.updCheck, box.updDownload, box.updInstall, box.updInstallQuit, box.updCancel, box.updOpen),
+        box.updStatus, box.updSub)
       : null;
     box.copy = el('button', { type: 'button', class: 'secondary sm', dataset: { act: 'copy-support' }, onclick: copySupport }, icon('content_copy'), 'Copiar informações');
     box.log = el('button', { type: 'button', class: 'secondary sm', dataset: { act: 'show-log' }, onclick: showLog }, icon('folder_open'), 'Mostrar o registro');
@@ -117,16 +126,25 @@
     await BF.api('shell:reveal', { path: state.logFile }, { toast: true });
   }
 
-  /** O cartão Atualizações: interruptor, texto do último resultado, "Verificar agora" e "Ver e baixar" (só com versão nova). */
+  /** O cartão Atualizações: os dois interruptores, o estado em palavras (e a assinatura do arquivo baixado) e só os botões que fazem sentido agora. */
   function drawUpdates() {
     if (!box.updates || !BF.update) return;
     const u = BF.update;
-    const { text, kind, canOpen } = u.describe(u.state.result);
+    const v = u.view();
     box.updSwitch.checked = u.enabled();
-    box.updCheck.disabled = u.state.checking;
-    box.updStatus.textContent = u.state.checking ? 'Verificando…' : text;
-    box.updStatus.dataset.kind = u.state.checking ? '' : kind;
-    box.updOpen.hidden = !canOpen || u.state.checking;
+    box.updAutoSwitch.checked = u.autoDownload();
+    box.updAutoSwitch.disabled = !u.enabled();
+    box.updCheck.disabled = v.busy;
+    box.updStatus.textContent = v.text;
+    box.updStatus.dataset.kind = v.busy && v.kind !== 'info' ? '' : v.kind;
+    box.updSub.textContent = v.sub;
+    box.updSub.hidden = !v.sub;
+    box.updDownload.hidden = !v.show.download || v.busy;
+    box.updInstall.hidden = !v.show.install;
+    box.updInstallQuit.hidden = !v.show.install;
+    box.updInstallQuit.replaceChildren(icon('schedule'), u.state.installOnQuit ? 'Não instalar ao fechar' : 'Instalar quando eu fechar');
+    box.updCancel.hidden = !v.show.cancel;
+    box.updOpen.hidden = !v.show.open || v.busy;
   }
 
   function draw() {

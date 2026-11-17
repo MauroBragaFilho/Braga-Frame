@@ -119,6 +119,43 @@ function tryRemove(dir) {
   }
 }
 
+function sha256File(file) {
+  return new Promise((resolve, reject) => {
+    const hash = require('node:crypto').createHash('sha256');
+    fs.createReadStream(file).on('data', (c) => hash.update(c)).on('error', reject).on('end', () => resolve(hash.digest('hex')));
+  });
+}
+
+/** Processos cujo programa está dentro de `dir` (via PowerShell): [{ pid, exe }]. */
+function processesUnder(dir) {
+  const script = '$d = $env:BF_DIR; Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($d, [System.StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { [pscustomobject]@{ pid = $_.ProcessId; exe = $_.ExecutablePath } } | ConvertTo-Json -Compress';
+  const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { env: { ...process.env, BF_DIR: `${dir}${path.sep}` }, encoding: 'utf8', windowsHide: true, timeout: 60000 });
+  const text = String(r.stdout || '').trim();
+  if (!text) return [];
+  const parsed = JSON.parse(text);
+  return (Array.isArray(parsed) ? parsed : [parsed]).map((p) => ({ pid: p.pid, exe: p.exe }));
+}
+
+/** Encerra tudo o que roda de dentro de `dir` (o app que o instalador reabriu) e espera sumirem. */
+async function killProcessesUnder(dir, h) {
+  for (let i = 0; i < 20; i += 1) {
+    const list = processesUnder(dir);
+    if (!list.length) return;
+    for (const p of list) spawnSync('taskkill', ['/PID', String(p.pid), '/T', '/F'], { windowsHide: true });
+    await h.sleep(500);
+  }
+}
+
+async function until(check, ms, what, h) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    const value = await check();
+    if (value) return value;
+    await h.sleep(500);
+  }
+  throw new Error(`Tempo esgotado esperando: ${what}`);
+}
+
 async function main() {
   if (process.platform !== 'win32') { console.log('Teste do instalador: só no Windows (o instalador é NSIS). Nada a fazer aqui.'); return; }
   const argv = process.argv.slice(2);
@@ -135,6 +172,7 @@ async function main() {
 
   const v1 = require('../package.json').version;
   const v2 = bumpPatch(v1);
+  const v3 = bumpPatch(v2);
   const installDir = path.join(work, 'instalado');
   const userData = path.join(work, 'dados');
   let installed = false;
@@ -156,9 +194,12 @@ async function main() {
     const out2 = path.join(work, 'build-v2');
     const file1 = installerFile(out1, v1);
     const file2 = installerFile(out2, v2);
+    const out3 = path.join(work, 'build-v3');
+    const file3 = installerFile(out3, v3);
     const installer1 = reuse && fs.existsSync(file1) ? file1 : build(v1, out1);
     const installer2 = reuse && fs.existsSync(file2) ? file2 : build(v2, out2);
-    log(`instaladores gerados (${v1} e ${v2}), com a identidade de teste "${IDENT.productName}"`);
+    const installer3 = reuse && fs.existsSync(file3) ? file3 : build(v3, out3);
+    log(`instaladores gerados (${v1}, ${v2} e ${v3}), com a identidade de teste "${IDENT.productName}"`);
 
     const video = path.join(work, 'Aventura de teste.mp4');
     h.makeSampleVideo(ffmpeg, video, { seconds: 12, size: '640x360', rate: 15 });
@@ -216,6 +257,42 @@ async function main() {
     await app.stop(); app = null;
     log(`atualização ${v1} → ${v2} por cima: mesma entrada em "Adicionar ou remover programas", projeto e decisão preservados`);
 
+    // ---- atualização pelo PRÓPRIO app (v2 → v3), com o instalador de verdade: a atualização já baixada e conferida (como o app a deixa em
+    // <dados>/updates + pending.json) é instalada em silêncio pelo NSIS (/S --updated --force-run); o app fecha, o instalador troca os arquivos e reabre o app
+    const updatesDir = path.join(userData, 'updates');
+    fs.mkdirSync(updatesDir, { recursive: true });
+    const downloaded = path.join(updatesDir, path.basename(installer3));
+    fs.copyFileSync(installer3, downloaded);
+    fs.writeFileSync(path.join(updatesDir, 'pending.json'), JSON.stringify({
+      schema: 1, version: v3, tag: `v${v3}`, file: path.basename(downloaded), size: fs.statSync(downloaded).size, sha256: await sha256File(downloaded),
+      signature: { status: 'NotSigned', subject: null }, downloadedAt: new Date().toISOString()
+    }));
+    app = await h.launchApp(userData, { exe, timeout: 60000 });
+    await app.page.eval("window.localStorage.setItem('bf.updateCheck', '0'); true"); // sem consulta de rede nesta prova (o estado vem do disco)
+    await h.waitFor(app.page, "BF.update && BF.update.state.phase === 'ready'", 30000, 'a atualização já baixada reconhecida pelo programa instalado');
+    assert.equal(await app.page.eval('BF.update.state.ready.version'), v3);
+    assert.match(await app.page.eval('BF.update.state.ready.signature.text'), /Sem assinatura digital/);
+    const closing = app;
+    app = null;
+    try { await closing.page.eval("BF.api('app:updateInstall', { when: 'now' })"); } catch { /* o app fecha logo depois da resposta: a conexão pode cair */ }
+    await until(() => closing.proc.exitCode !== null, 60000, 'o app fechar sozinho para o instalador trabalhar', h);
+    await until(() => parseRegValue(regQuery(['query', key, '/v', 'DisplayVersion']).stdout, 'DisplayVersion') === v3, 180000, `a versão instalada passar para ${v3} (o instalador em silêncio)`, h);
+    try { await closing.stop(); } catch { /* já fechado */ } // só agora: encerrar o app antes poderia levar o instalador junto
+    assert.equal(findUninstallKey(IDENT.productName), key, 'a mesma entrada foi atualizada (não duplicou)');
+    assert.ok(fs.existsSync(startMenuShortcut(IDENT.productName)), 'o atalho do Menu Iniciar continua');
+    // o instalador reabre o app (--force-run): o processo novo roda de dentro da pasta de instalação e escreve a versão nova no registro dele
+    const relaunched = await until(() => processesUnder(installDir).find((p) => p.exe.toLowerCase() === exe.toLowerCase()), process.env.CI ? 45000 : 90000, 'o instalador reabrir o app', h).catch((err) => {
+      if (process.env.CI) { note(`(na CI o app não foi reaberto: ${err.message}; o instalador terminou e a versão mudou, que é o que vale lá)`); return null; }
+      throw err;
+    });
+    if (relaunched) {
+      const logFile = path.join(process.env.APPDATA || '', IDENT.name, 'logs', 'bragaframe.log');
+      await until(() => fs.existsSync(logFile) && fs.readFileSync(logFile, 'utf8').includes(`Braga Frame ${v3}`), 60000, `o app reaberto registrar a versão ${v3}`, h);
+      await killProcessesUnder(installDir, h);
+    }
+    assert.deepEqual(processesUnder(installDir), [], 'nada do programa antigo ficou rodando');
+    log(`atualização ${v2} → ${v3} pelo PRÓPRIO app: o instalador de verdade rodou em silêncio com o app aberto, trocou a versão${relaunched ? ', reabriu o app já na versão nova' : ''} e manteve a entrada e o atalho`);
+
     // ---- desinstalação
     // Os dados do teste ficam numa pasta própria (--user-data-dir), que nenhum desinstalador tocaria. Para provar `deleteAppDataOnUninstall: false`
     // de verdade, põe marcadores onde o desinstalador APAGARIA se a opção estivesse ligada: as pastas de dados padrão (nome do programa e do pacote).
@@ -237,6 +314,7 @@ async function main() {
     console.log(`\nTESTE DO INSTALADOR OK (${Math.round((Date.now() - started) / 1000)} s)`);
   } finally {
     try { if (app) await app.stop(); } catch { /* já fechado */ }
+    try { if (installed) await killProcessesUnder(installDir, h); } catch { /* melhor esforço */ }
     try { if (installed) runUninstaller(installDir); } catch (e) { console.error(`(não consegui desinstalar a instalação de teste: ${e.message})`); }
     try { await h.cleanupAll(); } catch { /* nada a limpar */ }
     for (const dir of defaultDataDirs()) tryRemove(dir); // os marcadores da desinstalação (a identidade de teste nunca tem dados de verdade)
