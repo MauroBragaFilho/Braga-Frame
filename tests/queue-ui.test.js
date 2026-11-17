@@ -321,8 +321,49 @@ test('os Ajustes recolhidos ficam só com o que não está na barra: tentativas,
   await idle();
   const details = env.q('details.q-settings');
   assert.equal(details.open, false, 'Ajustes recolhidos');
-  assert.deepEqual(plain(details.querySelectorAll('select').map((s) => s.id)), ['q-retries', 'q-recovery', 'q-conflict']);
-  assert.deepEqual(plain(details.querySelectorAll('select').map((s) => s.value)), ['2', 'ask', 'ask']);
+  assert.deepEqual(plain(details.querySelectorAll('select').map((s) => s.id)), ['q-retries', 'q-recovery', 'q-conflict', 'q-priority', 'q-threads', 'q-minram']);
+  assert.deepEqual(plain(details.querySelectorAll('select').map((s) => s.value)), ['2', 'ask', 'ask', 'low', '0', '1024']);
+});
+
+test('limites de processamento: prioridade, núcleos e memória mínima gravam pelo queue:setSettings; um valor fora da lista ganha a sua opção', async () => {
+  const env = load({ jobs: [] });
+  await idle();
+  const priority = env.q('#q-priority');
+  priority.value = 'normal';
+  priority.dispatch('change');
+  const threads = env.q('#q-threads');
+  threads.value = '4';
+  threads.dispatch('change');
+  const minRam = env.q('#q-minram');
+  minRam.value = '2048';
+  minRam.dispatch('change');
+  await idle();
+  const sent = env.calls.filter(([c]) => c === 'queue:setSettings').map(([, p]) => p);
+  assert.deepEqual(plain(sent.slice(-3)), [{ lowPriority: false }, { encodeThreads: 4 }, { minFreeMemoryMb: 2048 }]);
+});
+
+test('resourcesText: CPU, memória, placa e o disco mais cheio, na ordem; sem dados vira texto vazio; gbText usa vírgula', () => {
+  const q = load({ jobs: [] }).queue;
+  assert.equal(q.gbText(6144), '6,0 GB');
+  assert.equal(q.gbText(1536), '1,5 GB');
+  assert.equal(q.resourcesText(null), '');
+  assert.equal(q.resourcesText({}), '');
+  assert.equal(q.resourcesText({
+    cpu: { percent: 42 }, memory: { freeMb: 6144, totalMb: 16384 }, gpu: { utilPercent: 23, memUsedMb: 1536, memTotalMb: 4096 },
+    disks: [{ dir: 'D:/a', freeMb: 122880 }, { dir: 'C:/b', freeMb: 20480 }, { dir: 'X:/c', freeMb: null }]
+  }), 'CPU 42% · Memória livre 6,0 GB de 16,0 GB · Placa 23% (1,5 GB de 4,0 GB) · Disco: 20,0 GB livres');
+  assert.equal(q.resourcesText({ cpu: { percent: null }, memory: { freeMb: 1024, totalMb: 2048 }, gpu: null, disks: [] }), 'Memória livre 1,0 GB de 2,0 GB');
+});
+
+test('exportação esperando por memória: aviso claro (com os dois valores) e some quando a fila libera', async () => {
+  const env = load({ jobs: [job('a', 'running'), job('b', 'queued')] });
+  await idle();
+  env.push([job('a', 'running'), job('b', 'queued')], { throttled: { reason: 'memory', freeMb: 512, minMb: 1024 } });
+  await idle();
+  assert.match(env.q('.q-notices').textContent, /esperando: só há 0,5 GB de memória livre e o mínimo dos Ajustes é 1,0 GB/);
+  env.push([job('a', 'running'), job('b', 'running')], { throttled: null });
+  await idle();
+  assert.doesNotMatch(env.q('.q-notices').textContent, /memória livre/);
 });
 
 test('a tela é só texto e componentes do app: sem HTML montado como texto, sem estilo inline e com os textos do desenho', () => {

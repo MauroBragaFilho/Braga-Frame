@@ -205,13 +205,13 @@ test('o estado em disco reflete a fila durante o trabalho (nunca JSON inválido)
   await poll;
   assert.equal(broken, 0);
   const disk = JSON.parse(fs.readFileSync(path.join(dir, 'queue.json'), 'utf8'));
-  assert.deepEqual(disk.settings, { parallel: 3, retries: 4, recovery: 'resume', onConflict: 'rename' });
+  assert.deepEqual(disk.settings, { parallel: 3, retries: 4, recovery: 'resume', onConflict: 'rename', lowPriority: true, encodeThreads: 0, minFreeMemoryMb: 1024 });
   assert.equal(disk.jobs.length, 30);
   assert.equal(Object.keys(disk.completed).length, 30);
   q.shutdown();
 
   const again = makeManager(dir, { runner: fake.runner }).load();
-  assert.deepEqual(again.getSettings(), { parallel: 3, retries: 4, recovery: 'resume', onConflict: 'rename', effectiveParallel: 3, defaultParallel: 1 });
+  assert.deepEqual(again.getSettings(), { parallel: 3, retries: 4, recovery: 'resume', onConflict: 'rename', lowPriority: true, encodeThreads: 0, minFreeMemoryMb: 1024, effectiveParallel: 3, defaultParallel: 1 });
   assert.equal(again.jobs.length, 30);
   again.shutdown();
 }));

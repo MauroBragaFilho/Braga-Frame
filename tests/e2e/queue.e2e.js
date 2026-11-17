@@ -149,7 +149,7 @@ async function main() {
     assert.equal(await page.eval("document.querySelector('#tab-queue .tab-badge').hidden"), true, 'sem selo quando não há nada ativo');
     assert.equal(await page.eval("document.querySelector('#tabpanel-queue details.q-settings').open"), false, 'Ajustes recolhidos');
     assert.equal(await page.eval("[...document.querySelectorAll('#tabpanel-queue button')].filter((b) => !b.disabled && b.getClientRects().length).length"), 0, 'tela vazia sem botões soltos');
-    assert.deepEqual(await page.eval("[...document.querySelectorAll('#tabpanel-queue details.q-settings select')].map((s) => s.value)"), ['2', 'ask', 'ask']);
+    assert.deepEqual(await page.eval("[...document.querySelectorAll('#tabpanel-queue details.q-settings select')].map((s) => s.value)"), ['2', 'ask', 'ask', 'low', '0', '1024']);
     assert.equal(await page.eval("document.getElementById('q-parallel').value"), '', 'o limite de fila mora na barra de saída (padrão das Preferências)');
     assert.match(await page.eval("document.querySelector('#q-parallel option[value=\"\"]').textContent"), /Padrão das Preferências \(1\)/);
     assert.equal(await page.eval("document.querySelector('#tabpanel-queue .q-bar').hidden"), true, 'sem trabalhos as pílulas nem aparecem');
@@ -166,7 +166,7 @@ async function main() {
     await waitFor(page, "BF.queue.state.settings.parallel === 2");
     await sleep(300);
     const saved0 = JSON.parse(fs.readFileSync(path.join(userData, 'queue.json'), 'utf8'));
-    assert.deepEqual(saved0.settings, { parallel: 2, retries: 3, recovery: 'ask', onConflict: 'ask' });
+    assert.deepEqual(saved0.settings, { parallel: 2, retries: 3, recovery: 'ask', onConflict: 'ask', lowPriority: true, encodeThreads: 0, minFreeMemoryMb: 1024 });
     step('ajustes alterados na interface foram gravados em queue.json');
     await page.eval("(() => { const s = document.getElementById('q-parallel'); s.value = '1'; s.dispatchEvent(new Event('change', { bubbles: true })); })()");
     await waitFor(page, "BF.queue.state.settings.parallel === 1");

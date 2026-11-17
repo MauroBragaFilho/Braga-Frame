@@ -1242,3 +1242,62 @@ test('textos de erro da fila sem jargão na linha principal: PATH, variável de 
   assert.equal(describeError(Object.assign(new Error('x'), { code: 'NO_FFMPEG', details: { stderr: 'linha 1\nlinha 2' } })).technical, 'linha 1\nlinha 2');
   assert.equal(describeError(new Error('x')).technical, null);
 });
+
+// ------------------------------------------------------------------ limites de processamento (Etapa 3)
+
+test('ajustes de limites: valores válidos entram, inválidos dizem o que usar', withDir(async (dir, mk) => {
+  const q = mk({ runner: makeFakeRunner().runner }).load();
+  assert.deepEqual([q.getSettings().lowPriority, q.getSettings().encodeThreads, q.getSettings().minFreeMemoryMb], [true, 0, 1024]);
+  const next = q.setSettings({ lowPriority: false, encodeThreads: 4, minFreeMemoryMb: 2048 });
+  assert.deepEqual([next.lowPriority, next.encodeThreads, next.minFreeMemoryMb], [false, 4, 2048]);
+  assert.throws(() => q.setSettings({ lowPriority: 'sim' }), /Prioridade baixa/);
+  assert.throws(() => q.setSettings({ encodeThreads: -1 }), /Núcleos por exportação/);
+  assert.throws(() => q.setSettings({ encodeThreads: 2.5 }), /Núcleos por exportação/);
+  assert.throws(() => q.setSettings({ minFreeMemoryMb: 'muito' }), /Memória livre mínima/);
+  assert.equal(q.getSettings().encodeThreads, 4, 'um valor inválido não muda nada');
+}));
+
+test('o executor recebe os limites (prioridade baixa e núcleos) dos ajustes', withDir(async (dir, mk) => {
+  const fake = makeFakeRunner();
+  const q = mk({ runner: fake.runner }).load();
+  q.setSettings({ encodeThreads: 3 });
+  enqueueN(q, dir, 1);
+  await waitUntil(() => fake.calls.length === 1);
+  assert.deepEqual(fake.calls[0].opts.limits, { lowPriority: true, threads: 3 });
+  fake.calls[0].finish();
+  await waitUntil(() => h.states(q).every((s) => s === 'done'));
+  q.setSettings({ lowPriority: false, encodeThreads: 0 });
+  q.enqueue([makeJob(dir, 7)]); // outro corte (o primeiro já foi concluído)
+  await waitUntil(() => fake.calls.length === 2);
+  assert.deepEqual(fake.calls[1].opts.limits, { lowPriority: false, threads: 0 });
+  fake.calls[1].finish();
+}));
+
+test('pouca memória livre: a primeira exportação sempre começa, as paralelas esperam, e voltam a andar quando a memória sobe', withDir(async (dir, mk) => {
+  const fake = makeFakeRunner();
+  let freeMb = 300; // abaixo do mínimo (1024)
+  const q = mk({ runner: fake.runner, freeMemoryMb: () => freeMb, throttleRecheckMs: 15 }).load();
+  q.setSettings({ parallel: 3 });
+  enqueueN(q, dir, 3);
+  await waitUntil(() => fake.calls.length === 1, { what: 'a primeira começar apesar da pouca memória' });
+  await h.sleep(60);
+  assert.equal(fake.calls.length, 1, 'as paralelas esperam enquanto falta memória');
+  assert.equal(q.snapshot().throttled.reason, 'memory');
+  assert.equal(q.snapshot().throttled.freeMb, 300);
+  assert.equal(q.snapshot().throttled.minMb, 1024);
+
+  freeMb = 4000;
+  await waitUntil(() => fake.calls.length === 3, { what: 'as outras começarem quando a memória volta' });
+  assert.equal(q.snapshot().throttled, null);
+  for (const call of fake.calls) call.finish();
+}));
+
+test('minFreeMemoryMb 0 desliga a conferência de memória', withDir(async (dir, mk) => {
+  const fake = makeFakeRunner();
+  const q = mk({ runner: fake.runner, freeMemoryMb: () => 1 }).load();
+  q.setSettings({ parallel: 2, minFreeMemoryMb: 0 });
+  enqueueN(q, dir, 2);
+  await waitUntil(() => fake.calls.length === 2, { what: 'as duas rodarem juntas' });
+  assert.equal(q.snapshot().throttled, null);
+  for (const call of fake.calls) call.finish();
+}));

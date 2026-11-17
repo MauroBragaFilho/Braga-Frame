@@ -18,7 +18,7 @@ const silent = { log() {}, info() {}, warn() {}, error() {} };
 
 const CHANNELS = [
   'queue:enqueue', 'queue:list', 'queue:pause', 'queue:resume', 'queue:recover', 'queue:cancel', 'queue:reorder', 'queue:remove',
-  'queue:retry', 'queue:clearFinished', 'queue:getSettings', 'queue:setSettings', 'queue:resolveConflict'
+  'queue:retry', 'queue:clearFinished', 'queue:getSettings', 'queue:setSettings', 'queue:resolveConflict', 'queue:resources'
 ];
 
 /** ctx com Electron falso; `app.on` guarda os ouvintes para disparar 'before-quit' à mão. */
@@ -177,10 +177,10 @@ test('erros voltam como { ok:false, code, message } em português, com a causa',
 test('ajustes: leitura, gravação e validação; o estado fica em userData/queue.json', withEnv(async (base, mk) => {
   const s = mk({ overrides: { runner: makeFakeRunner().runner } });
   const first = await s.call('queue:getSettings');
-  assert.deepEqual(first.settings, { parallel: null, retries: 2, recovery: 'ask', onConflict: 'ask', effectiveParallel: 1, defaultParallel: 1 });
+  assert.deepEqual(first.settings, { parallel: null, retries: 2, recovery: 'ask', onConflict: 'ask', lowPriority: true, encodeThreads: 0, minFreeMemoryMb: 1024, effectiveParallel: 1, defaultParallel: 1 });
   const set = await s.call('queue:setSettings', { parallel: 3, retries: 4, recovery: 'resume', onConflict: 'rename' });
   assert.equal(set.ok, true);
-  assert.deepEqual(set.settings, { parallel: 3, retries: 4, recovery: 'resume', onConflict: 'rename', effectiveParallel: 3, defaultParallel: 1 });
+  assert.deepEqual(set.settings, { parallel: 3, retries: 4, recovery: 'resume', onConflict: 'rename', lowPriority: true, encodeThreads: 0, minFreeMemoryMb: 1024, effectiveParallel: 3, defaultParallel: 1 });
   assert.equal((await s.call('queue:setSettings', { parallel: null, defaultParallel: 2 })).settings.effectiveParallel, 2, 'padrão das Preferências');
   await waitUntil(() => fs.existsSync(path.join(s.userData, 'queue.json')));
   assert.equal(JSON.parse(fs.readFileSync(path.join(s.userData, 'queue.json'), 'utf8')).settings.retries, 4);
@@ -340,4 +340,18 @@ test('ids hostis pelo canal queue:enqueue são trocados e a pasta de fora não �
   await waitUntil(() => s.manager.jobs.every((j) => j.state === 'done'), { timeout: 5000 });
   assert.equal(fs.readFileSync(path.join(precious, 'importante.txt'), 'utf8'), 'não apague');
   assert.ok(fake.calls.every((c) => path.dirname(c.opts.tmpDir) === path.join(s.ctx.paths.cache, 'queue')));
+}));
+
+test('queue:resources: CPU, memória, disco das pastas de saída e do cache; pastas pedidas precisam ser caminhos completos', withEnv(async (base, mk) => {
+  const s = mk({ overrides: { runner: makeFakeRunner().runner } });
+  const res = await s.call('queue:resources', {});
+  assert.equal(res.ok, true);
+  const r = res.resources;
+  assert.ok(Number.isFinite(r.memory.totalMb) && r.memory.totalMb > 0);
+  assert.ok(Number.isFinite(r.memory.freeMb));
+  assert.ok(r.cpu.cores >= 1);
+  assert.ok(Array.isArray(r.disks) && r.disks.length >= 1, 'o cache entra na lista');
+  const asked = await s.call('queue:resources', { dirs: [base, 'relativo/x', 42] });
+  assert.deepEqual(asked.resources.disks.map((d) => d.dir), [base], 'só caminho completo vale');
+  assert.ok(Number.isFinite(asked.resources.disks[0].freeMb));
 }));

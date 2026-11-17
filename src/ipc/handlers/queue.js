@@ -3,13 +3,15 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { QueueManager, QueueError } = require('../../core/queue');
+const { createResourceMonitor } = require('../../core/system/resources');
 
 /**
  * Fila de exportação no IPC (contrato: docs/arquitetura.md 3.4; detalhes: docs/recursos/queue.md).
  *
  * Canais: queue:enqueue {jobs, force?}, queue:list, queue:pause {interrupt?}, queue:resume, queue:recover {action},
  * queue:cancel {id|all}, queue:reorder {ids}, queue:remove {id}, queue:retry {id}, queue:clearFinished {includeFailed?},
- * queue:getSettings, queue:setSettings {parallel, retries, recovery, onConflict, defaultParallel?},
+ * queue:getSettings, queue:setSettings {parallel, retries, recovery, onConflict, lowPriority, encodeThreads, minFreeMemoryMb, defaultParallel?},
+ * queue:resources {dirs?} -> { resources: { at, cpu, memory, disks, gpu } } (só leitura: CPU, RAM, espaço nas pastas e placa NVIDIA),
  * queue:resolveConflict {id, action}.
  * Eventos: queue:update, queue:progress, queue:jobDone, queue:conflict, queue:recovery (também no ctx.bus).
  */
@@ -57,7 +59,8 @@ function testRunnerFromEnv(ctx, env) {
  * Cria o gerenciador ligado ao `ctx`. `overrides` (testes): { runner, preflight (false = sem pré-verificação), env, ...opções do QueueManager }.
  */
 function createQueue(ctx, overrides = {}) {
-  const { runner: runnerOverride, preflight: preflightOverride, env = process.env, ...managerOpts } = overrides;
+  const { runner: runnerOverride, preflight: preflightOverride, env = process.env, monitor: monitorOverride, ...managerOpts } = overrides;
+  const monitor = monitorOverride || createResourceMonitor();
   const jobRunner = lazyModule('../../core/export/jobRunner');
   const qc = lazyModule('../../core/export/qc');
   const injected = runnerOverride || testRunnerFromEnv(ctx, env);
@@ -69,8 +72,10 @@ function createQueue(ctx, overrides = {}) {
     getRunner: () => injected || (jobRunner() && jobRunner().runExportJob) || null,
     getPreflight: () => (preflightOverride === false ? null : preflightOverride || (qc() && qc().preflight) || null),
     log: (level, msg) => ctx.log(level, msg),
+    freeMemoryMb: () => monitor.freeMemoryMb(),
     ...managerOpts
   });
+  manager.monitor = monitor; // a tela Exportações lê CPU, RAM, disco e placa por queue:resources
   return manager;
 }
 
@@ -90,7 +95,7 @@ function register(ctx, overrides) {
     });
   };
   forward('update', 'queue:update', (s) => ({
-    jobs: s.jobs, running: s.running, paused: s.paused, parallel: s.parallel, active: s.active, blocked: s.blocked,
+    jobs: s.jobs, running: s.running, paused: s.paused, parallel: s.parallel, active: s.active, blocked: s.blocked, throttled: s.throttled,
     recovery: s.recovery, loadWarning: s.loadWarning, saveError: s.saveError, settings: s.settings
   }));
   forward('progress', 'queue:progress', (e) => e);
@@ -137,6 +142,13 @@ function register(ctx, overrides) {
   ctx.handle('queue:getSettings', () => ({ settings: manager.getSettings() }));
   ctx.handle('queue:setSettings', (patch) => ({ settings: manager.setSettings(patch) }));
   ctx.handle('queue:resolveConflict', ({ id, action }) => manager.resolveConflict(id, action));
+  // CPU, RAM, espaço livre e placa: só leitura. As pastas pedidas precisam ser caminhos completos; sem pedido valem as de saída dos trabalhos e o cache
+  ctx.handle('queue:resources', async (payload) => {
+    const asked = payload && Array.isArray(payload.dirs) ? payload.dirs.filter((d) => typeof d === 'string' && path.isAbsolute(d)) : null;
+    const dirs = asked && asked.length ? asked : [...new Set(manager.jobs.filter((j) => ['queued', 'running', 'needsAction', 'interrupted'].includes(j.state)).map((j) => j.outputDir).filter(Boolean))].slice(0, 3);
+    if (!asked && ctx.paths && ctx.paths.cache) dirs.push(ctx.paths.cache);
+    return { resources: await manager.monitor.sample({ dirs }) };
+  });
 
   return manager;
 }

@@ -122,7 +122,7 @@
   // ---------- estado ----------
 
   const state = {
-    jobs: [], running: 0, paused: false, parallel: 1, active: 0, blocked: null,
+    jobs: [], running: 0, paused: false, parallel: 1, active: 0, blocked: null, throttled: null,
     recovery: { pending: false, jobs: [] }, loadWarning: null, saveError: null, settings: null,
     loaded: false, error: null,
     progress: new Map(), // id -> { p, etaSec }
@@ -151,7 +151,7 @@
     }
     state.prev = nextPrev;
     state.jobs = s.jobs;
-    for (const key of ['running', 'paused', 'parallel', 'active', 'blocked', 'recovery', 'loadWarning', 'saveError', 'settings']) {
+    for (const key of ['running', 'paused', 'parallel', 'active', 'blocked', 'throttled', 'recovery', 'loadWarning', 'saveError', 'settings']) {
       if (s[key] !== undefined) state[key] = s[key];
     }
     if (!state.recovery) state.recovery = { pending: false, jobs: [] };
@@ -699,6 +699,9 @@
     const out = [];
     if (state.error) out.push(notice('error', `Não foi possível ler a fila: ${state.error}`, noticeButton('Tentar de novo', refresh, false, 'reload')));
     if (state.blocked) out.push(notice('warn', state.blocked.message));
+    if (state.throttled && state.throttled.reason === 'memory') {
+      out.push(notice('info', `Uma exportação está esperando: só há ${gbText(state.throttled.freeMb)} de memória livre e o mínimo dos Ajustes é ${gbText(state.throttled.minMb)}. Ela começa sozinha quando a memória voltar.`));
+    }
     if (state.recovery.pending) {
       const n = state.recovery.jobs.length;
       out.push(notice('warn',
@@ -759,6 +762,7 @@
     ui.loading.hidden = state.loaded;
 
     ui.summary.textContent = state.tab === 'queue' ? summaryText() : '';
+    syncResources();
     ui.pause.hidden = !hasActive && !state.paused;
     // Pausar é da FILA (não inicia novos); não congela o que já está exportando, e o rótulo e a dica dizem isso.
     // O destaque (pílula cheia) só vai para "Retomar" quando o aviso de recuperação não oferece o seu próprio "Retomar".
@@ -793,6 +797,48 @@
     render();
   }
 
+  // ---------- recursos do computador (CPU, memória, placa e disco), só enquanto algo exporta ----------
+
+  /** 6144 -> "6,0 GB". */
+  function gbText(mb) {
+    const n = Number(mb);
+    return Number.isFinite(n) ? `${(n / 1024).toFixed(1).replace('.', ',')} GB` : '?';
+  }
+
+  /** O que a linha de recursos mostra: "CPU 42% · Memória livre 6,1 de 15,9 GB · Placa 23% (1,4 de 4,0 GB) · Disco: 120,0 GB livres" ('' sem dados). */
+  function resourcesText(r) {
+    if (!r || typeof r !== 'object') return '';
+    const parts = [];
+    if (r.cpu && Number.isFinite(r.cpu.percent)) parts.push(`CPU ${r.cpu.percent}%`);
+    if (r.memory && Number.isFinite(r.memory.freeMb)) parts.push(`Memória livre ${gbText(r.memory.freeMb)} de ${gbText(r.memory.totalMb)}`);
+    if (r.gpu && Number.isFinite(r.gpu.utilPercent)) parts.push(`Placa ${r.gpu.utilPercent}% (${gbText(r.gpu.memUsedMb)} de ${gbText(r.gpu.memTotalMb)})`);
+    const free = (r.disks || []).map((d) => d.freeMb).filter(Number.isFinite);
+    if (free.length) parts.push(`Disco: ${gbText(Math.min(...free))} livres`);
+    return parts.join(' · ');
+  }
+
+  let resourcesTimer = null;
+  let resourcesSeq = 0;
+  async function pollResources() {
+    const seq = ++resourcesSeq;
+    const res = await BF.api('queue:resources', {});
+    const ui = state.ui;
+    if (!ui || seq !== resourcesSeq || !resourcesTimer) return; // chegou depois de parar
+    const text = res.ok ? resourcesText(res.resources) : '';
+    ui.resources.textContent = text;
+    ui.resources.hidden = !text;
+  }
+
+  /** A linha de recursos só é pedida (a cada 3 s) com a aba à vista e alguma exportação rodando. */
+  function syncResources() {
+    const ui = state.ui;
+    if (!ui) return;
+    const panel = typeof document !== 'undefined' ? document.getElementById('tabpanel-queue') : null;
+    const should = state.running > 0 && Boolean(panel) && !panel.hidden;
+    if (should && !resourcesTimer) { resourcesTimer = setInterval(pollResources, 3000); pollResources(); }
+    else if (!should && resourcesTimer) { clearInterval(resourcesTimer); resourcesTimer = null; ui.resources.hidden = true; }
+  }
+
   // ---------- Ajustes (montados uma vez; só os valores são atualizados, para não fechar um menu aberto) ----------
 
   function field(label, control, hint) {
@@ -810,13 +856,22 @@
       () => saveSetting({ recovery: recovery.value }));
     const conflict = selectOf('q-conflict', [['ask', 'Perguntar'], ['rename', 'Salvar com outro nome'], ['skip', 'Pular'], ['fail', 'Marcar como falha']],
       () => saveSetting({ onConflict: conflict.value }));
+    const priority = selectOf('q-priority', [['low', 'Baixa (o computador continua rápido)'], ['normal', 'Normal']],
+      () => saveSetting({ lowPriority: priority.value === 'low' }));
+    const threads = selectOf('q-threads', [['0', 'Automático'], ...[1, 2, 4, 6, 8, 12, 16].map((n) => [String(n), `${n} núcleo${n === 1 ? '' : 's'}`])],
+      () => saveSetting({ encodeThreads: Number(threads.value) }));
+    const minRam = selectOf('q-minram', [['0', 'Não olhar'], ...[512, 1024, 2048, 4096].map((n) => [String(n), gbText(n)])],
+      () => saveSetting({ minFreeMemoryMb: Number(minRam.value) }));
     const node = el('details', { class: 'q-settings' },
       el('summary', {}, 'Ajustes'),
       el('div', { class: 'q-settings-body' },
         field('Tentativas automáticas', retries, 'Só em falhas passageiras (disco ocupado, exportação que caiu). Espera crescente entre elas.'),
         field('Se o app fechar com exportações em andamento', recovery, 'Elas recomeçam do início.'),
-        field('Se o arquivo já existir', conflict, 'Substituir só é oferecido arquivo por arquivo, nunca como padrão.')));
-    return { node, retries, recovery, conflict };
+        field('Se o arquivo já existir', conflict, 'Substituir só é oferecido arquivo por arquivo, nunca como padrão.'),
+        field('Prioridade da exportação', priority, 'Baixa deixa o resto do computador responsivo enquanto exporta; a velocidade quase não muda.'),
+        field('Núcleos do processador por exportação', threads, 'Automático usa o que o programa achar melhor. Limite para sobrar processador para outras coisas.'),
+        field('Memória livre mínima para começar outra', minRam, 'Com menos memória livre que isto, uma exportação nova espera enquanto outra roda. A primeira nunca espera.')));
+    return { node, retries, recovery, conflict, priority, threads, minRam };
   }
 
   function renderSettings() {
@@ -829,6 +884,13 @@
     set(ui.settings.retries, String(s.retries));
     set(ui.settings.recovery, s.recovery);
     set(ui.settings.conflict, s.onConflict);
+    set(ui.settings.priority, s.lowPriority === false ? 'normal' : 'low');
+    const optionFor = (select, value) => { // um valor guardado que não está na lista (ajuste pela API) ganha a sua opção
+      if (!select.querySelector(`option[value="${value}"]`)) select.append(el('option', { value }, select === ui.settings.minRam ? gbText(Number(value)) : `${value} núcleos`));
+      set(select, value);
+    };
+    optionFor(ui.settings.threads, String(s.encodeThreads ?? 0));
+    optionFor(ui.settings.minRam, String(s.minFreeMemoryMb ?? 1024));
   }
 
   // ---------- barra de saída: perfil e destino do projeto aberto (os da aba Exportar) e o limite da fila ----------
@@ -935,6 +997,7 @@
     ui.pausedText = el('span', {});
     ui.interrupt = el('button', { type: 'button', class: 'link', onclick: interruptCurrent, hidden: true, dataset: { act: 'interrupt' } }, 'Interromper os atuais');
     ui.pausedNote = el('p', { class: 'q-paused', hidden: true }, ui.pausedText, ' ', ui.interrupt);
+    ui.resources = el('p', { class: 'q-resources small muted', id: 'q-resources', hidden: true });
     ui.emptyTitle = el('strong', {}, EMPTY.queue[0]);
     ui.emptyText = el('p', {}, EMPTY.queue[1]);
     ui.empty = el('div', { class: 'empty-state center q-empty', hidden: true },
@@ -959,7 +1022,7 @@
       el('p', { class: 'q-intro' }, 'Acompanhe o progresso dos seus cortes e exportações.'),
       ui.notices,
       el('section', { class: 'q-panel panel', 'aria-label': 'Exportações' },
-        ui.bar, ui.summary, ui.pausedNote, ui.loading, ui.empty, TAB_KEYS.map((key) => ui.lists[key]), ui.out),
+        ui.bar, ui.summary, ui.resources, ui.pausedNote, ui.loading, ui.empty, TAB_KEYS.map((key) => ui.lists[key]), ui.out),
       ui.settings.node);
 
     ui.root.addEventListener('click', onClick);
@@ -993,7 +1056,7 @@
       container.append(state.ui.root);
       render();
     },
-    onShow() { refresh(); syncPreferredParallel(); renderOutput(); }
+    onShow() { refresh(); syncPreferredParallel(); renderOutput(); syncResources(); }
   });
 
   // ---------- ligação com o processo principal e com o app ----------
@@ -1040,5 +1103,5 @@
     syncPreferredParallel();
   });
 
-  BF.queue = { state, fmtEta, clock, applyDone, reconcile, activeOrder, groupOf, groupJobs, setTab, sameProject, refresh, move, sendOrder, renderOutput };
+  BF.queue = { state, resourcesText, gbText, fmtEta, clock, applyDone, reconcile, activeOrder, groupOf, groupJobs, setTab, sameProject, refresh, move, sendOrder, renderOutput };
 })();

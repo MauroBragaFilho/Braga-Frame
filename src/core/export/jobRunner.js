@@ -22,6 +22,7 @@ const { resolveFraming, buildVideoGraph } = require('./framing');
 const encoders = require('./encoders');
 const { sanitizeFileName } = require('./naming');
 const optional = require('./optional');
+const { lowerPriority } = require('../system/resources');
 const { probeMedia } = require('../ffmpeg/probe');
 
 /** Códigos que a fila pode tentar de novo; os demais não adiantam repetir. */
@@ -204,6 +205,21 @@ function buildFfmpegArgs({ input, output, start, duration, graph, audioFilter, w
   ];
 }
 
+/** `-threads N` do codificador quando a fila pede um limite de núcleos (0 ou ausente: o ffmpeg decide). */
+function threadArgs(limits) {
+  const n = limits && Number.isInteger(limits.threads) ? limits.threads : 0;
+  return n > 0 ? ['-threads', String(n)] : [];
+}
+
+/** O `onStart` do ffmpeg, com a prioridade baixa aplicada ao processo quando a fila pede (melhor esforço). */
+function withPriority(onStart, limits) {
+  if (!limits || limits.lowPriority !== true) return onStart;
+  return (info) => {
+    lowerPriority(info && info.pid);
+    if (typeof onStart === 'function') onStart(info);
+  };
+}
+
 /** Roda o ffmpeg. Resolve { code, signal, stderr, aborted }; rejeita só se o processo nem iniciou. */
 function runFfmpeg(ffmpeg, args, { signal, onProgress, totalSec, onStart }) {
   return new Promise((resolve, reject) => {
@@ -357,7 +373,7 @@ function ensureOutputDir(dir) {
  * @param {object} job  Job (contrato 3.3). `onConflict` precisa vir resolvido: rename|replace|skip|fail.
  * @param {{tools:{ffmpeg:string,ffprobe?:string}, onProgress?:(p:number)=>void, signal?:AbortSignal, tmpDir?:string, onStart?:(x:{pid:number})=>void}} opts
  */
-async function runExportJob(job, { tools, onProgress, signal, tmpDir, onStart } = {}) {
+async function runExportJob(job, { tools, onProgress, signal, tmpDir, onStart, limits } = {}) {
   const { profile, cut, start, end, info, sourcePath } = checkJob(job, tools);
   const warnings = [];
   const duration = end - start;
@@ -435,8 +451,8 @@ async function runExportJob(job, { tools, onProgress, signal, tmpDir, onStart } 
     const audioChain = [monoSource ? MONO_TO_STEREO : null, audioFilter].filter(Boolean).join(',') || null;
     const attempt = (kind) => runFfmpeg(tools.ffmpeg, buildFfmpegArgs({
       input: sourcePath, output: target.part, start, duration, graph, audioFilter: audioChain, withAudio,
-      encoderArgs: encoders.buildEncoderArgs({ codec: profile.codec, kind, bitrateKbps: profile.bitrateKbps })
-    }), { signal, onProgress, totalSec: duration, onStart });
+      encoderArgs: [...threadArgs(limits), ...encoders.buildEncoderArgs({ codec: profile.codec, kind, bitrateKbps: profile.bitrateKbps })]
+    }), { signal, onProgress, totalSec: duration, onStart: withPriority(onStart, limits) });
 
     if (onProgress) onProgress(0);
     let usedKind = choice.kind;
@@ -482,5 +498,5 @@ async function runExportJob(job, { tools, onProgress, signal, tmpDir, onStart } 
 }
 
 module.exports = {
-  ExportError, RECOVERABLE_CODES, NON_RECOVERABLE_CODES, runExportJob, buildFfmpegArgs, classifyFailure, reserveTarget, publish
+  threadArgs, withPriority, ExportError, RECOVERABLE_CODES, NON_RECOVERABLE_CODES, runExportJob, buildFfmpegArgs, classifyFailure, reserveTarget, publish
 };

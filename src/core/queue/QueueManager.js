@@ -2,6 +2,7 @@
 
 const EventEmitter = require('node:events');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { QueueStore } = require('./queueStore');
 const { jobKey, predictOutputPath, samePath, normPath, CASE_INSENSITIVE } = require('./jobKey');
@@ -34,7 +35,13 @@ const RECOVERY_MODES = Object.freeze(['ask', 'resume', 'discard']);
 const MAX_PARALLEL = 4;
 const MAX_RETRIES = 5;
 
-const DEFAULT_SETTINGS = Object.freeze({ parallel: null, retries: 2, recovery: 'ask', onConflict: 'ask' });
+// Limites de processamento (Etapa 3): lowPriority = o ffmpeg da exportação roda com prioridade abaixo do normal (o computador continua
+// respondendo; a velocidade quase não muda); encodeThreads = núcleos do codificador (0 = o ffmpeg decide); minFreeMemoryMb = com menos RAM livre
+// que isto, nenhuma exportação NOVA começa enquanto outra roda (0 = não olhar). A primeira exportação nunca espera por memória.
+const MAX_THREADS = 64;
+const MAX_MIN_FREE_MEMORY_MB = 65536;
+const THROTTLE_RECHECK_MS = 5000;
+const DEFAULT_SETTINGS = Object.freeze({ parallel: null, retries: 2, recovery: 'ask', onConflict: 'ask', lowPriority: true, encodeThreads: 0, minFreeMemoryMb: 1024 });
 
 /**
  * Id de job: vira nome de pasta de trabalho (`<tmpRoot>/<id>`) e é a chave de cancelamento ("all" é reservado), então só
@@ -89,6 +96,20 @@ function normalizeSettings(patch, base, strict) {
   if ('recovery' in src) {
     if (RECOVERY_MODES.includes(src.recovery)) out.recovery = src.recovery;
     else { bad('Recuperação: use "ask" (perguntar), "resume" (retomar sozinho) ou "discard" (descartar).'); out.recovery = base.recovery; }
+  }
+  if ('lowPriority' in src) {
+    if (typeof src.lowPriority === 'boolean') out.lowPriority = src.lowPriority;
+    else { bad('Prioridade baixa: use ligado ou desligado.'); out.lowPriority = base.lowPriority; }
+  }
+  if ('encodeThreads' in src) {
+    const n = Number(src.encodeThreads);
+    if (Number.isInteger(n) && n >= 0 && n <= MAX_THREADS) out.encodeThreads = n;
+    else { bad(`Núcleos por exportação: use um número de 0 (automático) a ${MAX_THREADS}.`); out.encodeThreads = base.encodeThreads; }
+  }
+  if ('minFreeMemoryMb' in src) {
+    const n = Number(src.minFreeMemoryMb);
+    if (Number.isInteger(n) && n >= 0 && n <= MAX_MIN_FREE_MEMORY_MB) out.minFreeMemoryMb = n;
+    else { bad(`Memória livre mínima: use um número de MB de 0 (não olhar) a ${MAX_MIN_FREE_MEMORY_MB}.`); out.minFreeMemoryMb = base.minFreeMemoryMb; }
   }
   if ('onConflict' in src) {
     if (DEFAULT_CONFLICT_MODES.includes(src.onConflict)) out.onConflict = src.onConflict;
@@ -148,6 +169,10 @@ class QueueManager extends EventEmitter {
     this.maxFinished = opts.maxFinished ?? 300;
     this.maxCompleted = opts.maxCompleted ?? 5000;
     this.log = typeof opts.log === 'function' ? opts.log : () => {};
+    this.freeMemoryMb = typeof opts.freeMemoryMb === 'function' ? opts.freeMemoryMb : () => Math.round(os.freemem() / (1024 * 1024)); // RAM livre agora (testes trocam)
+    this.throttled = null; // { reason: 'memory', freeMb, minMb }: há trabalho esperando só porque falta memória livre
+    this._throttleTimer = null;
+    this.throttleRecheckMs = opts.throttleRecheckMs ?? THROTTLE_RECHECK_MS;
 
     this.jobs = [];
     this.completed = {}; // chave -> { output, at, dir }: sobrevive ao "Limpar concluídos"
@@ -378,6 +403,7 @@ class QueueManager extends EventEmitter {
       parallel: this.effectiveParallel(),
       active: this.jobs.filter((j) => ACTIVE.has(j.state)).length,
       blocked: this.blocked,
+      throttled: this.throttled,
       recovery: { pending: this.recovery.pending, jobs: this.jobs.filter((j) => j.state === 'interrupted').map((j) => j.id) },
       loadWarning: this.loadWarning,
       saveError: this.saveError,
@@ -761,14 +787,41 @@ class QueueManager extends EventEmitter {
     if (!runner) return;
     const limit = this.effectiveParallel();
     const now = this.now();
+    let memoryHeld = false;
     for (const job of [...this.jobs]) {
       if (job.state !== 'queued') continue;
       if (job.retryAt && job.retryAt > now) continue;
       if (this._safePrecheck(job) !== 'go') continue; // pulou, pediu decisão ou falhou: não ocupa vaga
       if (this.runtime.size >= limit) continue; // sem vaga: segue só para checar os próximos
       if (this._outputBusy(job)) continue; // outro job em execução vai gravar o mesmo arquivo: espera
+      if (this._lowMemory()) { memoryHeld = true; continue; } // a primeira exportação nunca espera; as paralelas esperam por RAM livre
       this._start(job, runner);
     }
+    this._setThrottled(memoryHeld);
+  }
+
+  /** Há exportação rodando E a RAM livre está abaixo do mínimo dos Ajustes? (uma nova esperaria) */
+  _lowMemory() {
+    const min = this.settings.minFreeMemoryMb;
+    if (!(min > 0) || this.runtime.size === 0) return false;
+    let free;
+    try { free = this.freeMemoryMb(); } catch { return false; }
+    if (!Number.isFinite(free) || free >= min) return false;
+    this._lastFreeMb = free;
+    return true;
+  }
+
+  _setThrottled(held) {
+    const next = held ? { reason: 'memory', freeMb: this._lastFreeMb, minMb: this.settings.minFreeMemoryMb } : null;
+    const changed = Boolean(next) !== Boolean(this.throttled);
+    this.throttled = next;
+    if (this._throttleTimer) { clearTimeout(this._throttleTimer); this._throttleTimer = null; }
+    if (held && !this.closed) {
+      // a memória livre muda sem avisar: confere de novo em alguns segundos
+      this._throttleTimer = setTimeout(() => { this._throttleTimer = null; this._schedule(); }, this.throttleRecheckMs);
+      if (typeof this._throttleTimer.unref === 'function') this._throttleTimer.unref();
+    }
+    if (changed) this._emitUpdateSoon();
   }
 
   _armRetryTimer() {
@@ -994,7 +1047,8 @@ class QueueManager extends EventEmitter {
       tools: this.getTools(),
       onProgress: (p) => this._onProgress(job, rt, p),
       signal: rt.controller.signal,
-      tmpDir
+      tmpDir,
+      limits: { lowPriority: this.settings.lowPriority, threads: this.settings.encodeThreads } // o executor aplica (prioridade do ffmpeg e núcleos do codificador)
     };
     const running = Promise.resolve().then(() => runner(this._runnerJob(job, rt.mode), opts));
     return new Promise((resolve, reject) => {
@@ -1166,7 +1220,7 @@ class QueueManager extends EventEmitter {
   shutdown() {
     if (this.closed) return;
     this.closed = true;
-    for (const timer of [this._updateTimer, this._retryTimer]) if (timer) clearTimeout(timer);
+    for (const timer of [this._updateTimer, this._retryTimer, this._throttleTimer]) if (timer) clearTimeout(timer);
     const stopped = [];
     for (const job of this.jobs) {
       if (job.state === 'running') {

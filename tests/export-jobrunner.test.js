@@ -580,3 +580,39 @@ test('falha NVENC durante o trabalho: o aviso da queda diz o motivo em portuguê
   assert.match(w.message, /placa/);
   assert.match(w.message, /software/);
 }));
+
+// ------------------------------------------------------------------ limites vindos da fila (Etapa 3)
+
+test('threadArgs: só pede núcleos quando a fila definiu um número maior que zero', () => {
+  const { threadArgs } = require('../src/core/export/jobRunner');
+  assert.deepEqual(threadArgs({ threads: 4 }), ['-threads', '4']);
+  assert.deepEqual(threadArgs({ threads: 0 }), []);
+  assert.deepEqual(threadArgs({}), []);
+  assert.deepEqual(threadArgs(undefined), []);
+  assert.deepEqual(threadArgs({ threads: 2.5 }), [], 'número quebrado não vira argumento');
+});
+
+test('withPriority: com prioridade baixa ligada, chama o observador original e baixa a do processo; desligada, devolve o mesmo observador', () => {
+  const { withPriority } = require('../src/core/export/jobRunner');
+  const seen = [];
+  const original = (info) => seen.push(info.pid);
+  assert.equal(withPriority(original, { lowPriority: false }), original);
+  assert.equal(withPriority(original, undefined), original);
+  const wrapped = withPriority(original, { lowPriority: true });
+  assert.notEqual(wrapped, original);
+  wrapped({ pid: 0 }); // pid inválido: não muda prioridade nenhuma, mas o observador continua sendo chamado
+  assert.deepEqual(seen, [0]);
+  assert.doesNotThrow(() => withPriority(undefined, { lowPriority: true })({ pid: 0 }));
+});
+
+test('com os limites da fila (núcleos e prioridade baixa) o ffmpeg de verdade exporta normalmente e o observador recebe o pid', { skip: skipMedia }, () => withSource(async (dir, src) => {
+  const pids = [];
+  const res = await run(makeJob(dir, src, { baseName: 'limitado' }), { limits: { lowPriority: true, threads: 2 }, onStart: ({ pid }) => pids.push(pid) });
+  assert.equal(res.skipped, false);
+  const info = await fx.probe(res.output);
+  assert.deepEqual([info.width, info.height], [VERTICAL.width, VERTICAL.height]);
+  assert.equal(pids.length, 1);
+  assert.ok(Number.isInteger(pids[0]) && pids[0] > 0);
+  assert.deepEqual(res.warnings, []);
+  assert.ok(noPartIn(path.join(dir, 'saida')));
+}));

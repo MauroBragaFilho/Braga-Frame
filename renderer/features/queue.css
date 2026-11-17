@@ -30,6 +30,8 @@
 #q-pause[aria-pressed="true"]::before { content: 'play_arrow'; }
 .q-summary { color: var(--muted); font-size: var(--fs-label); }
 .q-summary:empty { display: none; }
+.q-resources { margin: 4px 0 0; font-size: var(--fs-label); color: var(--muted); font-variant-numeric: tabular-nums; }
+.q-resources[hidden] { display: none; }
 
 .q-paused { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 10px 16px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--status-info) 12%, var(--card-2)); font-size: 13px; }
 .q-paused[hidden] { display: none; }
