@@ -49,7 +49,7 @@ Esta etapa é, por natureza, de **avaliação e decisão**: quase tudo o que fal
 | SignPath Foundation | grátis | só para projetos de **código aberto**: exige uma licença aberta (decisão 4) |
 | Microsoft Store (MSIX) | taxa única pequena de conta | a Loja assina e dispensa o SmartScreen, mas exige empacotar em MSIX, passar na análise e resolver o FFmpeg (decisão 1) |
 
-**Distribuição.** Hoje não há canal. O mais simples e sem custo é **GitHub Releases** do próprio repositório (instalador + SHA-256 + notas), publicado por um fluxo de CI disparado por etiqueta. Não criei esse fluxo porque **publicar um release é uma ação pública** (e mais ainda sem assinatura): fica para depois da decisão.
+**Distribuição.** O canal é o **GitHub Releases** do próprio repositório, publicado por um fluxo disparado por **tag** (`vX.Y.Z`), no mesmo molde do Braga Digital Studio, mas com **um arquivo só** por versão e um único padrão de nome (`braga-frame-<versão>-windows-x64-setup.exe`), sem artefatos nem cache do Actions. Como usar e o que ainda não foi testado: [publicar-release.md](publicar-release.md). Nenhuma tag foi enviada, então **ainda não existe Release**.
 **Aceite (assinatura):** o instalador e o `Braga Frame.exe` mostram o editor correto nas propriedades do arquivo e o SmartScreen não bloqueia a instalação numa máquina limpa. **Dependência:** decisão 3 e as chaves guardadas como segredos da CI (nunca no repositório).
 
 ## 3. Compatibilidade de hardware

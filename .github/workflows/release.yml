@@ -1,0 +1,135 @@
+name: Release
+
+# Compila o instalador do Windows e publica a Release quando uma TAG de versão é enviada:
+#
+#     git tag v0.2.0
+#     git push origin v0.2.0
+#
+# A versão do app e do instalador é a da tag (sem o "v"): o package.json não precisa mudar.
+# Reenviar a mesma tag (git push --force origin v0.2.0) refaz a Release e troca o arquivo.
+# Pushes na main NÃO publicam nada (só o CI roda).
+#
+# A Release tem UM arquivo, o instalador, no padrão  braga-frame-<versão>-windows-x64-setup.exe  (versão, sistema e arquitetura no nome).
+# Não há arquivo de somas à parte: o GitHub mostra o SHA-256 de cada arquivo ao lado dele, e o texto da Release o repete.
+#
+# Sem lixo no GitHub:
+#   - nenhum artefato do Actions (o instalador vai direto do disco do runner para a Release; nada fica guardado);
+#   - nenhum cache do Actions (a instalação das dependências é refeita a cada release: custa uns minutos, não ocupa espaço);
+#   - a Release só é criada DEPOIS que lint, testes e a compilação passaram; se o envio falhar no meio, o rascunho é apagado.
+# Os registros de execução (logs) ficam pelo prazo do repositório: dá para encurtar em Settings -> Actions -> General.
+#
+# Pré-requisito: nada além do repositório. A Release é criada com o GITHUB_TOKEN do próprio workflow (contents: write só neste job).
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: read
+
+# Uma Release por vez: tags seguidas entram em fila.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0 # histórico completo: confere que a tag é da main e monta a lista de mudanças
+
+      - name: Conferir a tag (vX.Y.Z e commit da main)
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::O commit da tag $GITHUB_REF_NAME não está na main. Só se publica o que está na main."
+            exit 1
+          fi
+          echo "Versão da Release: $VERSION (commit $(git rev-parse --short HEAD))"
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22 # sem `cache:` de propósito (veja o topo do arquivo)
+
+      - uses: ./.github/actions/instalar-ffmpeg
+
+      - run: npm ci
+
+      # só publica o que passa nas mesmas verificações do CI
+      - name: Lint e testes
+        run: |
+          npm run lint
+          npm test
+
+      - name: Aplicar a versão da tag no build (sem commit)
+        run: npm version "$env:VERSION" --no-git-tag-version --allow-same-version
+
+      # Os downloads do Electron e do NSIS falham de vez em quando nos runners: até 3 tentativas.
+      - name: Compilar o instalador
+        shell: pwsh
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false' # ainda sem assinatura digital
+        run: |
+          $code = 1
+          for ($try = 1; $try -le 3; $try++) {
+            Write-Host "== electron-builder: tentativa $try/3 =="
+            npx electron-builder --win nsis --x64 --publish never
+            $code = $LASTEXITCODE
+            if ($code -eq 0) { break }
+            if ($try -lt 3) { Start-Sleep -Seconds 20 }
+          }
+          if ($code -ne 0) { Write-Error "electron-builder falhou após 3 tentativas (código $code)."; exit $code }
+
+      # Cria a Release com o instalador. Reenvio da mesma tag: apaga a Release anterior (a tag fica) e refaz.
+      - name: Publicar a Release
+        shell: bash
+        run: |
+          EXE="dist/installer/braga-frame-${VERSION}-windows-x64-setup.exe"
+          if [ ! -f "$EXE" ]; then
+            echo "::error::Instalador esperado não encontrado: $EXE"
+            ls -la dist/installer || true
+            exit 1
+          fi
+          # o instalador é o único .exe da pasta
+          [ "$(ls dist/installer/*.exe | wc -l)" = "1" ] || { echo "::error::Há mais de um .exe em dist/installer."; exit 1; }
+
+          SHA=$(sha256sum "$EXE" | cut -d' ' -f1)
+          PREV=$(git describe --tags --abbrev=0 --match 'v[0-9]*' "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+          {
+            echo "Instalador para Windows 10 e 11 (64 bits). Instala só para o seu usuário, sem administrador, e **seus projetos são mantidos** ao atualizar."
+            echo
+            echo "O Braga Frame precisa do FFmpeg para abrir e exportar vídeos; o guia do usuário explica como instalar."
+            echo
+            echo "SHA-256: \`$SHA\`"
+            echo
+            echo "## Mudanças"
+            if [ -n "$PREV" ]; then git log --no-merges --pretty='- %s' "$PREV..$GITHUB_REF_NAME"; else git log --no-merges --pretty='- %s' -n 20 "$GITHUB_REF_NAME"; fi
+          } > "$RUNNER_TEMP/notas.md"
+          cat "$RUNNER_TEMP/notas.md"
+
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME já existe: apagando para refazer (a tag fica)."
+            gh release delete "$GITHUB_REF_NAME" --yes
+          fi
+          gh release create "$GITHUB_REF_NAME" "$EXE" --verify-tag --title "Braga Frame $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notas.md"
+          gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[] | "\(.size)\t\(.name)"'
+
+      # O `gh` cria a Release em rascunho, envia o arquivo e só então a publica; se algo cair no meio, não deixa um rascunho para trás.
+      - name: Se falhou, não deixar Release pela metade
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          if [ "$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft 2>/dev/null)" = "true" ]; then
+            gh release delete "$GITHUB_REF_NAME" --yes
+            echo "Rascunho da Release $GITHUB_REF_NAME apagado."
+          fi

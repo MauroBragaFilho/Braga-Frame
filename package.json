@@ -69,6 +69,7 @@
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
+      "artifactName": "braga-frame-${version}-windows-${arch}-setup.${ext}",
       "deleteAppDataOnUninstall": false,
       "shortcutName": "Braga Frame"
     },

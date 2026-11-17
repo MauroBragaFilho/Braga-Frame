@@ -69,6 +69,7 @@ Arquitetura e contratos: [docs/arquitetura.md](docs/arquitetura.md); como acresc
 
 - **Para usar o app** (sem mexer em código): [docs/guia-do-usuario.md](docs/guia-do-usuario.md).
 - **`npm run test:installer`** gera o instalador de duas versões com uma identidade de teste ("Braga Frame Teste", que não toca numa instalação real), instala em silêncio, abre o programa instalado, atualiza por cima, confere que os projetos ficaram e desinstala (Windows; uns 4 minutos, ou 1 com `-- --reuse`). Roda também na CI (job `installer`).
+- **Publicar uma versão**: enviar uma tag (`git tag v0.2.0` e `git push origin v0.2.0`) faz o GitHub Actions compilar o instalador e criar a Release, com um arquivo só e sem artefatos nem cache guardados. Detalhes em [docs/publicar-release.md](docs/publicar-release.md).
 - **Licenças de terceiros**: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) (vai dentro do instalador, com os textos das licenças das fontes). A licença do próprio Braga Frame **ainda não foi definida** (`UNLICENSED`).
 - **Atualização automática, assinatura digital, FFmpeg no instalador e licença**: avaliação e decisões pendentes em [docs/comercial.md](docs/comercial.md). Nada de pagamento ou licenciamento comercial foi implementado.
 - **Suporte**: Configurações > Geral > Suporte copia as informações do computador (sem segredos nem o nome de usuário do Windows) e mostra o registro.

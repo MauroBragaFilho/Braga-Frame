@@ -4,7 +4,7 @@ O Braga Frame transforma gravações e lives em **cortes verticais prontos para 
 
 ## 1. Instalar
 
-1. Baixe o instalador (`Braga Frame Setup X.Y.Z.exe`) e abra. A instalação é só para o seu usuário, **não pede administrador**, e você pode escolher a pasta.
+1. Baixe o instalador (`braga-frame-X.Y.Z-windows-x64-setup.exe`) na página **Releases** do projeto (github.com/MauroBragaFilho/Braga-Frame/releases) e abra. A instalação é só para o seu usuário, **não pede administrador**, e você pode escolher a pasta.
 2. **O aviso do Windows.** Enquanto o instalador não tiver assinatura digital, o Windows pode mostrar "O Windows protegeu o computador". Isso acontece com qualquer programa novo sem assinatura. Só continue se você baixou do endereço oficial do Braga Frame: clique em **Mais informações** e depois em **Executar assim mesmo**.
 3. Abra pelo **Menu Iniciar** (Braga Frame).
 

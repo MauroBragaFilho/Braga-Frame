@@ -28,6 +28,11 @@ const ROOT = path.resolve(__dirname, '..');
 const IDENT = Object.freeze({ appId: 'com.bragadev.bragaframe.instalador-teste', productName: 'Braga Frame Teste', name: 'braga-frame-teste' });
 const UNINSTALL_ROOT = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall';
 
+/** Nome do instalador no padrão da Release (package.json, nsis.artifactName): versão, sistema e arquitetura no nome. */
+function installerFile(outDir, version) {
+  return path.join(outDir, `braga-frame-${version}-windows-x64-setup.exe`);
+}
+
 /** "0.1.0" -> "0.1.1". */
 function bumpPatch(version) {
   const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(version));
@@ -86,7 +91,7 @@ function build(version, outDir) {
   const started = Date.now();
   const r = spawnSync(process.execPath, args, { cwd: ROOT, encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, CSC_IDENTITY_AUTO_DISCOVERY: 'false' } });
   if (r.status !== 0) throw new Error(`electron-builder falhou (versão ${version}):\n${String(r.stdout).slice(-1500)}\n${String(r.stderr).slice(-1500)}`);
-  const file = path.join(outDir, `${IDENT.productName} Setup ${version}.exe`);
+  const file = installerFile(outDir, version);
   if (!fs.existsSync(file)) throw new Error(`O instalador esperado não foi gerado: ${file}`);
   note(`instalador ${version}: ${mb(fs.statSync(file).size)}, gerado em ${Math.round((Date.now() - started) / 1000)} s`);
   return file;
@@ -149,8 +154,8 @@ async function main() {
 
     const out1 = path.join(work, 'build-v1');
     const out2 = path.join(work, 'build-v2');
-    const file1 = path.join(out1, `${IDENT.productName} Setup ${v1}.exe`);
-    const file2 = path.join(out2, `${IDENT.productName} Setup ${v2}.exe`);
+    const file1 = installerFile(out1, v1);
+    const file2 = installerFile(out2, v2);
     const installer1 = reuse && fs.existsSync(file1) ? file1 : build(v1, out1);
     const installer2 = reuse && fs.existsSync(file2) ? file2 : build(v2, out2);
     log(`instaladores gerados (${v1} e ${v2}), com a identidade de teste "${IDENT.productName}"`);
@@ -242,4 +247,4 @@ if (require.main === module) {
   main().then(() => process.exit(0), (err) => { console.error(`\n✖ TESTE DO INSTALADOR FALHOU: ${err.stack || err.message}`); process.exit(1); });
 }
 
-module.exports = { bumpPatch, nsisArgs, parseRegValue, findUninstallKey, startMenuShortcut, defaultDataDirs, IDENT };
+module.exports = { installerFile, bumpPatch, nsisArgs, parseRegValue, findUninstallKey, startMenuShortcut, defaultDataDirs, IDENT };

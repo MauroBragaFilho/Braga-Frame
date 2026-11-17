@@ -12,6 +12,14 @@ test('bumpPatch: soma 1 ao último número; versão fora de X.Y.Z é recusada', 
   for (const bad of ['1.2', 'v1.2.3', '1.2.3-beta', '', undefined]) assert.throws(() => T.bumpPatch(bad), /Versão inesperada/, String(bad));
 });
 
+test('installerFile: o instalador segue o padrão da Release (versão, sistema e arquitetura no nome) que o workflow de release também espera', () => {
+  assert.equal(require('node:path').basename(T.installerFile(require('node:path').join('X:', 'saida'), '0.2.0')), 'braga-frame-0.2.0-windows-x64-setup.exe');
+  const pkg = require('../package.json');
+  assert.equal(pkg.build.nsis.artifactName, 'braga-frame-${version}-windows-${arch}-setup.${ext}', 'o artifactName do package.json é a fonte do padrão');
+  const release = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', '.github', 'workflows', 'release.yml'), 'utf8');
+  assert.ok(release.includes('braga-frame-${VERSION}-windows-x64-setup.exe'), 'o workflow de release procura o mesmo nome');
+});
+
 test('nsisArgs: /S e /D= por último e sem aspas, mesmo com espaços no caminho', () => {
   assert.deepEqual(T.nsisArgs('C:\\Users\\Ana Maria\\inst'), ['/S', '/D=C:\\Users\\Ana Maria\\inst']);
   assert.equal(T.nsisArgs('X:\\a').at(-1).startsWith('/D='), true);
