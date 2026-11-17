@@ -664,4 +664,42 @@ Pedido do plano de evolução (a Alice): não enviar a transcrição inteira à 
 
 **Ajuste às palavras** (`src/core/analysis/words.js`; vale nos dois métodos quando a transcrição foi **gerada** pelo Whisper, que agora guarda `words: [[início, fim, texto], …]` junto das falas; transcrição importada de .srt/.vtt não tem palavras e segue com o ajuste por falas): o **início** vai para a primeira palavra depois de uma pausa > 300 ms (com 100 ms de folga), o **fim** para o encerramento da última palavra da frase + 200 ms, sem invadir a palavra seguinte; no máximo 4 s para cada lado, e só se a duração continua dentro do mínimo e do máximo (senão tenta só um lado, depois o fim recuado para a frase anterior, depois deixa como veio). Também vale para os novos horários da conferência do algoritmo. Transcrições já guardadas **não têm palavras**: gere de novo para ganhar o ajuste.
 
-**Verificado**: testes `analysis-words`, `analysis-candidates` e `analysis-ai-windows` (servidor local que imita a API, áudio e palavras sintéticos): em 80 min com 3 momentos, os pedidos em janelas ficaram em ~24% dos bytes dos pedidos em blocos (−76%), as 3 sugestões contêm o momento inteiro e nenhuma borda cai dentro de uma palavra. **NÃO verificado**: nenhum número em live real (a redução de 60% e a qualidade dos cortes precisam ser medidas com `scripts/eval-analysis.js` na live de referência e com provedor de verdade); o Whisper real nunca alimentou o ajuste às palavras neste ambiente; a cobertura de 35% pode perder momentos que o filtro não vê (conversa calma sem chat, por exemplo): o método de blocos continua disponível para esses vídeos.
+**Verificado**: testes `analysis-words`, `analysis-candidates` e `analysis-ai-windows` (servidor local que imita a API, áudio e palavras sintéticos): em 80 min com 3 momentos, os pedidos em janelas ficaram em ~24% dos bytes dos pedidos em blocos (−76%), as 3 sugestões contêm o momento inteiro e nenhuma borda cai dentro de uma palavra. **NÃO verificado**: a qualidade dos cortes que a IA devolve nas janelas (nenhuma chave de provedor foi usada); o Whisper real nunca alimentou o ajuste às palavras neste ambiente; a cobertura pode perder momentos que nenhum sinal vê (conversa calma sem chat, por exemplo): o método de blocos continua disponível para esses vídeos.
+
+### 18.1 Medição em 17 lives reais (17/11/2026) e o que ela mudou
+
+**Dados**: 17 lives de 3 canais (31 h; LOUD Coringa, Flakes Power e Piuzinho), com a legenda automática do YouTube como transcrição, o áudio já em cache e o gráfico de **"mais reassistidos"** do YouTube como régua (100 faixas por live). Sem chat e sem IA (o chat não foi baixado). Mesma régua e mesmo acaso do estudo anterior (resultado do algoritmo contra o público): o acaso sorteia as MESMAS durações em outros pontos da mesma live (1000 sorteios, semente fixa). Reproduzir: `node scripts/medir-janelas.js --base <pasta> --source local|algorithm|both [--coverage 0.2]` (a pasta não fica no repositório). Os tokens saem das MESMAS funções do app (`buildWindows` e `packCandidateBlocks`).
+
+| Fonte das janelas | Janelas | Vídeo coberto | Tokens (blocos → janelas) | Janelas nos 20% mais reassistidos (acaso 17,8%) | Picos tocados, de 85 (acaso) |
+|---|---|---|---|---|---|
+| Só sinais locais (áudio + risada) | 103 | 5,9% | −78% | 27,2% | 16 (9,9) |
+| **Sugestões do algoritmo** (padrão quando há) | 228 | 13,4% | **−67%** | **28,5%** | **42 (20,0)** |
+
+**O que a medição mostrou**
+1. **O pré-filtro só com áudio e risada é fraco** (como a seção 2 já dizia do volume): toca 16 de 85 picos, quase o que o acaso toca (9,9); a regra "dois tipos de evento" deixa o Piuzinho com 2 janelas em 4 lives. Por isso a fonte principal passou a ser **o próprio algoritmo** (áudio + texto + chat, sem a imagem, que é a parte lenta; reaproveita o áudio já em cache): com 13,4% do vídeo ele toca **42 de 85 picos, o dobro do acaso** (sorte < 0,1%). Os sinais locais completam o que sobrar do orçamento de cobertura (`ALGORITHM_COVERAGE`, 20%); se o algoritmo falhar, valem só eles.
+2. **Seis janelas por chamada desperdiçava a economia**: as instruções e o guia de cortes se repetem em cada chamada. Com 6, a economia caía para −54%; com 20 (o novo padrão, ainda limitado pelo teto de tokens da chamada) ficou em **−67%**, e as chamadas de 79 para 36. A meta de 60% de redução **vale para ~13% do vídeo coberto; com 20% coberto cai para ~57%**: a cobertura é o botão que troca tokens por cobertura de picos (13% → 42 picos e −67%; 20% → 48 picos e −57%).
+3. **Limites do que isso prova**: o gráfico mede o que o público reassiste na live inteira, **não** o que dá um bom short; as lives são de variedades, sem chat e com legenda sem pontuação; e a lista de picos tocados diz onde a IA vai olhar, **não** o que ela vai achar. Falta medir, com um provedor de verdade, quantos cortes bons a IA devolve em janelas contra os blocos (precisão, revocação e F1: Etapa 4).
+4. **Modo Algoritmo + IA**: a conferência das sugestões do algoritmo já existia; com o interruptor ligado a IA deixa de ler o resto da transcrição e só vê os trechos que o algoritmo e os sinais marcaram.
+
+### 18.2 Ajuste às palavras com Whisper de verdade (17/11/2026)
+
+**O que foi medido**: o Whisper real (large-v3-turbo q5, motor CUDA, GTX 1650, **~6 a 8× o tempo real**) transcreveu trechos com `returnWords`; o script sorteou cortes e ajustou o início e o fim de três jeitos (`scripts/medir-corte-palavras.js`). Primeiro resultado: **as palavras do Whisper chegam inteiras até o ajuste** (856 palavras em 8 trechos de 120 s de uma live real; 367 em 3 trechos de 60 s de fala sintetizada), e o ajuste roda sobre elas.
+
+**A medida e o que ela vale**: uma borda "corta voz" quando o nível do áudio (RMS de 20 ms, ±40 ms em volta da borda) passa de −50 dBFS. É uma medida **independente do Whisper** (olha o áudio, não as palavras dele), mas **grosseira**: uma borda entre duas palavras coladas também conta como "voz" (não há silêncio para cair), então ela **superestima** os cortes no meio de palavra e não os distingue das junções. Tentei separar isso com os instantes de palavra do próprio sintetizador do Windows, mas o relógio dele não bateu com o áudio (a calibração falhou) e a verdade por palavra **não foi obtida**; o modo foi removido do script.
+
+| Fonte | Estratégia | Início em voz | Fim em voz |
+|---|---|---|---|
+| **Live real** (6An4gKwgvMU, sem porta de ruído) | sem ajuste | 76,0% | 74,8% |
+| | ajuste às falas (antes) | 78,8% | 77,8% |
+| | ajuste às palavras (novo) | 71,3% | 73,3% |
+| **Fala sintetizada** (silêncio de verdade entre as frases) | sem ajuste | 84,0% | 83,6% |
+| | ajuste às falas (antes) | 68,2% | **97,8%** |
+| | ajuste às palavras (novo) | 69,8% | **50,0%** |
+
+**Como ler**
+1. **Na live real a medida não serve**: 75% das bordas sorteadas já caem em áudio acima de −50 dBFS, porque o microfone não tem porta de ruído (o jogo e a música nunca deixam o nível cair). Os números dessa linha ficam só como registro.
+2. **Na fala sintetizada o fim melhora muito**: o ajuste antigo terminava o corte **exatamente no fim da última palavra da fala**, sem folga (97,8% das bordas ainda dentro do som da última sílaba); o novo termina no fim da frase **+ 200 ms** e metade das bordas cai em silêncio (50,0%; o restante é frase que continua sem pausa dentro de 4 s).
+3. **O início não melhora em relação ao ajuste às falas** (68,2% contra 69,8%): sem pausa > 300 ms nos 4 s anteriores o novo ajuste cai no começo da palavra mais próxima (nunca no meio dela), que é uma junção, e a medida a conta como "voz". Os dois são bem melhores que não ajustar (84%).
+4. **O deslocamento é menor** no novo ajuste (início 1,0 s e fim 1,3 s em média, contra 2,3 s e 2,1 s do ajuste às falas): ele mexe menos nos horários que a IA ou o algoritmo escolheram.
+
+**Não verificado**: que **nenhum** corte caia no meio de uma palavra (o critério de aceite #1 do pedido): a medida acima não separa "no meio de palavra" de "entre palavras coladas", e o Whisper pode errar o tempo de uma palavra em alguns centésimos (o ajuste confia nele). Para provar o critério falta uma verdade por palavra feita à mão ou por alinhamento forçado de outra ferramenta.

@@ -14,6 +14,11 @@
  *   - RISADA marcada na transcrição (`laugh`).
  * Um grupo de eventos próximos vira janela se tem dois tipos de evento (sobreposição) ou um pico isolado forte. O número de janelas é limitado
  * pela fração do vídeo que podem cobrir (padrão 35%): é isso que corta os tokens.
+ *
+ * MEDIDO (17/11/2026, 17 lives reais, 31 h, contra o gráfico de "mais reassistidos" do YouTube; scripts/medir-janelas.js e docs/recursos/analise-ia.md,
+ * seção 18): só áudio + risada é um pré-filtro FRACO (o volume sozinho já era fraco: seção 2). As sugestões do próprio algoritmo (que juntam áudio, imagem,
+ * texto e chat) tocam o dobro dos picos para a mesma cobertura. Por isso `windowsFromSuggestions` existe e é a fonte principal quando há sugestões do
+ * algoritmo; os eventos de áudio, chat e risada completam o que sobrar do orçamento de cobertura.
  */
 
 const { noiseFloor } = require('./audioSignal');
@@ -221,4 +226,53 @@ function buildCandidateWindows({ events, duration }, opts = {}) {
 
 const round1 = (n) => Math.round(n * 10) / 10;
 
-module.exports = { audioEvents, chatEvents, laughEvents, buildCandidateWindows, DEFAULTS };
+const overlapSec = (a0, a1, b0, b1) => Math.max(0, Math.min(a1, b1) - Math.max(a0, b0));
+
+/**
+ * Janelas de 45 a 90 s ao redor de sugestões do algoritmo ({ start, end, relevance? }): a premissa antes (60% da folga), as mais relevantes
+ * primeiro, até o orçamento de cobertura (janela + contexto). Sugestão que cai quase toda em janela já escolhida não vira outra.
+ * @returns {Array<{ id, from, to, score, kinds:['algorithm'], peak }>} em ordem de tempo
+ */
+function windowsFromSuggestions(suggestions, duration, opts = {}) {
+  const o = { ...DEFAULTS, ...opts };
+  const ranked = [...(Array.isArray(suggestions) ? suggestions : [])]
+    .filter((s) => s && Number.isFinite(s.start) && Number.isFinite(s.end) && s.end > s.start)
+    .sort((a, b) => (Number.isFinite(b.relevance) ? b.relevance : 0) - (Number.isFinite(a.relevance) ? a.relevance : 0));
+  const budget = Math.max(0, o.maxCoverage * duration);
+  const out = [];
+  let used = 0;
+  for (const s of ranked) {
+    const span = s.end - s.start;
+    const len = clamp(span + 20, o.minWindowSec, o.maxWindowSec);
+    const from = round1(clamp(s.start - (len - span) * o.beforeShare, 0, Math.max(0, duration - len)));
+    const to = round1(Math.min(duration, from + len));
+    if (to - from < Math.min(o.minWindowSec, duration)) continue;
+    const cost = to - from + 2 * o.contextSec;
+    if (used + cost > budget && out.length >= 1) continue;
+    if (out.some((w) => overlapSec(from, to, w.from, w.to) > 0.5 * (to - from))) continue;
+    used += cost;
+    out.push({ from, to, score: Number.isFinite(s.relevance) ? s.relevance : 0, kinds: ['algorithm'], peak: round1(Number.isFinite(s.peak) ? s.peak : (s.start + s.end) / 2) });
+  }
+  return out.sort((a, b) => a.from - b.from).map((w, i) => ({ id: `w${i + 1}`, ...w }));
+}
+
+/**
+ * Junta duas fontes: as janelas `primary` ficam todas; as de `secondary` só entram se não encostam em nenhuma da primeira e se cabem no que
+ * sobra do orçamento (`maxCoverage` do vídeo, contando o contexto), as de maior pontuação primeiro. Devolve em ordem de tempo, com ids novos.
+ */
+function mergeWindows(primary, secondary, duration, opts = {}) {
+  const o = { ...DEFAULTS, ...opts };
+  const budget = Math.max(0, o.maxCoverage * duration);
+  const cost = (w) => w.to - w.from + 2 * o.contextSec;
+  const out = [...primary];
+  let used = out.reduce((n, w) => n + cost(w), 0);
+  for (const w of [...secondary].sort((a, b) => (b.score || 0) - (a.score || 0))) {
+    if (out.some((x) => overlapSec(w.from, w.to, x.from, x.to) > 0)) continue;
+    if (used + cost(w) > budget) continue;
+    used += cost(w);
+    out.push(w);
+  }
+  return out.sort((a, b) => a.from - b.from).map((w, i) => ({ ...w, id: `w${i + 1}` }));
+}
+
+module.exports = { audioEvents, chatEvents, laughEvents, buildCandidateWindows, windowsFromSuggestions, mergeWindows, DEFAULTS };

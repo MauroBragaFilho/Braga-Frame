@@ -81,7 +81,7 @@
       // modo janelas candidatas: um filtro local (volume do áudio, picos de chat e risadas) marca onde pode haver corte e a IA lê só esses trechos
       ui.aiWindows = el('input', { type: 'checkbox', id: 'anAiWindows', class: 'bds-switch', role: 'switch', onchange: () => { onControlChange(); refreshEstimate(); } });
       ui.aiWindowsRow = switchRow('an-switch-row an-ai-windows', 'anAiWindows', 'Enviar só os trechos candidatos',
-        el('span', { class: 'small' }, 'Um filtro no seu computador (volume, picos de chat e risadas) marca onde pode haver corte e a IA lê só esses trechos, com 15 s de contexto: menos texto enviado, menos chamadas e menos erro de limite. O volume não é enviado. Sem sinais suficientes, usa o método de sempre.'), ui.aiWindows);
+        el('span', { class: 'small' }, 'O algoritmo (áudio, fala e chat, sem ler a imagem) roda no seu computador e marca onde pode haver corte; a IA lê só esses trechos, com 15 s de contexto: menos texto enviado (cerca de 2/3 a menos em lives reais), menos chamadas e menos erro de limite. O volume não é enviado. Em troca, a IA não olha o que nenhum sinal marcou: para ler a live inteira, deixe desligado.'), ui.aiWindows);
       ui.sensitivity = el('input', { type: 'range', id: 'anSensitivity', min: '1', max: '5', step: '1', onchange: onControlChange, oninput: syncOutputs });
       ui.sensitivityOut = el('output', { for: 'anSensitivity', class: 'an-out' });
       ui.perHour = el('input', { type: 'range', id: 'anPerHour', min: '1', max: '20', step: '1', onchange: onControlChange, oninput: syncOutputs });

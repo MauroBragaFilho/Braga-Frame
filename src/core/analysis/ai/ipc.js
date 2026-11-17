@@ -32,6 +32,7 @@ const { AiAnalysisManager } = require('./manager');
 const { SkillStore } = require('./skill');
 const { AnalysisError } = require('../errors');
 const { AnalysisCache, sourceKey } = require('../cache');
+const { analyzeSource } = require('../analyze');
 const { extractAudio } = require('../audioSignal');
 
 function electronSafeStorage() {
@@ -81,6 +82,22 @@ function registerAiChannels(ctx) {
       const data = await extractAudio({ ffmpeg: ctx.tools.ffmpeg, file, duration, signal, onProgress });
       if (!data.partial) { try { cache.set('sig-audio', key, data); } catch { /* cache é opcional */ } }
       return data;
+    }),
+    // o algoritmo SEM a imagem (áudio + transcrição + chat: rápido, e sem ler o vídeo inteiro de novo se o áudio já está no cache) como pré-filtro das
+    // janelas candidatas; na estimativa só roda se o áudio já está em cache (senão o áudio levaria minutos para extrair)
+    algorithm: opts.algorithm || (async ({ file, duration, hasAudio, doc, signal, allowExtract, chatPath, params }) => {
+      const cacheDir = path.join(ctx.paths.cache, 'analysis');
+      if (!allowExtract) {
+        let key;
+        try { key = sourceKey(file); } catch { return null; }
+        if (!new AnalysisCache(cacheDir).get('sig-audio', key)) return null;
+      }
+      if (!ctx.tools || !ctx.tools.ffmpeg) return null;
+      const result = await analyzeSource({
+        file, duration, hasAudio, chatPath: chatPath || null, transcript: { cues: doc.cues },
+        params: { ...(params || {}), signals: { audio: true, image: false, chat: Boolean(chatPath), text: true, calm: false } }
+      }, { ffmpeg: ctx.tools.ffmpeg, cacheDir, signal });
+      return result.suggestions;
     })
   });
   const transcriptManager = new TranscriptManager({

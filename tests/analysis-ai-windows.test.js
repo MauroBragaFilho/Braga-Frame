@@ -204,3 +204,43 @@ test('janelas candidatas: o ajuste às palavras vale também sem o modo (transcr
     for (const [a, b] of s.words) assert.ok(!(a + 1e-3 < x.start && x.start < b - 1e-3), `início ${x.start} corta a palavra ${a}-${b}`);
   }
 });
+
+test('packCandidateBlocks: o padrão agrupa até 20 janelas por chamada (as instruções do pedido não se repetem a cada 6)', () => {
+  const tr = F.makeTranscript({ minutes: 80, moments: MOMENTS });
+  const cands = Array.from({ length: 14 }, (_, i) => ({ id: `w${i + 1}`, from: 100 + i * 300, to: 170 + i * 300, score: 1 }));
+  assert.equal(packCandidateBlocks(cands, tr.cues, tr.duration).length, 1);
+});
+
+test('janelas candidatas com o algoritmo como fonte: as sugestões dele viram as janelas e o resultado diz que fonte foi usada', async (t) => {
+  const s = setup(t, { audio: false });
+  let asked = null;
+  const mock = await F.startMockAi((call) => {
+    if (isPick(call)) return { json: F.chatBody(JSON.stringify({ picks: [] })) };
+    return { json: F.chatBody(windowAnswer(call, s.tr.moments)) };
+  });
+  t.after(() => mock.close());
+  const manager = s.make(mock);
+  manager.deps.algorithm = async (req) => { asked = req; return s.tr.moments.map((m) => ({ start: m.start + 8, end: m.end, relevance: 0.8 })); };
+  const { done } = await run(manager, s.tr, { aiWindows: true });
+  assert.equal(done.ai.windows.mode, 'candidates');
+  assert.equal(done.ai.windows.valid, 3);
+  assert.equal(done.ai.windows.filter.algorithm, 'ok');
+  assert.equal(done.ai.windows.filter.algorithmSuggestions, 3);
+  assert.equal(done.ai.windows.filter.audio, 'unavailable', 'sem o áudio: a fonte principal foi o algoritmo');
+  assert.ok(asked && asked.doc && asked.file === VIDEO.path, 'o algoritmo recebe o vídeo e a transcrição');
+});
+
+test('algoritmo que falha ou não devolve nada: as janelas vêm dos sinais locais (áudio e risadas) e o motivo fica no resultado', async (t) => {
+  const s = setup(t);
+  const mock = await F.startMockAi((call) => {
+    if (isPick(call)) return { json: F.chatBody(JSON.stringify({ picks: [] })) };
+    return { json: F.chatBody(windowAnswer(call, s.tr.moments)) };
+  });
+  t.after(() => mock.close());
+  const manager = s.make(mock);
+  manager.deps.algorithm = async () => { throw new Error('quebrou'); };
+  const { done } = await run(manager, s.tr, { aiWindows: true });
+  assert.equal(done.ai.windows.mode, 'candidates');
+  assert.equal(done.ai.windows.filter.algorithm, 'failed');
+  assert.equal(done.suggestions.length, 3, 'o filtro local ainda acha os 3 momentos');
+});

@@ -120,8 +120,8 @@ class AiAnalysisManager extends EventEmitter {
    * Janelas candidatas (modo opcional): o filtro local de áudio, chat e risadas. Nunca lança por falta de sinal: sem janelas suficientes
    * devolve { windows: [], reason } e quem chama volta ao método de blocos. `allowExtract:false` (estimativa) só usa o áudio já em cache.
    */
-  async _candidateWindows({ doc, chat, duration, hasAudio, file, signal, allowExtract, onProgress }) {
-    const found = await findCandidateWindows({ doc, chat, duration, hasAudio, file, audioDb: this.deps.audioDb, signal, allowExtract, onProgress });
+  async _candidateWindows({ doc, chat, duration, hasAudio, file, chatPath = null, params = null, signal, allowExtract, onProgress }) {
+    const found = await findCandidateWindows({ doc, chat, duration, hasAudio, file, chatPath, params, audioDb: this.deps.audioDb, algorithm: this.deps.algorithm, signal, allowExtract, onProgress });
     if (!found.enough) {
       const why = found.info.windows ? `só ${found.info.windows} janela(s) candidata(s)` : 'nenhum trecho candidato (sem picos de áudio, de chat nem risadas)';
       return { windows: [], info: found.info, reason: `O filtro local achou ${why}; foi usado o método de blocos, que lê a transcrição inteira.` };
@@ -145,7 +145,7 @@ class AiAnalysisManager extends EventEmitter {
     let windowsInfo = null;
     if (aiWindows === true) {
       const hasAudio = true;
-      const found = await this._candidateWindows({ doc, chat, duration: source.duration || doc.source.duration, hasAudio, file, signal: null, allowExtract: false });
+      const found = await this._candidateWindows({ doc, chat, duration: source.duration || doc.source.duration, hasAudio, file, chatPath, signal: null, allowExtract: false });
       if (found.windows.length) {
         const packed = packCandidateBlocks(found.windows, doc.cues, source.duration || doc.source.duration, { maxInputTokens: limits.maxInputTokens, chat, profileTokens: estimateTokens(blockText) + skill.extraTokens });
         const winEst = estimate(packed, { candidatesPerBlock: Math.max(1, ...packed.map((b) => b.packed.length)), pickExtraTokens: estimateTokens(pickText) + skill.extraTokens });
@@ -255,7 +255,7 @@ class AiAnalysisManager extends EventEmitter {
       if (aiWindows) {
         progress({ p: 0.01, stage: 'prepare', message: 'Procurando os trechos candidatos (áudio, chat e risadas)…' });
         const found = await this._candidateWindows({
-          doc, chat, duration, hasAudio, file: source.path, signal: job.abort.signal, allowExtract: true,
+          doc, chat, duration, hasAudio, file: source.path, chatPath, params, signal: job.abort.signal, allowExtract: true,
           onProgress: (p) => progress({ p: 0.01 + 0.07 * Math.min(1, Math.max(0, Number(p) || 0)), stage: 'prepare', message: 'Lendo o volume do áudio…', stageP: p })
         });
         windowsInfo = found.info;

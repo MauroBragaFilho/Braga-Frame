@@ -91,3 +91,47 @@ test('janelas: respeitam o início e o fim do vídeo', () => {
   const wins = buildCandidateWindows({ events: [{ t: 2, z: 5, kind: 'audio', from: 2, to: 3 }, { t: 598, z: 5, kind: 'audio', from: 598, to: 599 }], duration: 600 });
   for (const w of wins) { assert.ok(w.from >= 0); assert.ok(w.to <= 600); assert.ok(w.to - w.from >= 45); }
 });
+
+const { windowsFromSuggestions, mergeWindows } = require('../src/core/analysis/candidates');
+
+test('windowsFromSuggestions: 45 a 90 s com a premissa antes, as mais relevantes primeiro, até o orçamento de cobertura', () => {
+  const sugs = [
+    { start: 1000, end: 1030, relevance: 0.9 }, { start: 2000, end: 2025, relevance: 0.5 }, { start: 3000, end: 3040, relevance: 0.7 },
+    { start: 4000, end: 4030, relevance: 0.3 }
+  ];
+  const all = windowsFromSuggestions(sugs, 7200, { maxCoverage: 1 });
+  assert.equal(all.length, 4);
+  for (const w of all) { assert.ok(w.to - w.from >= 45 && w.to - w.from <= 90, `len ${w.to - w.from}`); assert.deepEqual(w.kinds, ['algorithm']); }
+  assert.deepEqual(all.map((w) => w.id), ['w1', 'w2', 'w3', 'w4'], 'em ordem de tempo, ids novos');
+  const first = all[0];
+  assert.ok(first.from < 1000 && first.to > 1030, 'a janela envolve a sugestão');
+  assert.ok(1000 - first.from > first.to - 1030, 'mais folga antes (a premissa) do que depois');
+  // orçamento de 2% de 7200 s = 144 s de janela + contexto: cabe só a de maior relevância (e uma segunda não)
+  const tight = windowsFromSuggestions(sugs, 7200, { maxCoverage: 0.02 });
+  assert.equal(tight.length, 1);
+  assert.ok(tight[0].from < 1000 && tight[0].to > 1030, 'ficou a mais relevante (0,9)');
+});
+
+test('windowsFromSuggestions: sugestão dentro de janela já escolhida não vira outra; bordas do vídeo; entrada ruim não quebra', () => {
+  const near = windowsFromSuggestions([{ start: 500, end: 530, relevance: 0.9 }, { start: 505, end: 533, relevance: 0.8 }], 3600, { maxCoverage: 1 });
+  assert.equal(near.length, 1);
+  const edge = windowsFromSuggestions([{ start: 2, end: 20, relevance: 1 }, { start: 3590, end: 3599, relevance: 1 }], 3600, { maxCoverage: 1 });
+  for (const w of edge) { assert.ok(w.from >= 0 && w.to <= 3600 && w.to - w.from >= 45); }
+  assert.deepEqual(windowsFromSuggestions(null, 100), []);
+  assert.deepEqual(windowsFromSuggestions([{ start: 'x' }, null, { start: 5, end: 4 }], 100), []);
+});
+
+test('mergeWindows: a primeira fonte fica inteira; a segunda só entra sem encostar e dentro do que sobra do orçamento', () => {
+  const primary = [{ id: 'a', from: 100, to: 160, score: 1 }];
+  const secondary = [
+    { id: 'b', from: 150, to: 200, score: 5 }, // encosta na primeira: fora
+    { id: 'c', from: 1000, to: 1060, score: 2 },
+    { id: 'd', from: 2000, to: 2060, score: 3 }
+  ];
+  const full = mergeWindows(primary, secondary, 7200, { maxCoverage: 1 });
+  assert.deepEqual(full.map((w) => [w.from, w.to]), [[100, 160], [1000, 1060], [2000, 2060]]);
+  assert.deepEqual(full.map((w) => w.id), ['w1', 'w2', 'w3']);
+  // orçamento para a primeira (90 s com contexto) e mais UMA (60 + 30): a de maior pontuação (d) ganha
+  const tight = mergeWindows(primary, secondary, 1000, { maxCoverage: 0.18 });
+  assert.deepEqual(tight.map((w) => w.from), [100, 2000]);
+});

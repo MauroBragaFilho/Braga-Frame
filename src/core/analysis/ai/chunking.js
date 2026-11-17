@@ -81,11 +81,12 @@ function buildWindows(cues, duration, { windowSec = DEFAULT_WINDOW_SEC, maxInput
 
 /**
  * Modo JANELAS CANDIDATAS: junta as janelas marcadas pelo filtro local (candidates.js) em BLOCOS de chamada, cada um dentro do teto de
- * tokens de entrada e com no máximo `maxPerCall` janelas (poucas chamadas: menos 429 e menos instruções repetidas). Cada janela leva
+ * tokens de entrada e com no máximo `maxPerCall` janelas (poucas chamadas: menos 429 e menos instruções repetidas). Medido em 17 lives reais: com 6
+ * por chamada a economia de tokens caía de 67% para 54% (as instruções e o guia de cortes se repetem em CADA chamada); com 20, a conta fecha. Cada janela leva
  * `contextSec` de fala antes e depois do trecho marcado.
  * @returns {Array<{ index, total, from, to, lines:string[], chatLines:string[], tokens:number, packed:object[] }>} (mesma forma de buildWindows)
  */
-function packCandidateBlocks(candidates, cues, duration, { maxInputTokens = 24000, chat = null, profileTokens = 0, contextSec = 15, maxPerCall = 6 } = {}) {
+function packCandidateBlocks(candidates, cues, duration, { maxInputTokens = 24000, chat = null, profileTokens = 0, contextSec = 15, maxPerCall = 20 } = {}) {
   const extra = Math.max(0, Math.round(Number(profileTokens) || 0));
   const budget = Math.max(1000, maxInputTokens - OVERHEAD_TOKENS - extra - 400);
   const items = [...candidates].sort((a, b) => a.from - b.from).map((w) => {
