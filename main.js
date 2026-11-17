@@ -7,6 +7,8 @@ const { createBfModule } = require('./src/host');
 const { parseCli } = require('./src/host/cli');
 const { setupSingleInstance, focusWindow } = require('./src/singleInstance');
 const { watchWindow } = require('./src/windowControls');
+const { createFileLogger, installCrashHandlers } = require('./src/logging');
+const { collectDiagnostics, formatDiagnostics } = require('./src/diagnostics');
 
 let win = null;
 // Os handlers do processo principal vivem no módulo (src/host): o app próprio o usa como o Braga Digital Studio o usaria.
@@ -51,12 +53,19 @@ function onSecondInstance({ argv }) {
 // (veja src/singleInstance.js)
 if (setupSingleInstance(app, onSecondInstance)) {
   app.whenReady().then(() => {
+    const logger = createFileLogger({ dir: path.join(app.getPath('userData'), 'logs') });
+    installCrashHandlers(logger);
+    logger.info(formatDiagnostics(collectDiagnostics({
+      version: app.getVersion(), userDataDir: app.getPath('userData'), isPackaged: app.isPackaged
+    })));
+    app.on('render-process-gone', (_event, _contents, details) => logger.error('render-process-gone:', details));
+    app.on('child-process-gone', (_event, details) => logger.warn('child-process-gone:', details));
     bf = createBfModule({
       ipcMain, app, dialog, shell,
       getWindow: () => win,
       userDataDir: app.getPath('userData'),
       windowControls: true, // janela sem moldura: a interface desenha minimizar/maximizar/fechar
-      log: console
+      log: logger
     });
     bf.register();
     for (const request of startupRequests.splice(0)) bf.requestOpen(request);

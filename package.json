@@ -11,12 +11,54 @@
     "test:e2e": "node scripts/run-e2e.js",
     "test:network": "node scripts/run-network-tests.js",
     "test:perf": "node scripts/run-perf-tests.js",
-    "lint": "eslint . --ignore-pattern \".tmp/**\""
+    "lint": "eslint . --ignore-pattern \".tmp/**\"",
+    "dist": "electron-builder --win nsis",
+    "dist:dir": "electron-builder --win --dir"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
     "electron": "^43.7.7",
+    "electron-builder": "^26.18.0",
     "eslint": "^9.39.5",
     "globals": "^17.13.0"
+  },
+  "author": "Mauro Braga Filho",
+  "build": {
+    "appId": "com.bragadev.bragaframe",
+    "productName": "Braga Frame",
+    "copyright": "Copyright © Mauro Braga Filho",
+    "directories": {
+      "output": "dist/installer",
+      "buildResources": "assets"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "renderer/**/*",
+      "assets/**/*",
+      "package.json",
+      "!**/*.test.js"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
+      "shortcutName": "Braga Frame"
+    },
+    "publish": null
   }
 }

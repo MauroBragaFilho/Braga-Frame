@@ -19,7 +19,7 @@ npm install
 npm start
 ```
 
-No Windows, dá para usar o **`BF_Menu.bat`** (dois cliques): menu com **1** rodar o aplicativo (instala as dependências na primeira vez), **2** testes, **3** testes e2e, **4** lint e **0** sair. Ele precisa do Node.js instalado e não gera instalador: o empacotamento ainda não existe no Braga Frame.
+No Windows, dá para usar o **`BF_Menu.bat`** (dois cliques): menu com **1** rodar o aplicativo (instala as dependências na primeira vez), **2** testes, **3** testes e2e, **4** lint e **0** sair. Ele precisa do Node.js instalado. Para gerar o instalador do Windows (NSIS, ainda sem assinatura digital) use `npm run dist`: o arquivo sai em `dist/installer/`; `npm run dist:dir` gera só a pasta descompactada para teste. Os dados do usuário ficam em `%APPDATA%\braga-frame` (atualizar ou desinstalar não os apaga) e o log, em `logs/bragaframe.log` nessa pasta. O FFmpeg ainda não vai dentro do instalador: precisa estar no PATH ou em `CORTE_FFMPEG`.
 
 1. **Novo projeto** (botão da **Início** e de **Projetos**): escolha de onde vem o vídeo (**Arquivos locais**, **YouTube**, **Twitch** ou **Gravações do OBS**). Em Arquivos locais, arraste o arquivo para a janela ou clique na área de soltar (MP4, MKV, MOV, WebM, AVI, FLV, TS); o botão **Abrir vídeo** do cabeçalho faz o mesmo de qualquer tela. Sem vídeo aberto, **Início**, **Projetos** (com o **Novo projeto**), **Exportações** e **Configurações** (**Preferências** e **Ferramentas**) já funcionam, e o app abre na **Início**; só o item **Cortes** espera um vídeo.
 2. Posicione o player, use **Marcar início / Marcar fim** (ou digite `m:ss.d`; atalhos `I` e `O`) e **Ver trecho**; **Salvar corte**.

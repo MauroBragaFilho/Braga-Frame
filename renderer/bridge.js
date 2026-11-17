@@ -66,7 +66,7 @@
 
   function post(message) {
     // '*' porque a página que embute pode ter origem opaca (file:); o destino é sempre window.parent, nunca outra janela
-    window.parent.postMessage({ source: SOURCE, version: VERSION, ...message }, '*');
+    window.parent.postMessage({ source: SOURCE, version: VERSION, ...message }, expectedOrigin || '*');
   }
 
   function rejectAll(error) {
