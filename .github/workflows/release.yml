@@ -12,8 +12,14 @@ name: Release
 # A Release tem UM arquivo, o instalador, no padrão  braga-frame-<versão>-windows-x64-setup.exe  (versão, sistema e arquitetura no nome).
 # Não há arquivo de somas à parte: o GitHub mostra o SHA-256 de cada arquivo ao lado dele, e o texto da Release o repete.
 #
+# Assinatura digital (SignPath Foundation, gratuita para código aberto; passo a passo em docs/assinatura-signpath.md): liga SOZINHA quando a
+# variável do repositório SIGNPATH_ORGANIZATION_ID existe. Sem ela o instalador sai sem assinatura, como a v0.1.0, e o log avisa. Com ela: o instalador
+# sobe como artefato (a SignPath o lê), é assinado depois de uma APROVAÇÃO MANUAL no portal da SignPath, a assinatura é conferida e o arquivo ASSINADO é
+# o que vai para a Release (o SHA-256 do texto é o do arquivo assinado).
+#
 # Sem lixo no GitHub:
-#   - nenhum artefato do Actions (o instalador vai direto do disco do runner para a Release; nada fica guardado);
+#   - nenhum artefato do Actions (o instalador vai direto do disco do runner para a Release; só com a assinatura ligada ele sobe, por 1 dia, para a
+#     SignPath ler, e é apagado logo depois da assinatura);
 #   - nenhum cache do Actions (a instalação das dependências é refeita a cada release: custa uns minutos, não ocupa espaço);
 #   - a Release só é criada DEPOIS que lint, testes e a compilação passaram; se o envio falhar no meio, o rascunho é apagado.
 # Os registros de execução (logs) ficam pelo prazo do repositório: dá para encurtar em Settings -> Actions -> General.
@@ -36,9 +42,10 @@ concurrency:
 jobs:
   release:
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 360 # o máximo dos runners hospedados: com a assinatura ligada, a espera pela aprovação manual cabe aqui
     permissions:
       contents: write
+      actions: write # só para apagar o artefato do instalador sem assinatura depois da assinatura
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -78,7 +85,7 @@ jobs:
       - name: Compilar o instalador
         shell: pwsh
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false' # ainda sem assinatura digital
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false' # o electron-builder não assina: quem assina é a SignPath, nos passos abaixo
         run: |
           $code = 1
           for ($try = 1; $try -le 3; $try++) {
@@ -90,9 +97,60 @@ jobs:
           }
           if ($code -ne 0) { Write-Error "electron-builder falhou após 3 tentativas (código $code)."; exit $code }
 
+      # ---- Assinatura digital (SignPath Foundation): só roda com a variável SIGNPATH_ORGANIZATION_ID configurada ----
+      - name: Assinatura desligada (sem SIGNPATH_ORGANIZATION_ID)
+        if: ${{ vars.SIGNPATH_ORGANIZATION_ID == '' }}
+        shell: bash
+        run: |
+          echo "::warning::SIGNPATH_ORGANIZATION_ID não está configurada: o instalador sai SEM assinatura digital (docs/assinatura-signpath.md)."
+
+      # A SignPath lê o instalador de um artefato do Actions, com nome fixo (a configuração do artefato no portal o espera: .signpath/artifact-configuration.xml).
+      - name: Preparar o instalador para a assinatura
+        if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path unsigned | Out-Null
+          Copy-Item "dist/installer/braga-frame-$env:VERSION-windows-x64-setup.exe" "unsigned/braga-frame-setup.exe"
+
+      - name: Enviar o instalador sem assinatura (só a SignPath o lê; apagado logo depois)
+        if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
+        id: upload-unsigned
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: installer-unsigned
+          path: unsigned/braga-frame-setup.exe
+          retention-days: 1 # o mínimo; o passo "Apagar o artefato" o remove antes disso
+
+      - name: Assinar na SignPath (espera a aprovação manual e baixa o assinado)
+        if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'braga-frame' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY || 'release-signing' }}
+          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 18000 # 5 h para você aprovar; passando disso o workflow falha e nada é publicado
+          output-artifact-directory: signed
+
+      # Só segue se a assinatura for VÁLIDA; o instalador assinado substitui o sem assinatura (é ele que vai para a Release).
+      - name: Conferir a assinatura e usar o instalador assinado
+        if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
+        shell: pwsh
+        run: |
+          $signed = Join-Path $PWD 'signed/braga-frame-setup.exe'
+          if (-not (Test-Path $signed)) { Write-Error "Instalador assinado não encontrado em signed/."; exit 1 }
+          $sig = Get-AuthenticodeSignature $signed
+          Write-Host "Assinatura: $($sig.Status) | $($sig.SignerCertificate.Subject)"
+          if ($sig.Status -ne 'Valid') { Write-Error "Assinatura inválida: $($sig.Status)"; exit 1 }
+          Copy-Item $signed "dist/installer/braga-frame-$env:VERSION-windows-x64-setup.exe" -Force
+
       # Cria a Release com o instalador. Reenvio da mesma tag: apaga a Release anterior (a tag fica) e refaz.
       - name: Publicar a Release
         shell: bash
+        env:
+          SIGNED: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
         run: |
           EXE="dist/installer/braga-frame-${VERSION}-windows-x64-setup.exe"
           if [ ! -f "$EXE" ]; then
@@ -110,6 +168,7 @@ jobs:
             echo
             echo "O Braga Frame precisa do FFmpeg para abrir e exportar vídeos; o guia do usuário explica como instalar."
             echo
+            if [ "$SIGNED" = "true" ]; then echo "Instalador assinado digitalmente (certificado da SignPath Foundation)."; echo; fi
             echo "SHA-256: \`$SHA\`"
             echo
             echo "## Mudanças"
@@ -123,6 +182,12 @@ jobs:
           fi
           gh release create "$GITHUB_REF_NAME" "$EXE" --verify-tag --title "Braga Frame $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notas.md"
           gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[] | "\(.size)\t\(.name)"'
+
+      # Sem lixo: o artefato do instalador sem assinatura (só existe com a assinatura ligada) sai daqui, dê certo ou errado.
+      - name: Apagar o artefato do instalador sem assinatura
+        if: ${{ always() && steps.upload-unsigned.outputs.artifact-id != '' }}
+        shell: bash
+        run: gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/${{ steps.upload-unsigned.outputs.artifact-id }}" || echo "(não consegui apagar o artefato; ele expira em 1 dia)"
 
       # O `gh` cria a Release em rascunho, envia o arquivo e só então a publica; se algo cair no meio, não deixa um rascunho para trás.
       - name: Se falhou, não deixar Release pela metade

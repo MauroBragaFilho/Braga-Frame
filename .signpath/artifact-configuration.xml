@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Configuração de artefato do SignPath para o Braga Frame (cole no portal: Project -> Artifact Configurations; guia: docs/assinatura-signpath.md).
+  O actions/upload-artifact empacota o arquivo num ZIP, por isso a raiz é <zip-file>.
+  O workflow (.github/workflows/release.yml) envia o instalador com este nome FIXO (braga-frame-setup.exe) e depois o devolve ao nome com a versão.
+  Assina só o instalador NSIS (o app dentro dele fica comprimido no instalador e não pode ser assinado à parte).
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <pe-file path="braga-frame-setup.exe">
+      <authenticode-sign/>
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

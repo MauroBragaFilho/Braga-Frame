@@ -83,6 +83,10 @@ Copyright (C) 2026 Mauro Braga Filho
 
 Os componentes de terceiros e as licenças deles estão em [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Ainda **não há política para contribuições de terceiros** (DCO ou acordo de contribuição): combine antes de enviar código.
 
+## Assinatura de código
+
+O instalador **ainda não é assinado** (a v0.1.0 saiu sem assinatura, e o Windows pode mostrar o aviso do SmartScreen). O projeto está se preparando para a assinatura gratuita da SignPath Foundation, que atende projetos de código aberto: a [política de assinatura](CODE_SIGNING_POLICY.md) e o guia ([docs/assinatura-signpath.md](docs/assinatura-signpath.md)) já estão no repositório. Depois da aprovação, esta seção passará a dizer: *Free code signing provided by SignPath.io, certificate by SignPath Foundation.*
+
 ## Estado do projeto
 
 Todas as telas estão implementadas e verificadas com ffmpeg e Electron reais. Requisitos confirmados, **decisões provisórias a confirmar com a Liz** e o estado real de cada etapa: [docs/requisitos-e-etapas.md](docs/requisitos-e-etapas.md).

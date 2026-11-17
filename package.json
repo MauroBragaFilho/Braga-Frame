@@ -24,6 +24,11 @@
     "globals": "^17.13.0"
   },
   "author": "Mauro Braga Filho",
+  "homepage": "https://github.com/MauroBragaFilho/Braga-Frame",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MauroBragaFilho/Braga-Frame.git"
+  },
   "build": {
     "appId": "com.bragadev.bragaframe",
     "productName": "Braga Frame",

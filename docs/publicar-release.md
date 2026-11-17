@@ -23,7 +23,7 @@ O padrão do nome vem de `build.nsis.artifactName` no `package.json`; `tests/ins
 
 | O quê | Como |
 |---|---|
-| Artefatos do Actions | não há: o instalador vai do disco do runner direto para a Release |
+| Artefatos do Actions | não há: o instalador vai do disco do runner direto para a Release. **Só com a assinatura ligada** ele sobe como artefato (a SignPath precisa lê-lo), por 1 dia, e um passo o apaga logo depois, dê certo ou errado |
 | Cache do Actions | o workflow de release não usa (as dependências são baixadas de novo a cada versão: custa uns minutos, não ocupa espaço) |
 | Release pela metade | a Release só é criada depois do lint, dos testes e da compilação; se o envio cair no meio, o rascunho é apagado |
 | Logs das execuções | ficam pelo prazo do repositório; para encurtar: Settings > Actions > General |
@@ -40,6 +40,6 @@ O aviso de versão nova ([atualizacao.md](atualizacao.md)) lê a **última Relea
 
 ## O que ainda não existe
 
-- **Assinatura digital**: o instalador sai sem assinatura. O ponto de encaixe é entre "Compilar o instalador" e "Publicar a Release" (o BDS assina pela SignPath; veja `release-bds.yml` no repositório dele). A licença de código aberto (GPL v3 ou posterior) já existe; falta pedir a inscrição na SignPath Foundation, que pede um projeto já lançado, então **a primeira Release (sem assinatura) vem antes** ([comercial.md](comercial.md), decisão 3).
+- **Assinatura digital**: o instalador da v0.1.0 saiu sem assinatura. Os passos de assinatura (SignPath Foundation) **já estão no `release.yml`**, entre "Compilar o instalador" e "Publicar a Release", e ligam sozinhos quando a variável `SIGNPATH_ORGANIZATION_ID` existe no repositório; sem ela o workflow segue publicando sem assinar. Falta a inscrição e a aprovação do projeto na SignPath: [assinatura-signpath.md](assinatura-signpath.md). Com a assinatura ligada, o artefato que a SignPath lê dura 1 dia e é apagado depois, e o workflow espera a sua aprovação manual (até 5 horas).
 - **Teste do instalador publicado**: o job `installer` do CI testa um instalador gerado do mesmo código e da mesma configuração, com outra identidade; o arquivo que vai para a Release não é instalado nem aberto pelo workflow.
-- **Execução real do workflow**: ele foi escrito e validado só quanto à sintaxe e aos trechos que dá para rodar localmente (nome do instalador, texto da Release). A primeira tag enviada é o primeiro teste de verdade.
+- **Execução real do workflow**: rodou de verdade na **v0.1.0** (lint, testes, compilação e Release, em cerca de 10 minutos, com 0 artefatos e sem cache). **A parte da assinatura nunca rodou**: só foi validada na sintaxe, em testes de texto (`tests/release-workflow.test.js`) e conferindo que as entradas da ação da SignPath existem na versão fixada.
