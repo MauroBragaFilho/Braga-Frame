@@ -172,6 +172,8 @@ Canais (domínio `analysis:`): `aiState`, `aiSave`, `aiTest`, `aiAccept`, `aiEst
 
 ## 12. Conjunto de referência e como medir
 
+> **Etapa 4 (17/11/2026)**: a estratégia completa de avaliação (amostras por categoria, gabarito humano, precisão, revocação, F1, repetidas, tempo de análise e de revisão, comparação com o MESMO orçamento de sugestões) está em [../avaliacao.md](../avaliacao.md); `scripts/benchmark-analise.js` compara motores por categoria e `scripts/exportar-gabarito.js` tira o gabarito e a taxa de aprovação das decisões do usuário. Esta seção segue valendo para a live de referência.
+
 Os 15 cortes escolhidos à mão para a live `NtadPdBszjk` (campos `s`/`e` em segundos, `t`, `c`, `r` de 0 a 1, `why`) servem de gabarito. Os 8 primeiros (relevância ≥ 0,78) são os que o autor defenderia como "melhores". **O gabarito, a transcrição e o chat são conteúdo de terceiros e NÃO ficam no repositório**: o script lê os caminhos por parâmetro ou variável de ambiente.
 
 ```

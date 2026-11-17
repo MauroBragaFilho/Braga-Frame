@@ -66,31 +66,7 @@ function normalizeSuggestions(raw, run) {
   return list.map((s, i) => ({ order: i, start: num(s.start), end: num(s.end), relevance: num(s.relevance), title: String(s.title || '') })).filter((s) => s.start !== null && s.end !== null && s.end > s.start);
 }
 
-function overlap(a0, a1, b0, b1) { return Math.max(0, Math.min(a1, b1) - Math.max(a0, b0)); }
-
-/** A sugestão bate com o item do gabarito? */
-function matches(sug, gold, { tolerance = 5, overlapFraction = 0.5 } = {}) {
-  if (Math.abs(sug.start - gold.start) <= tolerance) return true;
-  const ov = overlap(sug.start, sug.end, gold.start, gold.end);
-  return ov > 0 && ov / Math.min(sug.end - sug.start, gold.end - gold.start) >= overlapFraction;
-}
-
-/** Pareamento guloso 1:1: os pares mais próximos (pelo início) primeiro. Devolve [{ g, s }]. */
-function pairOneToOne(suggestions, gold, opts) {
-  const candidates = [];
-  for (const g of gold) for (const s of suggestions) if (matches(s, g, opts)) candidates.push({ g, s, d: Math.abs(s.start - g.start) });
-  candidates.sort((a, b) => a.d - b.d);
-  const usedG = new Set();
-  const usedS = new Set();
-  const pairs = [];
-  for (const c of candidates) {
-    if (usedG.has(c.g) || usedS.has(c.s)) continue;
-    usedG.add(c.g);
-    usedS.add(c.s);
-    pairs.push(c);
-  }
-  return pairs;
-}
+const { matches, pairOneToOne, f1Of, duplicity } = require('../src/core/analysis/metrics');
 
 const ratio = (a, b) => (b > 0 ? a / b : null);
 const mean = (xs) => (xs.length ? xs.reduce((n, x) => n + x, 0) / xs.length : null);
@@ -132,6 +108,8 @@ function evaluate(suggestionsRaw, goldRaw, opts = {}) {
     precisionApprox: ratio(hitSugs.length, sugs.length),
     precisionHits: hitSugs.length,
     precisionOneToOne: ratio(pairs.length, sugs.length),
+    f1OneToOne: f1Of(ratio(pairs.length, sugs.length), ratio(pairs.length, gold.length)),
+    duplicity: duplicity(sugs),
     pairs: pairs.length,
     meanStartDistanceSec: mean(pairs.map((p) => Math.abs(p.s.start - p.g.start))),
     meanEndDistanceSec: mean(pairs.map((p) => Math.abs(p.s.end - p.g.end))),
@@ -207,6 +185,7 @@ function format(r) {
     `Gabarito: ${r.gold} cortes · Sugestões: ${r.suggestions} · bate = início até ${r.tolerance} s de diferença ou sobreposição >= ${Math.round(r.overlapFraction * 100)}%`,
     `Revocação: ${pct(r.recall)} (${r.recallHits}/${r.gold}) · 1:1: ${pct(r.recallOneToOne)} (${r.pairs}/${r.gold})`,
     `Precisão aproximada: ${pct(r.precisionApprox)} (${r.precisionHits}/${r.suggestions}) · 1:1: ${pct(r.precisionOneToOne)} (${r.pairs}/${r.suggestions})`,
+    `F1 1:1: ${pct(r.f1OneToOne)} · sugestões repetidas (mesmo momento, a menos relevante): ${r.duplicity.repeated}/${r.suggestions} (${pct(r.duplicity.rate)})`,
     `Distância média nos pares 1:1: início ${sec(r.meanStartDistanceSec)}, fim ${sec(r.meanEndDistanceSec)}`,
     `Revocação nos "melhores" (relevância >= 0,78 no gabarito): ${pct(r.recallBest.recall)} (${r.recallBest.hits}/${r.recallBest.total})`,
     `Revocação usando só as ${r.topGold.n} sugestões mais relevantes: ${pct(r.topGold.recall)} (${r.topGold.hits}/${r.gold})`
