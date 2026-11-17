@@ -8,21 +8,27 @@ on:
 jobs:
   test:
     runs-on: windows-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - name: Instalar FFmpeg (os testes de mídia usam o de verdade)
-        run: choco install ffmpeg --no-progress -y
-      - run: npm ci
-      - name: Diagnóstico icacls (temporário)
+      # FFmpeg de verdade (não o atalho do Chocolatey: matar o atalho deixa o ffmpeg real rodando e os testes de cancelamento esperam minutos)
+      - name: Instalar FFmpeg
         shell: pwsh
         run: |
-          $f = Join-Path $env:RUNNER_TEMP 'x.json'; Set-Content $f '{}'
-          Write-Host "USERNAME=$env:USERNAME"
-          icacls $f /inheritance:r /grant:r "$($env:USERNAME):F"; Write-Host "exit=$LASTEXITCODE"
-          icacls $f
+          $zip = Join-Path $env:RUNNER_TEMP 'ffmpeg.zip'
+          Invoke-WebRequest 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip' -OutFile $zip
+          Expand-Archive $zip -DestinationPath (Join-Path $env:RUNNER_TEMP 'ffmpeg')
+          $bin = (Get-ChildItem (Join-Path $env:RUNNER_TEMP 'ffmpeg') -Directory | Select-Object -First 1).FullName + '\bin'
+          Add-Content $env:GITHUB_PATH $bin
+          & "$bin\ffmpeg.exe" -version | Select-Object -First 1
+      - run: npm ci
+      - name: Diagnóstico icacls pelo Node (temporário)
+        shell: pwsh
+        run: |
+          node -e "const {execFileSync}=require('child_process');const os=require('os');const fs=require('fs');const p=require('path').join(os.tmpdir(),'y.json');fs.writeFileSync(p,'{}');console.log('USERNAME='+process.env.USERNAME+' file='+p);try{execFileSync('icacls',[p,'/inheritance:r','/grant:r',process.env.USERNAME+':F'],{encoding:'utf8',timeout:5000,windowsHide:true})}catch(e){console.log('ERR',e.message,'|',e.stderr,'|',e.stdout)};console.log(execFileSync('icacls',[p],{encoding:'utf8'}))"
       - run: npm run lint
       - run: npm test
