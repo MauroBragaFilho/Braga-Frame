@@ -5,6 +5,9 @@ const path = require('node:path');
 const appInfo = require('../../appInfo');
 const diagnostics = require('../../diagnostics');
 const encoders = require('../../core/export/encoders');
+const update = require('../../core/update/check');
+
+const UPDATE_CACHE_MS = 6 * 60 * 60 * 1000;
 const controls = require('../../windowControls');
 
 /** Informações do app e utilidades de janela/sistema. */
@@ -36,6 +39,37 @@ function register(ctx) {
       appName: appInfo.name, version: ctx.app.getVersion(), userDataDir: ctx.paths.userData, isPackaged: ctx.app.isPackaged
     });
     return { text: diagnostics.formatSupportReport(report, { gpus, encoders: detection, logFile }), logFile };
+  });
+
+  // Aviso de versão nova (docs/atualizacao.md): consulta a última Release do projeto no GitHub e compara com a versão instalada. SÓ AVISA.
+  // Sem erro, o resultado vale por 6 horas (abrir o app várias vezes não consulta várias vezes); `force` (o botão "Verificar agora") sempre consulta.
+  // Dentro de outro aplicativo (BDS) o hospedeiro é quem atualiza: não consulta.
+  let lastUpdate = null; // { at, result }
+  ctx.handle('app:updateCheck', async (payload) => {
+    const current = ctx.app.getVersion();
+    if (ctx.host && ctx.host.embedded) return { status: 'disabled', reason: 'embedded', current };
+    const force = Boolean(payload && payload.force === true);
+    if (!force && lastUpdate && Date.now() - lastUpdate.at < UPDATE_CACHE_MS) return { ...lastUpdate.result, cached: true };
+    const result = await update.checkForUpdate({
+      currentVersion: current, repo: appInfo.repo, fetchImpl: ctx.fetch || undefined,
+      base: update.apiBase(ctx.env, ctx.app.isPackaged)
+    });
+    if (result.status !== 'error') lastUpdate = { at: Date.now(), result };
+    if (result.status === 'error') ctx.log('warn', `app:updateCheck: ${result.reason}`);
+    return result;
+  });
+
+  // abre no navegador a página da Release achada pela última consulta (o endereço NUNCA vem do renderer: o main só abre o que ele mesmo conferiu)
+  ctx.handle('app:updateOpen', async () => {
+    const url = lastUpdate && lastUpdate.result.status === 'available' ? lastUpdate.result.url : null;
+    if (!url || !update.isReleaseUrl(url, appInfo.repo)) {
+      const err = new Error('Não há versão nova para abrir. Use "Verificar agora".');
+      err.code = 'NO_UPDATE';
+      throw err;
+    }
+    if (update.testMode(ctx.env, ctx.app.isPackaged)) return { opened: false, url, test: true }; // e2e: não abre o navegador da máquina
+    await ctx.shell.openExternal(url);
+    return { opened: true };
   });
 
   // o usuário instalou o FFmpeg (ou outra ferramenta) com o app aberto: procura de novo

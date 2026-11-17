@@ -12,15 +12,17 @@ Esta etapa é, por natureza, de **avaliação e decisão**: quase tudo o que fal
 | Avisos de licença de terceiros | **Entregue** (`THIRD-PARTY-NOTICES.md` e textos das licenças dentro do instalador) | não |
 | Suporte: informações do computador e registro | **Entregue** (Configurações > Geral > Suporte) | não |
 | Guia do usuário | **Entregue** ([guia-do-usuario.md](guia-do-usuario.md)); falta um atalho dentro do app | não |
-| FFmpeg não vem no instalador | **Maior obstáculo para um usuário comum** | **sim** (decisão 1) |
-| Atualização automática | Não existe | **sim** (decisão 2) |
+| FFmpeg | **Resolvido**: botão "Instalar o FFmpeg" (baixa a compilação de terceiros, GPL v3, só no clique, com SHA-256 conferido). A instalação real do pacote **não foi executada** aqui (veja o fim deste item) | não |
+| Aviso de versão nova | **Entregue** ([atualizacao.md](atualizacao.md)): só avisa e abre a página da Release; atualizar sozinho depende da assinatura | não |
 | Assinatura digital do instalador | Não existe; o Windows avisa ao instalar | **sim** (decisão 3) |
 | Licença do Braga Frame | Não definida | **sim** (decisão 4) |
 | Hardware: AMD, Intel, Windows 10, ARM | Não verificado | precisa de máquinas/testadores |
 
-## 1. Atualização automática
+## 1. Atualização
 
-**Estado.** Não existe. `build.publish` é `null`, não há nenhum release no GitHub e a versão é `0.1.0`. O instalador é NSIS **por usuário** (sem administrador), o que é bom para atualizar: o teste mostra que instalar uma versão nova por cima mantém a mesma entrada em "Adicionar ou remover programas" e os projetos.
+**Decidido e entregue: A (só avisar).** Detalhes, privacidade e segurança em [atualizacao.md](atualizacao.md). A opção B (instalar sozinho, `electron-updater`) continua para **depois da assinatura**. O texto abaixo é a avaliação original.
+
+**Estado antes.** Não existia. `build.publish` é `null`, não há nenhum release no GitHub e a versão é `0.1.0`. O instalador é NSIS **por usuário** (sem administrador), o que é bom para atualizar: o teste mostra que instalar uma versão nova por cima mantém a mesma entrada em "Adicionar ou remover programas" e os projetos.
 
 **Problemas.** O usuário só fica sabendo de uma versão nova se alguém avisar; corrigir um erro em campo exige que cada pessoa baixe e instale à mão.
 
@@ -91,13 +93,15 @@ Esta etapa é, por natureza, de **avaliação e decisão**: quase tudo o que fal
 
 ## Decisões que preciso de você
 
-**1. FFmpeg.** Hoje o usuário precisa instalá-lo à mão (por exemplo `winget install Gyan.FFmpeg`), o que um usuário comum não faz. Opções: **(a) Botão "Instalar FFmpeg" em Configurações > Ferramentas** que baixa de uma versão **fixa**, com tamanho e SHA-256 conferidos, só quando o usuário clica (o mesmo mecanismo do yt-dlp e do Whisper); o app não redistribui nada, e o aviso diz que é uma compilação GPL de terceiros. **(b) Embutir no instalador** (da ordem de uma centena de MB a mais, não medi; traz as obrigações da GPL e a questão das patentes). **(c) Manter como está** e só documentar. **Recomendo (a)**: tira o obstáculo sem trazer obrigações de redistribuição, mas **reverte uma decisão registrada** (o README diz que o app não baixa o FFmpeg, por o projeto oficial não publicar programas prontos), e a fonte (qual compilação, qual versão fixa) precisa de escolha sua.
+**1. FFmpeg. DECIDIDO (opção a) e entregue.** Texto da avaliação: hoje o usuário precisa instalá-lo à mão (por exemplo `winget install Gyan.FFmpeg`), o que um usuário comum não faz. Opções: **(a) Botão "Instalar FFmpeg" em Configurações > Ferramentas** que baixa de uma versão **fixa**, com tamanho e SHA-256 conferidos, só quando o usuário clica (o mesmo mecanismo do yt-dlp e do Whisper); o app não redistribui nada, e o aviso diz que é uma compilação GPL de terceiros. **(b) Embutir no instalador** (da ordem de uma centena de MB a mais, não medi; traz as obrigações da GPL e a questão das patentes). **(c) Manter como está** e só documentar. **Recomendo (a)**: tira o obstáculo sem trazer obrigações de redistribuição, mas **reverte uma decisão registrada** (o README diz que o app não baixa o FFmpeg, por o projeto oficial não publicar programas prontos), e a fonte (qual compilação, qual versão fixa) precisa de escolha sua.
 
-**2. Atualização.** A (só avisar) agora e B depois da assinatura, como acima? Ou nenhuma por enquanto?
+**O que foi e o que NÃO foi verificado no FFmpeg real.** Verificado: o pacote (`ffmpeg-9.0.2-full_build-shared.zip`, 99.899.672 bytes, SHA-256 `8d31e162…`) tem tamanho e hash iguais aos que o GitHub informa (o teste de rede `tests/ffmpeg-network.test.js` confere isso na API); a estrutura do zip (uma pasta de topo, `bin/ffmpeg.exe`, `bin/ffprobe.exe` e as DLLs ao lado); e, **lendo as DLLs como dados**, a configuração GPL v3 sem `nonfree` com libx264, libx265, libass e NVENC. O fluxo do botão (confirmação, progresso, os dois programas, aviso que some, remover) foi testado de ponta a ponta com **pacotes de mentira** num servidor local. **Não foi verificado: executar o `ffmpeg.exe` baixado** (o sistema bloqueou, com razão, que eu rodasse um programa de terceiros baixado, e eu não contornei). Para fechar essa lacuna, rode você: `BF_NETWORK_TESTS=1 BF_NETWORK_FFMPEG=1 node --test tests/ffmpeg-network.test.js` (baixa ~100 MB, instala pela mesma entrada, executa o programa, confere versão, filtros, codificadores, um encode real e que o app o enxerga).
 
-**3. Assinatura.** Qual caminho (certificado, serviço da Microsoft, SignPath, Loja) ou nenhum até ter público? Isso também decide se vale montar o fluxo de releases.
+**2. Atualização. DECIDIDO (A, só avisar) e entregue.** B (instalar sozinho) fica para depois da assinatura.
 
-**4. Licença do Braga Frame.** Qual das quatro linhas? Sem essa resposta o repositório público segue com todos os direitos reservados.
+**3. Assinatura. Direção decidida: código aberto (SignPath Foundation, gratuita para projetos abertos).** Depende da decisão 4: a SignPath exige uma licença de código aberto reconhecida e um pedido de inscrição do projeto. O fluxo de releases já existe ([publicar-release.md](publicar-release.md)); o ponto de encaixe da assinatura está marcado nele.
+
+**4. Licença do Braga Frame. EM ABERTO.** Direção: código aberto; a GPL v3 foi proposta pelo autor e recebeu parecer favorável (compatível com o FFmpeg GPL v3 que o app baixa e com a SignPath). Falta confirmar para eu criar o `LICENSE` e ajustar o `package.json` (`GPL-3.0-or-later` ou `GPL-3.0-only`). Sem isso o repositório público segue com todos os direitos reservados.
 
 ## Testes de instalação e atualização
 
@@ -115,4 +119,4 @@ Esta etapa é, por natureza, de **avaliação e decisão**: quase tudo o que fal
 
 ## Ordem sugerida
 
-Decisão 1 (destrava o primeiro uso) → decisão 4 (define a licença e as opções de assinatura) → decisão 3 → decisão 2 e o fluxo de releases → teste beta com o roteiro acima.
+Decisão 4 (a licença: destrava a assinatura) → decisão 3 (pedir a inscrição na SignPath e ligá-la ao fluxo de releases) → primeira tag (o primeiro teste do fluxo e do aviso de versão) → teste beta com o roteiro acima.

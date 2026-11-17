@@ -841,8 +841,8 @@ async function main() {
     } else {
       assert.equal(await page.eval("document.getElementById('toolsWarn').hidden"), false);
       assert.match(await page.eval("document.getElementById('toolsWarn').textContent"), /Não encontrado: ffmpeg, ffprobe.*Instale o FFmpeg/);
-      assert.equal(await page.eval("document.querySelector('#toolsWarn button').textContent"), 'Verificar de novo');
-      await page.eval("document.querySelector('#toolsWarn button').click()");
+      assert.deepEqual(await page.eval("[...document.querySelectorAll('#toolsWarn button')].map((b) => b.textContent)"), ['Instalar o FFmpeg', 'Verificar de novo'], 'o aviso oferece instalar e verificar de novo');
+      await page.eval("[...document.querySelectorAll('#toolsWarn button')].find((b) => b.textContent === 'Verificar de novo').click()");
       await waitFor(page, "/ainda não foi encontrado/.test(document.getElementById('toasts').textContent)", 10000, 'aviso de que o FFmpeg continua ausente');
       await page.eval(`BF.openSource(${JSON.stringify(source)})`);
       assert.match(await logText(page), /ffprobe não encontrado/);
@@ -850,7 +850,7 @@ async function main() {
       assert.equal(await page.eval("document.getElementById('tab-export').disabled"), true, 'sem vídeo aberto a aba Exportar fica desabilitada');
       assert.match(await page.eval("document.getElementById('tabpanel-export').textContent"), /Abra um vídeo/, 'o painel orienta em vez de quebrar');
       assert.equal(await page.eval("BF.ui.selectTab('export')"), false);
-      step('sem FFmpeg: aviso no topo com "Verificar de novo", abrir vídeo explica o motivo, a aba Exportar não abre sem projeto');
+      step('sem FFmpeg: aviso no topo com "Instalar o FFmpeg" e "Verificar de novo", abrir vídeo explica o motivo, a aba Exportar não abre sem projeto');
     }
     h.assertNoConsoleErrors(page);
     await noFfmpeg.stop();

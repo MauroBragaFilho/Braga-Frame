@@ -7,7 +7,10 @@ const registry = require('../../core/tools/registry');
 const { toolKeyFor } = require('../../core/tools/catalog');
 const { ToolInstaller } = require('../../core/tools/ToolInstaller');
 
-/** FFmpeg e FFprobe: só existem no sistema (o projeto oficial não publica programas prontos). */
+/**
+ * FFmpeg e FFprobe: a primeira parte da tela ("No seu computador") mostra o que está em uso, venha de onde vier: do sistema (PATH ou CORTE_*), do
+ * hospedeiro ou da instalação do app (a entrada `ffmpeg` do catálogo, com o ffprobe do mesmo pacote).
+ */
 const SYSTEM_TOOLS = Object.freeze([
   { key: 'ffmpeg', label: 'FFmpeg' },
   { key: 'ffprobe', label: 'FFprobe' }
@@ -126,11 +129,19 @@ function register(ctx) {
   /** O motor com placa NVIDIA (whisper-cuda) não é instalado aqui quando o hospedeiro já fornece o motor do Whisper (ele é o dono). */
   const cudaSuppressedByHost = (entry) => entry.id === 'whisper-cuda' && Boolean(host.tool('whisper'));
 
+  /** Caminho do ffmpeg ou do ffprobe que o APP instalou (o ffprobe vem do mesmo pacote), ou null. */
+  function appInstalled(key) {
+    if (key === 'ffmpeg') return (installer.status().find((row) => row.id === 'ffmpeg') || {}).path || null;
+    return registry.resolveExtras(ctx.paths.tools, 'ffmpeg', { entries: catalog.entries })[key] || null;
+  }
+
   async function buildStatus() {
     const system = await Promise.all(SYSTEM_TOOLS.map(async ({ key, label }) => {
       const exe = ctx.tools[key] || null;
       const fromHost = Boolean(exe) && samePath(exe, host.tool(key));
-      return { id: key, label, found: Boolean(exe), path: exe, version: exe ? await versionOf(exe) : null, origin: exe ? (fromHost ? 'host' : 'system') : null };
+      let origin = null;
+      if (exe) origin = fromHost ? 'host' : (samePath(exe, appInstalled(key)) ? 'app' : 'system');
+      return { id: key, label, found: Boolean(exe), path: exe, version: exe ? await versionOf(exe) : null, origin };
     }));
 
     const tools = await Promise.all(installer.status().filter((row) => !cudaSuppressedByHost(row)).map(async (row) => {

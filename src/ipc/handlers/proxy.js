@@ -49,6 +49,9 @@ function register(ctx) {
   });
   ctx.handle('proxy:cancel', () => ({ cancelled: manager.cancel() }));
 
+  // o FFmpeg que o app instalou não é removido nem trocado enquanto a cópia leve está sendo criada
+  if (ctx.toolUsage) ctx.toolUsage.register((key) => (key === 'ffmpeg' && manager.job ? 'a cópia leve do vídeo está sendo criada' : null));
+
   // o ffmpeg da cópia não pode ficar órfão ao fechar o app
   if (ctx.app && typeof ctx.app.on === 'function') ctx.app.on('before-quit', () => manager.shutdown());
 }

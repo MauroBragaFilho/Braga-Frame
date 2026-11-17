@@ -772,3 +772,44 @@ test('programa em uso (Windows): reinstalar e remover nunca deixam a instalaçã
     }
   });
 });
+
+// ------------------------------------------------------------------ programas extras do mesmo pacote (alsoExe): o ffprobe junto do ffmpeg
+
+const ffmpegLikeZip = (files) => makeZip(files.map(([name, data]) => ({ name: `ffmpeg-9.0.2-full_build-shared/${name}`, ...(data === null ? {} : { data }) })));
+const ffmpegLikeEntry = (base, buf) => makeEntry({ base, buf, id: 'ffmpeg', version: '9.0.2', file: 'ffmpeg-9.0.2-full_build-shared.zip', exe: 'bin/ffmpeg.exe', asset: { stripComponents: 1, alsoExe: { ffprobe: 'bin/ffprobe.exe' } } });
+
+test('instala um pacote com dois programas (ffmpeg + ffprobe): pasta de topo ignorada, os dois no lugar, manifesto com alsoExe', T, async () => {
+  await withEnv(async ({ base, toolsDir }) => {
+    const buf = ffmpegLikeZip([['LICENSE', 'GPL'], ['bin/', null], ['bin/ffmpeg.exe', 'MZ-ffmpeg'], ['bin/ffprobe.exe', 'MZ-ffprobe'], ['bin/avcodec-63.dll', 'dll']]);
+    const srv = await startServer(serveAlways(buf));
+    try {
+      const entry = ffmpegLikeEntry(srv.base, buf);
+      const inst = makeInstaller(toolsDir, [entry]);
+      const res = await inst.install('ffmpeg');
+      const finalDir = path.join(toolsDir, 'ffmpeg', '9.0.2');
+      assert.equal(res.exe, path.join(finalDir, 'bin', 'ffmpeg.exe'));
+      assert.equal(fs.readFileSync(path.join(finalDir, 'bin', 'ffprobe.exe'), 'utf8'), 'MZ-ffprobe');
+      assert.equal(fs.existsSync(path.join(finalDir, 'bin', 'avcodec-63.dll')), true, 'as DLLs ficam ao lado dos programas');
+      const manifest = JSON.parse(fs.readFileSync(path.join(finalDir, 'manifest.json'), 'utf8'));
+      assert.deepEqual(manifest.alsoExe, { ffprobe: 'bin/ffprobe.exe' });
+      const opts = { entries: [entry], platform: 'win32', arch: 'x64' };
+      assert.equal(registry.resolveInstalled(toolsDir, 'ffmpeg', opts), res.exe);
+      assert.deepEqual(registry.resolveExtras(toolsDir, 'ffmpeg', opts), { ffprobe: path.join(finalDir, 'bin', 'ffprobe.exe') });
+      noResidue(base);
+    } finally { await srv.close(); }
+  });
+});
+
+test('pacote sem o ffprobe: a instalação é recusada (EXE_MISSING), nada fica instalado nem sobra pasta de trabalho', T, async () => {
+  await withEnv(async ({ base, toolsDir }) => {
+    const buf = ffmpegLikeZip([['bin/', null], ['bin/ffmpeg.exe', 'MZ-ffmpeg']]);
+    const srv = await startServer(serveAlways(buf));
+    try {
+      const inst = makeInstaller(toolsDir, [ffmpegLikeEntry(srv.base, buf)]);
+      await assert.rejects(inst.install('ffmpeg'), (e) => e.code === 'EXE_MISSING' && /bin\/ffprobe\.exe/.test(e.message));
+      assert.equal(inst.resolveInstalled('ffmpeg'), null);
+      assert.equal(fs.existsSync(path.join(toolsDir, 'ffmpeg', '9.0.2')), false);
+      noResidue(base);
+    } finally { await srv.close(); }
+  });
+});

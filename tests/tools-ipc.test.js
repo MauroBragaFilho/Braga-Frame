@@ -334,3 +334,45 @@ test('ao iniciar, resíduos de uma instalação interrompida são varridos', () 
     assert.equal(fs.existsSync(path.join(dir, 'userdata', 'tools', '.tmp')), false);
   } finally { cleanup(dir); }
 });
+
+test('FFmpeg instalado pelo app: vence o do sistema (o ffprobe sai do mesmo pacote), aparece como "app" e some ao remover; em uso, não é removido', T, async () => {
+  await withEnv(async (base) => {
+    const buf = makeZip([{ name: 'pacote/bin/ffmpeg.exe', data: 'MZ-ffmpeg' }, { name: 'pacote/bin/ffprobe.exe', data: 'MZ-ffprobe' }, { name: 'pacote/bin/avcodec.dll', data: 'dll' }]);
+    const srv = await startServer((req, res) => sendBuffer(res, buf));
+    try {
+      const entry = makeEntry({ base: srv.base, buf, id: 'ffmpeg', version: '9.0.2', file: 'ffmpeg.zip', exe: 'bin/ffmpeg.exe', key: KEY, asset: { stripComponents: 1, alsoExe: { ffprobe: 'bin/ffprobe.exe' } } });
+      const s = setup(base, { entries: [entry], testIds: ['ffmpeg'] });
+
+      // antes: só o do sistema (CORTE_FFMPEG / CORTE_FFPROBE desta máquina, se houver)
+      const before = await s.call('tools:status');
+      assert.deepEqual(before.system.map((x) => x.origin), [real.ffmpeg ? 'system' : null, real.ffprobe ? 'system' : null]);
+
+      const res = await s.call('tools:install', { id: 'ffmpeg' });
+      const bin = path.join(s.toolsDir, 'ffmpeg', '9.0.2', 'bin');
+      assert.deepEqual([res.ok, res.path], [true, path.join(bin, 'ffmpeg.exe')]);
+      assert.equal(s.ctx.tools.ffmpeg, path.join(bin, 'ffmpeg.exe'), 'o do app vence CORTE_FFMPEG');
+      assert.equal(s.ctx.tools.ffprobe, path.join(bin, 'ffprobe.exe'), 'o ffprobe vem do mesmo pacote e vence CORTE_FFPROBE');
+      assert.equal(fs.existsSync(path.join(bin, 'avcodec.dll')), true, 'as DLLs ficam ao lado');
+      assert.equal(s.events('tools:changed').at(-1).tools.ffprobe, path.join(bin, 'ffprobe.exe'));
+
+      const after = await s.call('tools:status');
+      assert.deepEqual(after.system.map((x) => [x.id, x.found, x.origin, x.path]), [['ffmpeg', true, 'app', path.join(bin, 'ffmpeg.exe')], ['ffprobe', true, 'app', path.join(bin, 'ffprobe.exe')]]);
+      const row = after.tools.find((t) => t.id === 'ffmpeg');
+      assert.deepEqual([row.installed, row.active.origin, row.available], [true, 'app', true]);
+
+      // em uso (exportação, análise, legendas…): nem remove nem reinstala
+      const release = s.ctx.toolUsage.register((key) => (key === 'ffmpeg' ? 'há exportações em andamento' : null));
+      const blocked = await s.call('tools:remove', { id: 'ffmpeg' });
+      assert.deepEqual([blocked.ok, blocked.code], [false, 'TOOL_IN_USE']);
+      assert.match(blocked.message, /há exportações em andamento/);
+      assert.equal(s.ctx.tools.ffmpeg, path.join(bin, 'ffmpeg.exe'), 'continua instalado');
+      release();
+
+      const removed = await s.call('tools:remove', { id: 'ffmpeg' });
+      assert.equal(removed.removed, true);
+      assert.equal(s.ctx.tools.ffmpeg, real.ffmpeg || null, 'volta para o do sistema');
+      assert.equal(s.ctx.tools.ffprobe, real.ffprobe || null);
+      assert.deepEqual(listTree(s.toolsDir), [], 'nada sobrou na pasta de ferramentas');
+    } finally { await srv.close(); }
+  });
+});

@@ -9,7 +9,7 @@ Programa separado do Braga Digital Studio (BDS), com a mesma base técnica (Elec
 ## Pré-requisitos
 
 - **Windows 10/11** (único sistema em que o app foi executado; o código de Linux/macOS existe, mas não foi testado), **Node.js** (desenvolvido com Node 24) e `npm install` (traz o Electron).
-- **FFmpeg e ffprobe** no PATH (ou `CORTE_FFMPEG` / `CORTE_FFPROBE` apontando para os executáveis). O projeto FFmpeg não publica programas prontos, então o app **não os baixa**: a aba **Ferramentas** mostra a versão detectada e como instalar. Para legenda incorporada o FFmpeg precisa do filtro `subtitles` (libass; as builds "full" têm); a aceleração por placa NVIDIA (NVENC) é opcional e testada de verdade antes de ser usada.
+- **FFmpeg e ffprobe** no PATH (ou `CORTE_FFMPEG` / `CORTE_FFPROBE` apontando para os executáveis). No Windows 64 bits a aba **Ferramentas** (e o aviso vermelho do topo) tem o botão **Instalar o FFmpeg**, que baixa uma compilação de terceiros (Gyan Doshi, licença GPL v3) com tamanho e SHA-256 conferidos, só quando você clica; nos outros sistemas, ou se preferir, instale à mão (a aba mostra a versão detectada e como instalar). Para legenda incorporada o FFmpeg precisa do filtro `subtitles` (libass; as builds "full" têm); a aceleração por placa NVIDIA (NVENC) é opcional e testada de verdade antes de ser usada.
 - Opcionais, instalados pelo próprio app (aba **Ferramentas**, só de releases oficiais, com URL fixa, tamanho e SHA-256 conferidos): **yt-dlp** e **Deno** (VODs do YouTube/Twitch), **TwitchDownloaderCLI** (chat da Twitch) e **whisper.cpp** (legendas automáticas). Baixar depende de internet e, no caso dos VODs, de acesso e disponibilidade da fonte ([docs/recursos/tools.md](docs/recursos/tools.md)).
 
 ## Como usar
@@ -19,7 +19,7 @@ npm install
 npm start
 ```
 
-No Windows, dá para usar o **`BF_Menu.bat`** (dois cliques): menu com **1** rodar o aplicativo (instala as dependências na primeira vez), **2** testes, **3** testes e2e, **4** lint e **0** sair. Ele precisa do Node.js instalado. Para gerar o instalador do Windows (NSIS, ainda sem assinatura digital) use `npm run dist`: o arquivo sai em `dist/installer/`; `npm run dist:dir` gera só a pasta descompactada para teste. Os dados do usuário ficam em `%APPDATA%\braga-frame` (atualizar ou desinstalar não os apaga) e o log, em `logs/bragaframe.log` nessa pasta. O FFmpeg ainda não vai dentro do instalador: precisa estar no PATH ou em `CORTE_FFMPEG`.
+No Windows, dá para usar o **`BF_Menu.bat`** (dois cliques): menu com **1** rodar o aplicativo (instala as dependências na primeira vez), **2** testes, **3** testes e2e, **4** lint e **0** sair. Ele precisa do Node.js instalado. Para gerar o instalador do Windows (NSIS, ainda sem assinatura digital) use `npm run dist`: o arquivo sai em `dist/installer/`; `npm run dist:dir` gera só a pasta descompactada para teste. Os dados do usuário ficam em `%APPDATA%\braga-frame` (atualizar ou desinstalar não os apaga) e o log, em `logs/bragaframe.log` nessa pasta. O FFmpeg não vai dentro do instalador: o próprio app o instala pelo botão **Instalar o FFmpeg** (ou use um que já esteja no PATH ou em `CORTE_FFMPEG`).
 
 1. **Novo projeto** (botão da **Início** e de **Projetos**): escolha de onde vem o vídeo (**Arquivos locais**, **YouTube**, **Twitch** ou **Gravações do OBS**). Em Arquivos locais, arraste o arquivo para a janela ou clique na área de soltar (MP4, MKV, MOV, WebM, AVI, FLV, TS); o botão **Abrir vídeo** do cabeçalho faz o mesmo de qualquer tela. Sem vídeo aberto, **Início**, **Projetos** (com o **Novo projeto**), **Exportações** e **Configurações** (**Preferências** e **Ferramentas**) já funcionam, e o app abre na **Início**; só o item **Cortes** espera um vídeo.
 2. Posicione o player, use **Marcar início / Marcar fim** (ou digite `m:ss.d`; atalhos `I` e `O`) e **Ver trecho**; **Salvar corte**.
@@ -71,7 +71,8 @@ Arquitetura e contratos: [docs/arquitetura.md](docs/arquitetura.md); como acresc
 - **`npm run test:installer`** gera o instalador de duas versões com uma identidade de teste ("Braga Frame Teste", que não toca numa instalação real), instala em silêncio, abre o programa instalado, atualiza por cima, confere que os projetos ficaram e desinstala (Windows; uns 4 minutos, ou 1 com `-- --reuse`). Roda também na CI (job `installer`).
 - **Publicar uma versão**: enviar uma tag (`git tag v0.2.0` e `git push origin v0.2.0`) faz o GitHub Actions compilar o instalador e criar a Release, com um arquivo só e sem artefatos nem cache guardados. Detalhes em [docs/publicar-release.md](docs/publicar-release.md).
 - **Licenças de terceiros**: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) (vai dentro do instalador, com os textos das licenças das fontes). A licença do próprio Braga Frame **ainda não foi definida** (`UNLICENSED`).
-- **Atualização automática, assinatura digital, FFmpeg no instalador e licença**: avaliação e decisões pendentes em [docs/comercial.md](docs/comercial.md). Nada de pagamento ou licenciamento comercial foi implementado.
+- **Aviso de versão nova**: o app consulta a última Release do GitHub ao abrir (dá para desligar) e avisa; não instala sozinho. [docs/atualizacao.md](docs/atualizacao.md).
+- **Assinatura digital e licença**: decisões pendentes em [docs/comercial.md](docs/comercial.md). Nada de pagamento ou licenciamento comercial foi implementado.
 - **Suporte**: Configurações > Geral > Suporte copia as informações do computador (sem segredos nem o nome de usuário do Windows) e mostra o registro.
 
 ## Estado do projeto

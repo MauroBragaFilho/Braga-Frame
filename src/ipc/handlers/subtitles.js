@@ -78,7 +78,7 @@ function register(ctx) {
   Promise.resolve(detectGpu({})).catch(() => null); // aquece o cache da placa (a aba Legendas abre sem esperar o nvidia-smi)
   const modelOps = new Map();  // modelId -> AbortController do download
 
-  ctx.toolUsage.register((key, id) => ((key === 'whisper' || id === CUDA_ID) && running.size > 0 ? 'a geração de legendas está rodando' : null));
+  ctx.toolUsage.register((key, id) => ((key === 'whisper' || key === 'ffmpeg' || id === CUDA_ID) && running.size > 0 ? 'a geração de legendas está rodando' : null));
   if (ctx.app && typeof ctx.app.on === 'function') {
     ctx.app.on('before-quit', () => {
       for (const { controller } of running.values()) controller.abort();

@@ -14,7 +14,7 @@ const TOOL_KEYS = Object.freeze(['ffmpeg', 'ffprobe', 'ytdlp', 'whisper', 'twitc
 
 /**
  * Onde procurar no sistema as ferramentas que o app também sabe instalar: nome no PATH e variável de
- * ambiente que aponta direto para o executável. (ffmpeg/ffprobe não estão aqui: só existem no sistema.)
+ * ambiente que aponta direto para o executável. (ffmpeg/ffprobe têm a procura própria em resolveTools: vêm do mesmo pacote.)
  */
 const SYSTEM_LOOKUP = Object.freeze({
   ytdlp: { name: 'yt-dlp', env: 'CORTE_YTDLP' },
@@ -24,9 +24,9 @@ const SYSTEM_LOOKUP = Object.freeze({
 
 /**
  * Descobre onde estão as ferramentas externas, nesta ordem:
- *   1. ffmpeg/ffprobe: só do sistema (CORTE_FFMPEG / CORTE_FFPROBE, depois PATH);
- *   2. yt-dlp, whisper e TwitchDownloaderCLI: a instalada pelo app em `paths.tools` (release oficial,
- *      conferida no disco a cada chamada) tem preferência; sem ela, a variável CORTE_* e depois o PATH.
+ *   1. a ferramenta instalada pelo app em `paths.tools` (conferida no disco a cada chamada) tem preferência, inclusive o ffmpeg e o ffprobe
+ *      (que o botão "Instalar" da aba Ferramentas traz do mesmo pacote);
+ *   2. sem ela, a variável CORTE_* (CORTE_FFMPEG, CORTE_FFPROBE, CORTE_YTDLP…) e depois o PATH.
  * Devolve { ffmpeg, ffprobe, ytdlp, whisper, twitchDownloader } com caminho ou null.
  */
 function resolveTools({ paths, env = process.env, entries } = {}) {
@@ -38,15 +38,20 @@ function resolveTools({ paths, env = process.env, entries } = {}) {
     const byId = registry.resolveAll(paths.tools, { entries: list });
     for (const entry of list) {
       const key = toolKeyFor(entry.id);
-      if (key && byId[entry.id]) installed[key] = byId[entry.id];
+      if (!key || !byId[entry.id]) continue;
+      installed[key] = byId[entry.id];
+      // programas extras do mesmo pacote (o ffprobe vem junto do ffmpeg)
+      for (const [extraKey, file] of Object.entries(registry.resolveExtras(paths.tools, entry.id, { entries: list }))) {
+        if (TOOL_KEYS.includes(extraKey)) installed[extraKey] = file;
+      }
     }
   }
   // uma única varredura do PATH para tudo o que ainda não foi achado (veja locate.js)
   const specs = [
     { key: 'ffmpeg', name: 'ffmpeg', envVar: 'CORTE_FFMPEG' },
     { key: 'ffprobe', name: 'ffprobe', envVar: 'CORTE_FFPROBE' },
-    ...Object.entries(SYSTEM_LOOKUP).filter(([key]) => !installed[key]).map(([key, spec]) => ({ key, name: spec.name, envVar: spec.env }))
-  ];
+    ...Object.entries(SYSTEM_LOOKUP).map(([key, spec]) => ({ key, name: spec.name, envVar: spec.env }))
+  ].filter((spec) => !installed[spec.key]);
   Object.assign(out, findTools(specs, env), installed);
   return out;
 }
@@ -204,7 +209,9 @@ function createContext(deps) {
     projectStore: new ProjectStore(paths.projects),
     bus, log, handle,
     busyChecks, projectBusy,
-    channels: registered
+    channels: registered,
+    env, // o ambiente consultado (padrão: process.env); os handlers o usam para as variáveis só de teste
+    fetch: typeof deps.fetch === 'function' ? deps.fetch : null // rede dos handlers (testes injetam a deles; sem ela vale o fetch global)
   };
   updateTools(false);
   return ctx;

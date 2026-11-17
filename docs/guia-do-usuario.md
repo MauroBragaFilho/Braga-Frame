@@ -8,22 +8,20 @@ O Braga Frame transforma gravações e lives em **cortes verticais prontos para 
 2. **O aviso do Windows.** Enquanto o instalador não tiver assinatura digital, o Windows pode mostrar "O Windows protegeu o computador". Isso acontece com qualquer programa novo sem assinatura. Só continue se você baixou do endereço oficial do Braga Frame: clique em **Mais informações** e depois em **Executar assim mesmo**.
 3. Abra pelo **Menu Iniciar** (Braga Frame).
 
-Para atualizar, é só instalar a versão nova por cima: **seus projetos continuam como estavam**. Antes, feche o Braga Frame.
+Para atualizar, é só instalar a versão nova por cima: **seus projetos continuam como estavam**. Antes, feche o Braga Frame. O app **avisa** quando sai uma versão nova (uma faixa no topo, com o botão **Ver e baixar**); dá para desligar o aviso em **Configurações › Geral › Atualizações**. Ele só avisa: nunca instala sozinho.
 
 ## 2. Primeiro uso: instalar o FFmpeg
 
-O Braga Frame precisa do **FFmpeg** (um programa gratuito que lê e grava vídeos) e **ainda não vem junto**. Sem ele, o app abre, mas não consegue abrir nem exportar vídeos, e mostra um aviso vermelho no topo.
+O Braga Frame precisa do **FFmpeg** (um programa gratuito que lê e grava vídeos) e ele **não vem junto com o instalador**. Sem ele, o app abre, mas não consegue abrir nem exportar vídeos, e mostra um aviso vermelho no topo. Dá para instalar com um clique.
 
-1. Abra o **Terminal** do Windows (clique com o botão direito no Menu Iniciar e escolha Terminal).
-2. Digite o comando abaixo e aperte Enter:
+1. Clique em **Instalar o FFmpeg** no aviso vermelho do topo (ou em **Configurações › Ferramentas**).
+2. Confirme. O app baixa o FFmpeg do GitHub (uns 100 MB; depois de instalado ocupa uns 260 MB), confere o tamanho e o código de verificação (SHA-256) e instala. Você acompanha a barra de progresso e pode cancelar. Quando termina, o aviso vermelho some.
 
-```bash
-winget install Gyan.FFmpeg
-```
+O FFmpeg é um programa de terceiros (a compilação "full" de Gyan Doshi, com licença GPL v3), não do Braga Frame, e **só é baixado quando você clica**.
 
-3. **Feche o Braga Frame e abra de novo.** Em **Configurações › Ferramentas** o FFmpeg deve aparecer como encontrado.
+**Se preferir instalar por conta própria** (ou se o botão não aparecer porque o seu sistema não é um Windows de 64 bits): no Terminal do Windows digite `winget install Gyan.FFmpeg`, aperte Enter, feche o Braga Frame e abra de novo. Também dá para baixar em ffmpeg.org/download.html e pôr a pasta dele no PATH do Windows.
 
-Se o `winget` não existir no seu Windows, baixe o FFmpeg em ffmpeg.org/download.html e deixe a pasta dele no PATH do Windows. Ainda em **Ferramentas** você pode instalar, com um clique, os programas opcionais: **yt-dlp** (baixar vídeos do YouTube e da Twitch), **Deno** (ajuda o yt-dlp), **TwitchDownloaderCLI** (chat da Twitch) e **Whisper** (legendas automáticas).
+Ainda em **Ferramentas** você pode instalar, com um clique, os programas opcionais: **yt-dlp** (baixar vídeos do YouTube e da Twitch), **Deno** (ajuda o yt-dlp), **TwitchDownloaderCLI** (chat da Twitch) e **Whisper** (legendas automáticas).
 
 ## 3. O caminho principal, em cinco passos
 
@@ -57,7 +55,7 @@ As letras podem ser trocadas em **Configurações › Preferências** (opções 
 - Os **projetos** (cortes, decisões, ajustes) ficam em `%APPDATA%\braga-frame`. Para abrir: aperte `Win + R`, digite `%APPDATA%\braga-frame` e Enter. **Configurações › Geral** mostra a pasta e abre ela para você.
 - Seus **vídeos** e os **cortes exportados** ficam onde sempre estiveram: o app não mexe neles.
 - **Desinstalar não apaga seus projetos.** Se quiser apagar tudo mesmo, depois de desinstalar apague a pasta `%APPDATA%\braga-frame`. Para apagar só um projeto, use a lixeira em **Projetos**.
-- O app **não envia seus vídeos** para a internet e só usa a rede quando você pede: baixar uma ferramenta, baixar um vídeo ou usar a **IA na nuvem**. A IA na nuvem recebe texto (a transcrição), só depois que você aceita o aviso de privacidade da tela de Análise, que diz o que vai. A chave do provedor fica só neste computador.
+- O app **não envia seus vídeos** para a internet e só usa a rede quando você pede: baixar uma ferramenta, baixar um vídeo ou usar a **IA na nuvem**. A única consulta por conta própria é a do aviso de versão nova, ao abrir (leva só o nome e a versão do app; dá para desligar em Configurações › Geral › Atualizações). A IA na nuvem recebe texto (a transcrição), só depois que você aceita o aviso de privacidade da tela de Análise, que diz o que vai. A chave do provedor fica só neste computador.
 
 ## 6. Quando algo não funciona
 

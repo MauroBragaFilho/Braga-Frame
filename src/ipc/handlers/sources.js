@@ -64,6 +64,7 @@ function register(ctx) {
   ctx.toolUsage.register((key, id) => {
     const usage = manager.usage();
     if (key === 'ytdlp') return usage.ytdlp;
+    if (key === 'ffmpeg') return usage.ytdlp; // o yt-dlp usa o ffmpeg para juntar vídeo e áudio: baixando, o ffmpeg também está em uso
     if (key === 'twitchDownloader') return usage.twitchdownloader;
     if (id === 'deno') return usage.deno;
     return null;

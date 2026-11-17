@@ -22,7 +22,7 @@ const TEST_ENV_VAR = 'BF_TEST_TOOL_ENTRIES';
  * id da entrada (minúsculas) -> chave de `ctx.tools`. Só estes ids alimentam o `ctx.tools`;
  * uma entrada com outro id aparece na tela de Ferramentas e instala, mas nenhum módulo a recebe.
  */
-const TOOL_KEY_BY_ID = Object.freeze({ ytdlp: 'ytdlp', whisper: 'whisper', twitchdownloader: 'twitchDownloader' });
+const TOOL_KEY_BY_ID = Object.freeze({ ffmpeg: 'ffmpeg', ytdlp: 'ytdlp', whisper: 'whisper', twitchdownloader: 'twitchDownloader' });
 
 /** Chave do `ctx.tools` para o id de uma entrada (sem diferenciar maiúsculas), ou null. */
 function toolKeyFor(id) {

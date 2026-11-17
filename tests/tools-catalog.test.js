@@ -43,22 +43,30 @@ function fakeInstall(toolsDir, e) {
   const exe = path.join(dir, ...asset.exe.split('/'));
   fs.mkdirSync(path.dirname(exe), { recursive: true });
   fs.writeFileSync(exe, 'MZ-programa');
+  const extras = {};
+  for (const [name, rel] of Object.entries(asset.alsoExe || {})) { // programas extras do mesmo pacote (o ffprobe, junto do ffmpeg)
+    extras[name] = path.join(dir, ...rel.split('/'));
+    fs.mkdirSync(path.dirname(extras[name]), { recursive: true });
+    fs.writeFileSync(extras[name], 'MZ-extra');
+  }
   fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({
-    schema: 1, id: e.id, version: e.version, file: asset.name, sha256: asset.sha256, exe: asset.exe,
+    schema: 1, id: e.id, version: e.version, file: asset.name, sha256: asset.sha256, exe: asset.exe, ...(asset.alsoExe ? { alsoExe: asset.alsoExe } : {}),
     exeSize: Buffer.byteLength('MZ-programa'), installedAt: new Date().toISOString(), source: e.source
   }));
-  return { dir, exe };
+  return { dir, exe, extras };
 }
 
 // ------------------------------------------------------------------ chaves do ctx.tools
 
-test('toolKeyFor: só ytdlp, whisper e twitchdownloader alimentam o ctx.tools (sem diferenciar maiúsculas)', () => {
+test('toolKeyFor: ffmpeg, ytdlp, whisper e twitchdownloader alimentam o ctx.tools (sem diferenciar maiúsculas); o ffprobe vem junto do ffmpeg, sem entrada própria', () => {
+  assert.equal(toolKeyFor('ffmpeg'), 'ffmpeg');
+  assert.equal(toolKeyFor('FFmpeg'), 'ffmpeg');
   assert.equal(toolKeyFor('ytdlp'), 'ytdlp');
   assert.equal(toolKeyFor('YTDLP'), 'ytdlp');
   assert.equal(toolKeyFor('whisper'), 'whisper');
   assert.equal(toolKeyFor('twitchdownloader'), 'twitchDownloader');
   assert.equal(toolKeyFor('TwitchDownloader'), 'twitchDownloader');
-  for (const other of ['ffmpeg', 'ffprobe', 'demo', '', null, undefined, 'constructor', '__proto__']) assert.equal(toolKeyFor(other), null, String(other));
+  for (const other of ['ffprobe', 'demo', '', null, undefined, 'constructor', '__proto__']) assert.equal(toolKeyFor(other), null, String(other));
 });
 
 // ------------------------------------------------------------------ entradas de teste
@@ -136,7 +144,7 @@ test('garantia: BF_TEST_TOOL_ENTRIES só é lida em src/core/tools/catalog.js (n
 
 // ------------------------------------------------------------------ resolveTools
 
-test('resolveTools: a instalada pelo app vence CORTE_* e PATH; sem ela cai para a variável; ffmpeg nunca vem da pasta do app', () => {
+test('resolveTools: a instalada pelo app vence CORTE_* e PATH (o ffprobe vem junto do ffmpeg); sem ela cai para a variável', () => {
   const base = tmpDir();
   try {
     const toolsDir = path.join(base, 'tools');
@@ -149,7 +157,11 @@ test('resolveTools: a instalada pelo app vence CORTE_* e PATH; sem ela cai para 
       ...process.env,
       CORTE_YTDLP: sys.ytdlp, CORTE_WHISPER: sys.whisper, CORTE_TWITCHDOWNLOADER: sys.twitch, CORTE_FFMPEG: sys.ffmpeg, CORTE_FFPROBE: sys.ffprobe
     };
-    const entries = [official('ytdlp'), entry({ id: 'whisper' }), entry({ id: 'twitchdownloader' }), entry({ id: 'ffmpeg' })];
+    const ffmpegEntry = entry({
+      id: 'ffmpeg', label: 'FFmpeg (teste)',
+      assets: { [PLATFORM_KEY]: { url: 'http://127.0.0.1:9/ffmpeg.zip', name: 'ffmpeg.zip', size: 10, sha256: SHA, exe: 'bin/ffmpeg.exe', alsoExe: { ffprobe: 'bin/ffprobe.exe' } } }
+    });
+    const entries = [official('ytdlp'), entry({ id: 'whisper' }), entry({ id: 'twitchdownloader' }), ffmpegEntry];
     const paths = { tools: toolsDir };
 
     // nada instalado: valem as variáveis de ambiente
@@ -160,15 +172,19 @@ test('resolveTools: a instalada pelo app vence CORTE_* e PATH; sem ela cai para 
     // instala whisper e twitchdownloader (id em minúsculas -> chave twitchDownloader): o do app passa a valer
     const w = fakeInstall(toolsDir, entries[1]);
     const t = fakeInstall(toolsDir, entries[2]);
-    fakeInstall(toolsDir, entries[3]); // um id "ffmpeg" no registro não vira ctx.tools.ffmpeg
+    const f = fakeInstall(toolsDir, ffmpegEntry); // ffmpeg do app: o ffprobe sai do mesmo pacote (alsoExe)
     const withApp = resolveTools({ paths, env, entries });
     assert.deepEqual([withApp.whisper, withApp.twitchDownloader, withApp.ytdlp], [w.exe, t.exe, sys.ytdlp]);
-    assert.equal(withApp.ffmpeg, sys.ffmpeg);
-    assert.equal(withApp.ffprobe, sys.ffprobe);
+    assert.equal(withApp.ffmpeg, f.exe, 'o ffmpeg instalado pelo app vence CORTE_FFMPEG');
+    assert.equal(withApp.ffprobe, f.extras.ffprobe, 'o ffprobe vem do mesmo pacote e vence CORTE_FFPROBE');
 
     // instalação adulterada (executável sumiu): não vale; volta para a variável de ambiente
     fs.rmSync(w.exe);
     assert.equal(resolveTools({ paths, env, entries }).whisper, sys.whisper);
+    // sem o ffprobe a instalação inteira do ffmpeg não vale (os dois voltam para o sistema: nunca um de cada lugar)
+    fs.rmSync(f.extras.ffprobe);
+    const broken = resolveTools({ paths, env, entries });
+    assert.deepEqual([broken.ffmpeg, broken.ffprobe], [sys.ffmpeg, sys.ffprobe]);
 
     // pasta de ferramentas vazia e CORTE_* vazia: nada do app, só o que existir no PATH desta máquina
     const bare = resolveTools({ paths: { tools: path.join(base, 'vazio') }, env: { ...env, CORTE_WHISPER: '', CORTE_TWITCHDOWNLOADER: '' }, entries });

@@ -111,7 +111,28 @@
     return el('button', { type: 'button', class: 'icon-btn', title: label, 'aria-label': label, dataset: { act, tool: toolId }, disabled, onclick: onClick }, icon(name));
   }
 
-  function ffmpegHelp(platform) {
+  /**
+   * O que fazer quando falta o FFmpeg. Com pacote para este sistema (Windows 64 bits), o caminho principal é UM botão que baixa e instala (com
+   * a confirmação em install()); a instalação à mão fica recolhida, como alternativa. Sem pacote (outros sistemas), só as instruções à mão.
+   * `tool`: a entrada `ffmpeg` do catálogo em tools:status (ou null).
+   */
+  function ffmpegHelp(platform, tool) {
+    if (!tool || !tool.available || toolState(tool) === 'host') return manualFfmpegHelp(platform);
+    const state = toolState(tool);
+    return el('div', { class: 'tool-help tool-help-ffmpeg', role: 'note', dataset: { help: 'ffmpeg' } },
+      icon('info'),
+      el('div', { class: 'tool-help-body' },
+        el('strong', {}, 'O FFmpeg não está instalado'),
+        el('p', {}, 'Sem ele o Braga Frame não abre nem exporta vídeos. Dá para instalar com um clique: ele é baixado do GitHub (' + fmtBytes(tool.sizeBytes) + '), com tamanho e SHA-256 conferidos, e você pode cancelar durante o download.'),
+        state === 'busy'
+          ? [progressBox(tool), el('div', { class: 'tool-help-actions' }, actions(tool, state))]
+          : el('div', { class: 'tool-help-actions' }, button('Instalar o FFmpeg', 'install-ffmpeg', tool.id, { primary: true, onClick: () => install(tool) })),
+        errors.has(tool.id) ? el('p', { class: 'tool-error', role: 'alert' }, icon('error'), el('span', {}, errors.get(tool.id))) : null,
+        el('details', { class: 'tool-help-manual' }, el('summary', {}, 'Prefiro instalar por conta própria'), manualFfmpegSteps(platform))));
+  }
+
+  /** Passos para instalar o FFmpeg à mão (a única opção fora do Windows 64 bits e a alternativa dentro dele). */
+  function manualFfmpegSteps(platform) {
     let steps;
     if (platform === 'win32') {
       steps = [
@@ -124,13 +145,18 @@
     } else {
       steps = ['Instale pelo gerenciador de pacotes da sua distribuição (por exemplo: sudo apt install ffmpeg).', 'Clique em Verificar de novo.'];
     }
-    return el('div', { class: 'tool-help', role: 'note' },
+    return el('ol', {}, steps.map((s) => el('li', {}, s)));
+  }
+
+  /** Sem pacote para este sistema: só as instruções à mão. */
+  function manualFfmpegHelp(platform) {
+    return el('div', { class: 'tool-help', role: 'note', dataset: { help: 'manual' } },
       icon('info'),
       el('div', { class: 'tool-help-body' },
         el('strong', {}, 'Como instalar o FFmpeg'),
-        el('p', {}, 'O FFmpeg vem do seu computador: o projeto FFmpeg não publica programas prontos, então o Braga Frame não baixa esta ferramenta.'),
+        el('p', {}, 'Neste sistema o Braga Frame não instala o FFmpeg sozinho: o projeto FFmpeg não publica programas prontos e não há um pacote que o app possa baixar daqui.'),
         el('p', {}, 'Para instalar:'),
-        el('ol', {}, steps.map((s) => el('li', {}, s)))));
+        manualFfmpegSteps(platform)));
   }
 
   function systemRow(item) {
@@ -143,6 +169,8 @@
           found ? el('div', { class: 'tool-meta tool-path', title: item.path }, item.path) : el('div', { class: 'tool-meta' }, 'Precisa estar instalado no computador.')),
         found && item.origin === 'host'
           ? chip(item.version ? `Fornecido pelo ${hostLabel()} · versão ${item.version}` : `Fornecido pelo ${hostLabel()}`, 'ok', 'tool-status')
+          : found && item.origin === 'app'
+          ? chip(item.version ? `Instalado pelo app · versão ${item.version}` : 'Instalado pelo app', 'ok', 'tool-status')
           : found
           ? chip(item.version ? `Encontrado · versão ${item.version}` : 'Encontrado', 'ok', 'tool-status')
           : chip('Não encontrado', 'bad', 'tool-status')));
@@ -229,7 +257,7 @@
             el('span', { class: 'tool-name' }, name),
             t.test ? chip('teste local', 'warn', 'tool-tag') : null),
           meta.filter(Boolean).map((line) => el('div', { class: 'tool-meta' }, line)),
-          state === 'host' ? null : el('div', { class: 'tool-meta tool-origin', title: origin.url || t.source }, icon('verified'), origin.text)),
+          state === 'host' ? null : el('div', { class: 'tool-meta tool-origin', title: origin.url || t.source }, icon(/^oficial/i.test(String(t.source)) ? 'verified' : 'info'), origin.text)),
         chip(chipText, chipKind, 'tool-status'),
         el('div', { class: 'tool-actions' }, actions(t, state))),
       state === 'busy' ? progressBox(t) : null,
@@ -258,7 +286,7 @@
   }
 
   function build() {
-    const intro = el('p', { class: 'tools-intro' }, 'Programas externos que o Braga Frame usa. Os que o app instala vêm só da página oficial de cada projeto, com tamanho e SHA-256 conferidos.',
+    const intro = el('p', { class: 'tools-intro' }, 'Programas externos que o Braga Frame usa. Os que o app instala vêm de um endereço fixo (a página oficial do projeto ou, no caso do FFmpeg, uma compilação de terceiros), com tamanho e SHA-256 conferidos, e só quando você pede.',
       gpuLine ? el('span', { class: 'tools-gpu muted small', dataset: { gpu: 'line' } }, ` ${gpuLine}`) : null);
     if (!data) {
       if (loadError) {
@@ -277,7 +305,7 @@
       section('computer', 'No seu computador',
         button(rechecking ? 'Verificando…' : 'Verificar de novo', 'recheck', 'system', { disabled: rechecking, onClick: recheck }),
         el('ul', { class: 'tool-list' }, data.system.map(systemRow)),
-        missing.length ? ffmpegHelp(data.platform) : null),
+        missing.length ? ffmpegHelp(data.platform, data.tools.find((t) => t.id === 'ffmpeg') || null) : null),
       data.tools.length
         ? section('inventory_2', data.host && data.host.embedded ? `Do ${hostLabel()} e instaladas pelo app` : 'Instaladas pelo app', null, el('ul', { class: 'tool-list' }, data.tools.map(toolRow)))
         : null
@@ -330,8 +358,19 @@
 
   // ---------- ações ----------
 
+  /** Programas de terceiros (não "oficiais" do projeto) pedem uma confirmação própria, mesmo pequenos: dizem de quem é e a licença. */
+  const THIRD_PARTY_CONFIRM = {
+    ffmpeg: (t) => ({
+      title: 'Instalar o FFmpeg?',
+      message: `O FFmpeg é um programa de terceiros (a compilação "full" de Gyan Doshi, com licença GPL v3) que o Braga Frame usa para ler e gravar vídeos. Ele não vem junto com o app: será baixado agora do GitHub (${fmtBytes(t.sizeBytes)}; ocupa mais no disco depois de extraído), com tamanho e SHA-256 conferidos, e você pode cancelar durante o download.`,
+      okLabel: 'Baixar e instalar'
+    })
+  };
+
   async function install(t) {
-    if (t.sizeBytes >= BIG_DOWNLOAD) {
+    if (THIRD_PARTY_CONFIRM[t.id]) {
+      if (!await BF.ui.confirm(THIRD_PARTY_CONFIRM[t.id](t))) return;
+    } else if (t.sizeBytes >= BIG_DOWNLOAD) {
       const ok = await BF.ui.confirm({
         title: `Baixar ${splitLabel(t.label).name}?`,
         message: `É um download grande: ${fmtBytes(t.sizeBytes)} (ocupa mais no disco depois de extraído). Vem só da página oficial do projeto, com tamanho e SHA-256 conferidos, e você pode cancelar durante o download.`,
@@ -402,6 +441,23 @@
     }
     await load(); // se algo mudou, o main também manda tools:changed (o app.js repassa ao BF.bus)
   }
+
+  /**
+   * "Instalar o FFmpeg" do aviso vermelho do topo (shell.js): abre a aba Ferramentas (onde o progresso aparece) e começa a instalação, com a confirmação.
+   * Devolve true se instalou ou já estava instalado; false se o usuário recusou, falhou ou o sistema não tem pacote (a aba mostra como instalar à mão).
+   */
+  async function installFfmpeg() {
+    BF.ui.selectTab('tools');
+    await load();
+    const t = data && data.tools.find((x) => x.id === 'ffmpeg');
+    if (!t || !t.available) return false;
+    const state = toolState(t);
+    if (state === 'installed') return true;
+    if (state === 'busy' || state === 'host') return false;
+    await install(t);
+    return Boolean(BF.state.tools.ffmpeg && BF.state.tools.ffprobe);
+  }
+  BF.tools = { installFfmpeg };
 
   // ---------- registro ----------
 

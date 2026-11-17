@@ -34,6 +34,10 @@ O CI (`ci.yml`) mantém o cache do `npm`, que é pequeno e some sozinho depois d
 
 Nenhum segredo: a Release é criada com o `GITHUB_TOKEN` do próprio workflow (`contents: write`, só no job de release). Se o repositório restringir as permissões do token, libere em Settings > Actions > General > Workflow permissions.
 
+## Como o app fica sabendo
+
+O aviso de versão nova ([atualizacao.md](atualizacao.md)) lê a **última Release publicada** (`/releases/latest`) e compara a tag com a versão instalada. Por isso a tag precisa ser `vX.Y.Z`; rascunhos e pré-lançamentos são ignorados. Enquanto não houver nenhuma Release, o app mostra "O projeto ainda não publicou nenhuma versão". **O primeiro teste de verdade do aviso é a primeira tag**: instale uma versão mais antiga e veja a faixa aparecer.
+
 ## O que ainda não existe
 
 - **Assinatura digital**: o instalador sai sem assinatura. O ponto de encaixe é entre "Compilar o instalador" e "Publicar a Release" (o BDS assina pela SignPath; veja `release-bds.yml` no repositório dele). Depende da licença de código aberto (decisão pendente).

@@ -18,9 +18,16 @@
     box.hidden = missing.length === 0;
     if (!missing.length) { box.replaceChildren(); return; }
     box.replaceChildren(
-      el('span', {}, `Não encontrado: ${missing.join(', ')}. Instale o FFmpeg pela página oficial (ffmpeg.org/download.html; o app não o baixa) e deixe-o no PATH, ou defina CORTE_FFMPEG / CORTE_FFPROBE. Depois clique em Verificar de novo (se mexeu no PATH, reabra o app). Sem isso não é possível abrir ou exportar vídeos.`),
+      el('span', {}, `Não encontrado: ${missing.join(', ')}. Sem isso não é possível abrir ou exportar vídeos. Instale o FFmpeg com o botão ao lado, ou por conta própria e então clique em Verificar de novo (se mexeu no PATH, reabra o app).`),
+      el('button', { type: 'button', class: 'primary sm', dataset: { act: 'install-ffmpeg' }, onclick: installFfmpeg }, 'Instalar o FFmpeg'),
       el('button', { type: 'button', onclick: recheckTools }, 'Verificar de novo')
     );
+  }
+
+  /** "Instalar o FFmpeg" do aviso: a aba Ferramentas faz o trabalho (confirmação, progresso, erros); sem ela (não deveria acontecer), só abre a aba. */
+  async function installFfmpeg() {
+    if (BF.tools && BF.tools.installFfmpeg) await BF.tools.installFfmpeg();
+    else BF.ui.selectTab('tools');
   }
 
   async function recheckTools() {

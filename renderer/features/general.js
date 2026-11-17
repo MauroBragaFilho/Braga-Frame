@@ -5,6 +5,7 @@
  *   - Aparência: Escuro ou Claro (BF.ui.setTheme, o mesmo botão do rodapé do menu; guarda a escolha). Dentro do Braga Digital Studio o tema é dele
  *     (`.theme-locked`): as opções ficam desabilitadas e o texto diz por quê.
  *   - Pasta de projetos: onde o app guarda os projetos (a do perfil do app; não dá para trocar) e "Mostrar na pasta".
+ *   - Atualizações: avisa de versão nova (liga/desliga, "Verificar agora"; só avisa, não instala; features/update.js).
  *   - Suporte: copia as informações do computador para mandar ao suporte (app:support) e mostra o arquivo de registro.
  *   - Sobre: nome, versão e a frase do app (app:info) e quem desenvolveu.
  * Preferências (análise, revisão, exportação) e Ferramentas são as outras abas de Configurações.
@@ -36,6 +37,19 @@
       el('h3', {}, 'Pasta de projetos'),
       el('div', { class: 'gen-folder' }, box.path, box.reveal),
       el('p', { class: 'muted small gen-note' }, 'Cada vídeo que você abre vira um projeto guardado aqui, e o app salva sozinho a cada mudança. Os vídeos e os cortes exportados ficam onde estão: aqui ficam só os dados do projeto.'));
+    // Atualizações: só avisa de versão nova (BF.update, features/update.js); dentro de outro aplicativo (BDS) o cartão nem existe
+    box.updSwitch = el('input', { type: 'checkbox', id: 'genUpdateSwitch', class: 'bds-switch', role: 'switch', onchange: () => BF.update.setEnabled(box.updSwitch.checked) });
+    box.updCheck = el('button', { type: 'button', class: 'secondary sm', dataset: { act: 'check-update' }, onclick: () => BF.update.check({ force: true }) }, icon('refresh'), 'Verificar agora');
+    box.updOpen = el('button', { type: 'button', class: 'secondary sm', dataset: { act: 'open-update' }, hidden: true, onclick: () => BF.update.open() }, icon('open_in_new'), 'Ver e baixar');
+    box.updStatus = el('p', { class: 'gen-update-status small', role: 'status' });
+    box.updates = BF.update && !BF.embedded
+      ? el('section', { class: 'card gen-card', dataset: { section: 'updates' } },
+        el('h3', {}, 'Atualizações'),
+        el('p', { class: 'muted small gen-note' }, 'O Braga Frame pode avisar quando sai uma versão nova. Para isso ele consulta a página de versões do projeto no GitHub ao abrir e envia só o nome e a versão do app, nada seu. Ele só avisa: você baixa e instala a nova por cima, e seus projetos continuam como estão.'),
+        el('label', { class: 'gen-switch-row', for: 'genUpdateSwitch' }, box.updSwitch, el('span', {}, 'Avisar quando houver versão nova')),
+        el('div', { class: 'gen-actions' }, box.updCheck, box.updOpen),
+        box.updStatus)
+      : null;
     box.copy = el('button', { type: 'button', class: 'secondary sm', dataset: { act: 'copy-support' }, onclick: copySupport }, icon('content_copy'), 'Copiar informações');
     box.log = el('button', { type: 'button', class: 'secondary sm', dataset: { act: 'show-log' }, onclick: showLog }, icon('folder_open'), 'Mostrar o registro');
     box.report = el('textarea', { class: 'gen-report', readOnly: true, rows: 9, hidden: true, 'aria-label': 'Informações para o suporte', spellcheck: 'false' });
@@ -53,6 +67,7 @@
         el('div', { class: 'gen-main' },
           el('section', { class: 'card gen-card', dataset: { section: 'appearance' } }, el('h3', {}, 'Aparência'), box.themes, box.themeNote),
           box.folder,
+          box.updates,
           box.support),
         el('aside', { class: 'card gen-card gen-about', dataset: { section: 'about' }, 'aria-label': 'Sobre' },
           el('h3', {}, 'Sobre'),
@@ -101,7 +116,20 @@
     await BF.api('shell:reveal', { path: state.logFile }, { toast: true });
   }
 
+  /** O cartão Atualizações: interruptor, texto do último resultado, "Verificar agora" e "Ver e baixar" (só com versão nova). */
+  function drawUpdates() {
+    if (!box.updates || !BF.update) return;
+    const u = BF.update;
+    const { text, kind, canOpen } = u.describe(u.state.result);
+    box.updSwitch.checked = u.enabled();
+    box.updCheck.disabled = u.state.checking;
+    box.updStatus.textContent = u.state.checking ? 'Verificando…' : text;
+    box.updStatus.dataset.kind = u.state.checking ? '' : kind;
+    box.updOpen.hidden = !canOpen || u.state.checking;
+  }
+
   function draw() {
+    drawUpdates();
     if (!box.themes) return;
     const theme = BF.ui.theme ? BF.ui.theme() : 'dark';
     const frozen = locked();
@@ -135,4 +163,5 @@
     onShow: draw
   });
   BF.bus.on('theme:changed', draw);
+  BF.bus.on('update:changed', drawUpdates);
 })();

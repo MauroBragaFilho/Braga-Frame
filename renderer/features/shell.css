@@ -91,6 +91,7 @@
 /* ---------- Aviso de ferramentas ausentes ---------- */
 .banner { flex: none; display: flex; align-items: center; gap: 12px; padding: 10px 32px; }
 .banner.warn { background: var(--warn-bg); color: var(--status-warn); border-bottom: 1px solid color-mix(in srgb, var(--status-warn) 40%, transparent); }
+.banner.info { background: color-mix(in srgb, var(--accent) 8%, var(--card)); color: var(--text); border-bottom: 1px solid var(--line); }
 .banner span { flex: 1; font-size: 13px; }
 .banner button { flex: none; }
 

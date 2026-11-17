@@ -13,6 +13,8 @@
  * (42 MB); BF_REQUIRE_NETWORK=1 faz o teste do whisper e o do catálogo do OpenRouter FALHAREM em vez de pular quando não há internet.
  * O YouTube às vezes pede "confirme que você não é um robô": o teste diz isso e se marca como pulado (não é falha do app).
  *
+ * O teste do FFmpeg (tests/ffmpeg-network.test.js) só roda com BF_NETWORK_FFMPEG=1: baixa ~100 MB e EXECUTA o ffmpeg baixado.
+ *
  * Os testes de provedor de IA COM CHAVE (tests/ai-real-network.test.js e tests/ai-openrouter-real.test.js) NÃO entram aqui: gastam a cota
  * do provedor e são opt-in por BF_AI_TEST_KEY (veja o cabeçalho de cada um; o do OpenRouter faz no máximo 8 pedidos de conversa).
  *
@@ -22,7 +24,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const ROOT = path.resolve(__dirname, '..');
-const files = ['tests/sources-network.test.js', 'tests/subtitles-whisper.test.js', 'tests/ai-openrouter-network.test.js'];
+const files = ['tests/sources-network.test.js', 'tests/subtitles-whisper.test.js', 'tests/ai-openrouter-network.test.js', 'tests/ffmpeg-network.test.js'];
 const env = { ...process.env, BF_NETWORK_TESTS: '1' };
 delete env.BF_SKIP_NETWORK_TESTS; // este modo existe justamente para usar a rede
 

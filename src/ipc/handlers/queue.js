@@ -118,6 +118,9 @@ function register(ctx, overrides) {
     });
   }
 
+  // o FFmpeg que o app instalou não é removido nem trocado no meio de uma exportação (a aba Ferramentas recusa e diz por quê)
+  if (ctx.toolUsage) ctx.toolUsage.register((key) => (key === 'ffmpeg' && manager.jobs.some((j) => j.state === 'running') ? 'há exportações em andamento' : null));
+
   // fechar o app: grava o estado agora, o que rodava vira "interrupted" e os processos do ffmpeg são mandados parar
   if (ctx.app && typeof ctx.app.on === 'function') ctx.app.on('before-quit', () => manager.shutdown());
 

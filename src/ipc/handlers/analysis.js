@@ -47,6 +47,15 @@ function register(ctx) {
   combo.on('failed', (ev) => ctx.send('analysis:failed', ev));
   ctx.analysis = { manager, ai, combo }; // os gerenciadores, para quem precisa saber o que está rodando (e para os testes)
 
+  // O FFmpeg que o app instalou não é removido nem trocado no meio de uma análise ou de uma transcrição (a aba Ferramentas recusa e diz por quê).
+  if (ctx.toolUsage) {
+    ctx.toolUsage.register((key) => {
+      if (key !== 'ffmpeg') return null;
+      if (combo.status() || manager.status() || ai.aiManager.status()) return 'há uma análise em andamento';
+      return ai.transcriptManager.status() ? 'há uma transcrição em andamento' : null;
+    });
+  }
+
   // Apagar o projeto espera a análise que lê o vídeo dele e a transcrição que vai gravá-lo (o resultado criaria um arquivo de projeto apagado).
   if (Array.isArray(ctx.busyChecks)) {
     const same = (a, b) => typeof a === 'string' && typeof b === 'string' && a.replace(/\\/g, '/').toLowerCase() === b.replace(/\\/g, '/').toLowerCase();

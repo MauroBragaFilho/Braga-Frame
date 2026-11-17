@@ -36,12 +36,12 @@ async function main() {
     await ev("document.getElementById('tab-settings').click()");
     assert.deepEqual(await ev("[document.getElementById('app').dataset.activeTab, document.getElementById('app').dataset.activeMenu, document.getElementById('pageTitle').textContent]"), ['general', 'settings', 'Configurações']);
     assert.deepEqual(await ev("[...document.querySelectorAll('#subTabs .subtabs:not([hidden]) .subtab-label')].map((n) => n.textContent)"), ['Geral', 'Preferências', 'Ferramentas']);
-    assert.deepEqual(await ev("[...document.querySelectorAll('#tabpanel-general .gen-card h3')].map((n) => n.textContent)"), ['Aparência', 'Pasta de projetos', 'Suporte', 'Sobre']);
+    assert.deepEqual(await ev("[...document.querySelectorAll('#tabpanel-general .gen-card h3')].map((n) => n.textContent)"), ['Aparência', 'Pasta de projetos', 'Atualizações', 'Suporte', 'Sobre']);
     const text = await ev("document.getElementById('tabpanel-general').textContent");
-    for (const missing of ['Idioma', 'Notificações', 'Salvar automaticamente', 'Enviar dados', 'Discord', 'GitHub', 'Chat de suporte', 'Atualizações']) assert.ok(!text.includes(missing), `"${missing}" não existe no app`);
+    for (const missing of ['Idioma', 'Notificações', 'Salvar automaticamente', 'Enviar dados', 'Discord', 'github.com', 'Chat de suporte', 'Atualização automática']) assert.ok(!text.includes(missing), `"${missing}" não existe no app`);
     assert.equal(await ev("document.querySelectorAll('#tabpanel-general a').length"), 0, 'sem links');
     await shot('settings-geral');
-    step('Configurações abre pela Geral (Geral · Preferências · Ferramentas) e mostra só Aparência, Pasta de projetos, Suporte e Sobre');
+    step('Configurações abre pela Geral (Geral · Preferências · Ferramentas) e mostra só Aparência, Pasta de projetos, Atualizações, Suporte e Sobre');
 
     // ---- Aparência
     assert.deepEqual(await themes(), [['dark', 'true', false], ['light', 'false', false]]);

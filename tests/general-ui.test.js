@@ -20,9 +20,22 @@ const CODE = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'features', 
 const CSS = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'features', 'general.css'), 'utf8');
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 const idle = async () => { for (let i = 0; i < 5; i += 1) await tick(); };
+
+/** BF.update de mentira: guarda o que a tela pediu e deixa o teste escolher o resultado. */
+function makeUpdate(result = null) {
+  const u = {
+    state: { result, checking: false }, on: true, calls: [],
+    enabled() { return u.on; },
+    setEnabled(value) { u.on = value; u.calls.push(['setEnabled', value]); },
+    async check(opts) { u.calls.push(['check', opts]); },
+    async open() { u.calls.push(['open']); },
+    describe: (r) => (r ? { text: `resultado:${r.status}`, kind: r.status === 'available' ? 'info' : 'ok', canOpen: r.status === 'available' } : { text: '', kind: '', canOpen: false })
+  };
+  return u;
+}
 const plain = (v) => JSON.parse(JSON.stringify(v));
 
-function load({ app = { name: 'Braga Frame', tagline: 'Cortes verticais para criadores.', version: '0.1.0', projectsDir: 'C:\\Users\\Ana\\AppData\\Roaming\\braga-frame\\projects' }, theme = 'dark', locked = false, reveal = { ok: true }, routes = {}, clipboard = null } = {}) {
+function load({ app = { name: 'Braga Frame', tagline: 'Cortes verticais para criadores.', version: '0.1.0', projectsDir: 'C:\\Users\\Ana\\AppData\\Roaming\\braga-frame\\projects' }, theme = 'dark', locked = false, reveal = { ok: true }, routes = {}, clipboard = null, update = 'padrão', embedded = false } = {}) {
   const doc = createDocument();
   const appNode = doc.register('app');
   if (locked) appNode.classList.add('theme-locked');
@@ -31,7 +44,11 @@ function load({ app = { name: 'Braga Frame', tagline: 'Cortes verticais para cri
   const handlers = new Map();
   let current = theme;
   let tab = null;
+  // `update`: o BF.update de mentira (features/update.js tem os próprios testes); null = o módulo nem foi carregado
+  const upd = update === 'padrão' ? makeUpdate() : update;
   const BF = {
+    embedded,
+    ...(upd ? { update: upd } : {}),
     state: { app },
     util: { el: makeEl(doc) },
     ui: {
@@ -54,16 +71,16 @@ function load({ app = { name: 'Braga Frame', tagline: 'Cortes verticais para cri
   tab.render(panel);
   const q = (selector) => panel.querySelector(selector);
   const all = (selector) => panel.querySelectorAll(selector);
-  return { tab, panel, q, all, calls, toasts, BF, setApp: (next) => { BF.state.app = next; tab.onShow(); }, themes: () => all('.gen-theme').map((b) => [b.dataset.theme, b.attrs['aria-checked'], b.disabled]) };
+  return { tab, panel, q, all, calls, toasts, BF, upd, redraw: () => (handlers.get('update:changed') || []).forEach((fn) => fn()), setApp: (next) => { BF.state.app = next; tab.onShow(); }, themes: () => all('.gen-theme').map((b) => [b.dataset.theme, b.attrs['aria-checked'], b.disabled]) };
 }
 
 test('registra a aba "general" (Geral, ordem 75: a primeira de Configurações) e mostra só o que o app tem', async () => {
   const env = load();
   await idle();
   assert.deepEqual(plain({ id: env.tab.id, title: env.tab.title, order: env.tab.order }), { id: 'general', title: 'Geral', order: 75 });
-  assert.deepEqual(env.all('.gen-card h3').map((h) => h.textContent), ['Aparência', 'Pasta de projetos', 'Suporte', 'Sobre']);
+  assert.deepEqual(env.all('.gen-card h3').map((h) => h.textContent), ['Aparência', 'Pasta de projetos', 'Atualizações', 'Suporte', 'Sobre']);
   const text = env.panel.textContent;
-  for (const missing of ['Idioma', 'Notificações', 'Salvar automaticamente', 'Enviar dados', 'Discord', 'GitHub', 'Chat de suporte', 'Atualizações']) assert.ok(!text.includes(missing), `"${missing}" não existe no app`);
+  for (const missing of ['Idioma', 'Notificações', 'Salvar automaticamente', 'Enviar dados', 'Discord', 'github.com', 'Chat de suporte', 'Atualização automática']) assert.ok(!text.includes(missing), `"${missing}" não existe no app`);
   assert.equal(env.all('.primary').length, 0, 'tela de ajustes: sem ação principal solta');
 });
 
@@ -112,6 +129,61 @@ test('pasta de projetos: mostra o caminho do app:info e "Mostrar na pasta" a rev
   const none = load({ app: { name: 'Braga Frame', tagline: '', version: '0.1.0' } });
   await idle();
   assert.equal(none.q('[data-section="folder"]').hidden, true);
+});
+
+test('atualizações: o cartão mostra o interruptor, o resultado e os botões; só "Ver e baixar" quando há versão nova', async () => {
+  const env = load();
+  await idle();
+  assert.equal(env.q('#genUpdateSwitch').checked, true);
+  assert.equal(env.q('#genUpdateSwitch').attrs.role, 'switch');
+  assert.equal(env.q('[data-act="open-update"]').hidden, true, 'sem versão nova não há o que baixar');
+  assert.equal(env.q('[data-act="check-update"]').disabled, false);
+  assert.match(env.q('[data-section="updates"] .gen-note').textContent, /GitHub/, 'diz o que consulta');
+  assert.match(env.q('[data-section="updates"] .gen-note').textContent, /só o nome e a versão do app, nada seu/, 'diz o que envia');
+  assert.match(env.q('[data-section="updates"] .gen-note').textContent, /Ele só avisa/, 'diz que não instala');
+
+  env.upd.state.result = { status: 'available', current: '0.1.0', latest: { version: '0.2.0' } };
+  env.redraw();
+  assert.equal(env.q('.gen-update-status').textContent, 'resultado:available');
+  assert.equal(env.q('.gen-update-status').dataset.kind, 'info');
+  assert.equal(env.q('[data-act="open-update"]').hidden, false);
+  env.q('[data-act="open-update"]').click();
+  assert.deepEqual(env.upd.calls, [['open']]);
+
+  env.upd.state.result = { status: 'current', current: '0.2.0', latest: { version: '0.2.0' } };
+  env.redraw();
+  assert.equal(env.q('[data-act="open-update"]').hidden, true);
+  assert.equal(env.q('.gen-update-status').dataset.kind, 'ok');
+});
+
+test('atualizações: o interruptor liga e desliga o aviso; "Verificar agora" força a consulta; verificando, o botão fica parado', async () => {
+  const env = load();
+  await idle();
+  const sw = env.q('#genUpdateSwitch');
+  sw.checked = false;
+  sw.dispatch('change');
+  assert.deepEqual(env.upd.calls, [['setEnabled', false]]);
+  env.upd.on = false;
+  env.redraw();
+  assert.equal(env.q('#genUpdateSwitch').checked, false, 'a tela acompanha o estado guardado');
+
+  env.q('[data-act="check-update"]').click();
+  assert.deepEqual(plain(env.upd.calls.at(-1)), ['check', { force: true }], '"Verificar agora" nunca usa a consulta guardada');
+
+  env.upd.state.checking = true;
+  env.redraw();
+  assert.equal(env.q('[data-act="check-update"]').disabled, true);
+  assert.equal(env.q('.gen-update-status').textContent, 'Verificando…');
+  assert.equal(env.q('[data-act="open-update"]').hidden, true);
+});
+
+test('atualizações: dentro de outro aplicativo (BDS) ou sem o módulo de atualização o cartão nem existe', async () => {
+  for (const opts of [{ embedded: true }, { update: null }]) {
+    const env = load(opts);
+    await idle();
+    assert.equal(env.q('[data-section="updates"]'), null);
+    assert.deepEqual(env.all('.gen-card h3').map((h) => h.textContent), ['Aparência', 'Pasta de projetos', 'Suporte', 'Sobre']);
+  }
 });
 
 const REPORT = { ok: true, text: 'Braga Frame 0.1.0\nPlacas de vídeo:\n  GPU de teste', logFile: 'C:\\dados\\logs\\bragaframe.log' };

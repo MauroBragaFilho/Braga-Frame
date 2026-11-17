@@ -625,6 +625,16 @@ class ToolInstaller extends EventEmitter {
       throw new ToolError(`O pacote baixado não contém o programa esperado (${asset.exe}). O pacote oficial pode ter mudado; atualize o ${appInfo.name}.`, 'EXE_MISSING');
     }
     if (process.platform !== 'win32') { try { fs.chmodSync(exe, 0o755); } catch { /* sem permissão para mudar o modo */ } }
+    // programas extras do mesmo pacote (ex.: o ffprobe junto do ffmpeg): sem qualquer um deles o pacote não serve
+    for (const rel of Object.values(asset.alsoExe || {})) {
+      const extra = registry.exePath(filesDir, rel);
+      let extraStat = null;
+      try { extraStat = fs.statSync(extra); } catch { /* tratado abaixo */ }
+      if (!extraStat || !extraStat.isFile()) {
+        throw new ToolError(`O pacote baixado não contém um dos programas esperados (${rel}). O pacote oficial pode ter mudado; atualize o ${appInfo.name}.`, 'EXE_MISSING');
+      }
+      if (process.platform !== 'win32') { try { fs.chmodSync(extra, 0o755); } catch { /* sem permissão para mudar o modo */ } }
+    }
 
     // 4) manifesto (gravado dentro da pasta ainda em staging: a pasta publicada já nasce completa)
     report({ phase: 'install', message: 'Instalando…' });
@@ -637,6 +647,7 @@ class ToolInstaller extends EventEmitter {
       id: entry.id, label: entry.label, version: entry.version,
       file: asset.name, sha256: asset.sha256, size: asset.size,
       exe: asset.exe, exeSize: exeStat.size,
+      ...(asset.alsoExe ? { alsoExe: asset.alsoExe } : {}),
       platform: asset.key, url: asset.url, source: entry.source,
       installedAt: new Date().toISOString()
     };

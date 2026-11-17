@@ -2,7 +2,7 @@
 
 Cada ferramenta externa oficial tem **um arquivo** aqui, com o nome igual ao `id` (`whisper.js`, `ytdlp.js`, `twitchdownloader.js`…). O `registry.js` carrega todos os `*.js` desta pasta (menos os que começam com `_` ou `.`), valida o formato e entrega ao `ToolInstaller`. Entrada inválida é descartada e não aparece na tela de Ferramentas; o teste `tests/tools-registry.test.js` falha apontando o defeito.
 
-Quem escreve a entrada é o dono do recurso (veja a tabela de propriedade em `docs/arquitetura.md`). Não existe entrada de exemplo no código de propósito: só entra aqui ferramenta real, de **release oficial** do projeto, com versão fixa, tamanho e SHA-256 conferidos.
+Quem escreve a entrada é o dono do recurso (veja a tabela de propriedade em `docs/arquitetura.md`). Não existe entrada de exemplo no código de propósito: só entra aqui ferramenta real, de **release oficial** do projeto, com versão fixa, tamanho e SHA-256 conferidos. A única exceção é o **FFmpeg** (`ffmpeg.js`): o projeto não publica programas prontos, então a entrada usa a compilação de terceiros que a própria página do FFmpeg indica, e o campo `source` diz isso (não começa com "oficial:").
 
 ## Formato
 
@@ -29,6 +29,8 @@ module.exports = {
 ```
 
 Campos opcionais do pacote:
+
+`alsoExe` = `{ ffprobe: 'bin/ffprobe.exe' }`: outros programas do MESMO pacote (1 a 4; a chave é a do `ctx.tools` que ele alimenta). A instalação só vale se todos existirem; o `registry.resolveExtras` devolve os caminhos. Foi criado para o ffprobe, que vem junto do ffmpeg.
 
 | Campo | Para quê |
 |---|---|

@@ -23,6 +23,7 @@ const ID_RE = /^[A-Za-z][A-Za-z0-9_-]{0,39}$/;
 const VERSION_RE = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$/;
 const PLATFORM_KEY_RE = /^(win32|linux|darwin)-(x64|arm64|ia32|arm)$/;
 const SHA256_RE = /^[0-9a-f]{64}$/i;
+const EXTRA_KEY_RE = /^[a-z][a-z0-9]{0,19}$/;
 
 class ToolError extends Error {
   constructor(message, code = 'TOOL_ERROR', extra = {}) {
@@ -84,6 +85,18 @@ function validateAsset(key, asset, { allowLoopbackHttp = false } = {}) {
   if (asset.kind !== undefined && !KINDS.includes(asset.kind)) errors.push(`${at}.kind deve ser um de: ${KINDS.join(', ')}`);
 
   const kind = KINDS.includes(asset.kind) ? asset.kind : inferKind(asset.name);
+  if (asset.alsoExe !== undefined) {
+    const extras = isPlainObject(asset.alsoExe) ? Object.entries(asset.alsoExe) : null;
+    if (!extras || extras.length === 0 || extras.length > 4) {
+      errors.push(`${at}.alsoExe deve ser um objeto { chave: "pasta/programa.exe" } com 1 a 4 programas`);
+    } else {
+      for (const [name, rel] of extras) {
+        if (!EXTRA_KEY_RE.test(name)) errors.push(`${at}.alsoExe: chave inválida "${name}" (minúsculas e números, começa com letra; ex.: "ffprobe")`);
+        if (!isSafeRelPath(rel)) errors.push(`${at}.alsoExe["${name}"] inválido (caminho relativo com "/", sem "..")`);
+      }
+    }
+    if (kind === 'file') errors.push(`${at}.alsoExe não se aplica a arquivo único`);
+  }
   if (asset.stripComponents !== undefined) {
     if (!Number.isInteger(asset.stripComponents) || asset.stripComponents < 0 || asset.stripComponents > 5) {
       errors.push(`${at}.stripComponents deve ser um inteiro de 0 a 5`);
@@ -229,7 +242,16 @@ function checkInstalled(toolsDir, entry, asset) {
   try { st = fs.statSync(exe); } catch { return null; }
   if (!st.isFile()) return null;
   if (Number.isSafeInteger(manifest.exeSize) && st.size !== manifest.exeSize) return null;
-  return { dir, exe, manifest };
+  // programas extras do mesmo pacote (ex.: o ffprobe, junto do ffmpeg): sem qualquer um deles a instalação não vale
+  const extras = {};
+  for (const [name, rel] of Object.entries(asset.alsoExe || {})) {
+    const file = exePath(dir, rel);
+    let extra;
+    try { extra = fs.statSync(file); } catch { return null; }
+    if (!extra.isFile()) return null;
+    extras[name] = file;
+  }
+  return { dir, exe, extras, manifest };
 }
 
 /** Versões instaladas de um id (qualquer uma com manifesto legível), mesmo que não seja a fixada hoje. */
@@ -265,6 +287,15 @@ function resolveInstalled(toolsDir, id, opts = {}) {
   const asset = assetFor(entry, platform, arch);
   const found = asset ? checkInstalled(toolsDir, entry, asset) : null;
   return found ? found.exe : null;
+}
+
+/** Programas extras do mesmo pacote (`alsoExe`: ex.: { ffprobe: caminho }) da ferramenta instalada; {} se não está instalada ou não tem extras. */
+function resolveExtras(toolsDir, id, opts = {}) {
+  const { entries, platform, arch } = resolveOptions(opts);
+  const entry = getEntry(id, entries);
+  const asset = entry ? assetFor(entry, platform, arch) : null;
+  const found = asset ? checkInstalled(toolsDir, entry, asset) : null;
+  return found ? { ...found.extras } : {};
 }
 
 /** { id: caminho|null } para todas as entradas (base do `ctx.tools`). */
@@ -316,5 +347,5 @@ module.exports = {
   validateEntry, assertValidEntry, loadRegistry, getRegistry, getEntries, getEntry,
   assetFor, unavailableReason, inferKind, isLoopbackHost, isSafeFileName, isSafeRelPath,
   installDir, exePath, readManifest, checkInstalled, listInstalledVersions,
-  resolveInstalled, resolveAll, status
+  resolveInstalled, resolveExtras, resolveAll, status
 };

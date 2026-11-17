@@ -250,3 +250,64 @@ test('status: versão antiga instalada aparece como desatualizada; plataforma se
     assert.equal(mac.sizeBytes, 0);
   } finally { cleanup(toolsDir); }
 });
+
+// ------------------------------------------------------------------ programas extras do mesmo pacote (alsoExe)
+
+const withExtras = (extra) => goodEntry({
+  id: 'ffmpegtest',
+  assets: { 'win32-x64': { ...goodEntry().assets['win32-x64'], exe: 'bin/ffmpeg.exe', alsoExe: { ffprobe: 'bin/ffprobe.exe' }, ...extra } }
+});
+
+test('alsoExe: um objeto { chave: caminho } com 1 a 4 programas; o resto é apontado', () => {
+  assert.deepEqual(registry.validateEntry(withExtras({})), []);
+  const bad = [
+    ['lista em vez de objeto', ['bin/ffprobe.exe'], /alsoExe deve ser um objeto/],
+    ['objeto vazio', {}, /alsoExe deve ser um objeto/],
+    ['mais de 4', { a: 'a.exe', b: 'b.exe', c: 'c.exe', d: 'd.exe', e: 'e.exe' }, /1 a 4 programas/],
+    ['chave inválida', { 'FF-probe': 'bin/ffprobe.exe' }, /chave inválida/],
+    ['caminho com ..', { ffprobe: '../ffprobe.exe' }, /alsoExe\["ffprobe"\] inválido/],
+    ['caminho absoluto', { ffprobe: '/ffprobe.exe' }, /alsoExe\["ffprobe"\] inválido/]
+  ];
+  for (const [why, value, re] of bad) assert.match(registry.validateEntry(withExtras({ alsoExe: value })).join(' | '), re, why);
+  const file = goodEntry({ assets: { 'win32-x64': { url: 'https://github.com/x/y/releases/download/1/demo.exe', name: 'demo.exe', size: 10, sha256: SHA, exe: 'demo.exe', alsoExe: { outro: 'outro.exe' } } } });
+  assert.match(registry.validateEntry(file).join(' | '), /não se aplica a arquivo único/);
+});
+
+test('alsoExe: sem qualquer dos programas a instalação não vale; resolveExtras devolve os caminhos', () => {
+  const toolsDir = tmpDir();
+  try {
+    const entry = withExtras({});
+    const opts = { entries: [entry], ...WIN };
+    assert.deepEqual(registry.resolveExtras(toolsDir, 'ffmpegtest', opts), {}, 'nada instalado');
+    const { dir, exe } = fakeInstall(toolsDir, entry);
+    assert.equal(registry.resolveInstalled(toolsDir, 'ffmpegtest', opts), null, 'só o ffmpeg, sem o ffprobe: não vale');
+    assert.deepEqual(registry.resolveExtras(toolsDir, 'ffmpegtest', opts), {});
+    const probe = path.join(dir, 'bin', 'ffprobe.exe');
+    fs.writeFileSync(probe, 'MZ-extra');
+    assert.equal(registry.resolveInstalled(toolsDir, 'ffmpegtest', opts), exe);
+    assert.deepEqual(registry.resolveExtras(toolsDir, 'ffmpegtest', opts), { ffprobe: probe });
+    assert.equal(registry.status(toolsDir, opts)[0].installed, true);
+    fs.rmSync(probe);
+    assert.equal(registry.status(toolsDir, opts)[0].installed, false, 'o ffprobe sumiu: a instalação deixa de valer');
+    fs.mkdirSync(probe); // uma pasta no lugar do arquivo também não vale
+    assert.equal(registry.resolveInstalled(toolsDir, 'ffmpegtest', opts), null);
+    assert.deepEqual(registry.resolveExtras(toolsDir, 'ffmpegtest', opts), {});
+    assert.deepEqual(registry.resolveExtras(toolsDir, 'desconhecida', opts), {});
+  } finally { cleanup(toolsDir); }
+});
+
+test('a entrada real do ffmpeg: pacote fixo, hash e tamanho do digest do GitHub, ffprobe do mesmo pacote e origem NÃO "oficial"', () => {
+  const entry = registry.getEntry('ffmpeg');
+  assert.ok(entry, 'entries/ffmpeg.js existe');
+  const asset = registry.assetFor(entry, 'win32', 'x64');
+  assert.equal(asset.kind, 'zip');
+  assert.equal(asset.size, 99899672);
+  assert.equal(asset.sha256, '8d31e162f1616e37aab3fa2db991b97e1b8dbeb1c8465fd81a81be16ff91b328');
+  assert.equal(asset.url, `https://github.com/GyanD/codexffmpeg/releases/download/${entry.version}/ffmpeg-${entry.version}-full_build-shared.zip`);
+  assert.equal(asset.stripComponents, 1);
+  assert.equal(asset.exe, 'bin/ffmpeg.exe');
+  assert.deepEqual(asset.alsoExe, { ffprobe: 'bin/ffprobe.exe' });
+  assert.doesNotMatch(entry.source, /^oficial/i, 'não é um release do projeto FFmpeg (que não publica programas): a origem diz que é de terceiros');
+  assert.match(entry.source, /terceiros/);
+  for (const other of ['linux-x64', 'darwin-arm64', 'win32-arm64']) assert.equal(registry.assetFor(entry, ...other.split('-')), null, `${other}: sem pacote (instala-se à mão)`);
+});

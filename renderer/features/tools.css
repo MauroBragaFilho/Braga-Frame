@@ -53,6 +53,10 @@
 .tool-help-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .tool-help strong { font-family: var(--font-title); font-size: 15px; letter-spacing: -0.01em; }
 .tool-help p { color: var(--muted); }
+.tool-help-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.tool-help-manual { margin-top: 4px; }
+.tool-help-manual summary { cursor: pointer; color: var(--muted); }
+.tool-help-manual ol { margin-top: 8px; }
 .tool-help ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; color: var(--muted); }
 
 /* carregando: duas linhas fantasma, discretas */

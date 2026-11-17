@@ -29,11 +29,11 @@ O app **não redistribui** estes programas: baixa dos lançamentos oficiais de c
 | **whisper.cpp com CUDA** (opcional, placas NVIDIA) | o mesmo, mais rápido | MIT para o whisper.cpp; o pacote traz bibliotecas de execução da **NVIDIA (CUDA)**, sob a licença da NVIDIA | github.com/ggml-org/whisper.cpp |
 | **Modelos do Whisper** (formato ggml) | o "cérebro" da transcrição | MIT (OpenAI Whisper) | huggingface.co/ggerganov/whisper.cpp |
 
-## 3. Instalado pelo usuário por conta própria
+## 3. FFmpeg e ffprobe
 
 | Programa | Observação |
 |---|---|
-| **FFmpeg e ffprobe** | **Não vão no instalador.** O usuário instala (por exemplo `winget install Gyan.FFmpeg`) e o app usa o que achar no PATH. A licença é a da compilação que o usuário escolher: as compilações "full" costumam ser **GPL** (trazem x264/x265); as "essentials"/LGPL não têm todos os codificadores. O app só **executa** o programa, não o inclui nem o liga ao seu código. |
+| **FFmpeg e ffprobe** | **Não vão no instalador.** O botão **Instalar o FFmpeg** (aba Ferramentas e aviso do topo) baixa, só quando o usuário clica e confirma, a compilação "full shared" **9.0.2 de Gyan Doshi** (a que ffmpeg.org/download.html indica; github.com/GyanD/codexffmpeg), com tamanho e SHA-256 conferidos. É **GPL v3** (`--enable-gpl --enable-version3`, sem `--enable-nonfree`; com x264, x265, libass e NVENC) e o texto da licença vai dentro do pacote baixado. O usuário também pode usar um FFmpeg que ele mesmo instalou (PATH ou `CORTE_FFMPEG`). O app só **executa** o programa, não o inclui no instalador nem o liga ao seu código. O projeto FFmpeg e a compilação são de terceiros: valem as licenças deles. |
 
 ## 4. Serviços externos (não são software distribuído)
 

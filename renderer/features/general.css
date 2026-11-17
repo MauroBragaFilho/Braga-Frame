@@ -29,6 +29,13 @@
 .gen-folder button { flex: none; display: inline-flex; align-items: center; gap: 6px; }
 .gen-folder .material-symbols-rounded { font-size: 18px; }
 
+/* atualizações */
+.gen-switch-row { display: flex; align-items: center; gap: 12px; min-height: 32px; cursor: pointer; }
+.gen-update-status { min-height: 18px; color: var(--muted); }
+.gen-update-status[data-kind="ok"] { color: var(--status-ok, var(--muted)); }
+.gen-update-status[data-kind="info"] { color: var(--text); font-weight: 600; }
+.gen-update-status[data-kind="warn"] { color: var(--status-warn); }
+
 /* suporte */
 .gen-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .gen-actions button { display: inline-flex; align-items: center; gap: 6px; }

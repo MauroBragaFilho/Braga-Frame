@@ -23,11 +23,14 @@ const tools = locateTools();
 const KEY = `${process.platform}-${process.arch}`;
 const PANEL = '#tabpanel-tools';
 
-const OFFICIAL_IDS = ['deno', 'twitchdownloader', 'whisper', 'whisper-cuda', 'ytdlp']; // entradas oficiais de src/core/tools/entries (ordem alfabética)
+const OFFICIAL_IDS = ['deno', 'ffmpeg', 'twitchdownloader', 'whisper', 'whisper-cuda', 'ytdlp']; // entradas de src/core/tools/entries (ordem alfabética); o ffmpeg é de terceiros, as outras são oficiais
 
-const row = (id) => `${PANEL} li.tool[data-tool="${id}"]`;
+const row = (id) => `${PANEL} li.tool:not(.sys)[data-tool="${id}"]`; // linha do registro (as do sistema são sysRow)
+const sysRow = (id) => `${PANEL} li.tool.sys[data-tool="${id}"]`;
 const rowState = (page, id) => page.eval(`(document.querySelector('${row(id)}') || { dataset: {} }).dataset.state || null`);
 const rowText = (page, id) => page.eval(`(document.querySelector('${row(id)}') || {}).textContent || ''`);
+const sysState = (page, id) => page.eval(`(document.querySelector('${sysRow(id)}') || { dataset: {} }).dataset.state || null`);
+const sysText = (page, id) => page.eval(`(document.querySelector('${sysRow(id)}') || {}).textContent || ''`);
 const click = (page, id, act) => page.eval(`document.querySelector('${row(id)} button[data-act="${act}"]').click()`);
 const samePath = (a, b) => path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
 
@@ -97,15 +100,15 @@ async function main() {
       assert.deepEqual(status.system.map((s) => [s.id, s.found]), [['ffmpeg', true], ['ffprobe', true]]);
 
       for (const id of ['ffmpeg', 'ffprobe']) {
-        assert.equal(await rowState(page, id), 'found');
-        const text = await rowText(page, id);
+        assert.equal(await sysState(page, id), 'found');
+        const text = await sysText(page, id);
         assert.match(text, /versão \S+/, `${id}: versão detectada aparece`);
         assert.ok(text.includes(tools[id]), `${id}: caminho aparece`);
       }
       const registryRows = await page.eval(`document.querySelectorAll('${PANEL} li.tool:not(.sys)').length`);
       assert.equal(registryRows, status.tools.length, 'uma linha por entrada do registro (e nenhuma a mais)');
-      assert.deepEqual(status.tools.map((t) => t.id).sort(), OFFICIAL_IDS, 'o registro oficial traz exatamente as cinco ferramentas do app (a quinta é o pacote CUDA do Whisper)');
-      assert.ok(status.tools.every((t) => !t.test && /^oficial: https:\/\//.test(t.source) && t.sizeBytes > 0 && t.version), 'só entradas oficiais, com origem https, versão e tamanho do download');
+      assert.deepEqual(status.tools.map((t) => t.id).sort(), OFFICIAL_IDS, 'o registro traz exatamente as seis ferramentas do app (o FFmpeg, as quatro oficiais e o pacote CUDA do Whisper)');
+      assert.ok(status.tools.every((t) => !t.test && (t.id === 'ffmpeg' ? /^compilação de terceiros .*https:\/\//.test(t.source) : /^oficial: https:\/\//.test(t.source)) && t.sizeBytes > 0 && t.version), 'só entradas do catálogo, com origem https, versão e tamanho do download (o FFmpeg diz que é de terceiros, as demais são oficiais)');
       for (const id of OFFICIAL_IDS) assert.ok(['missing', 'system'].includes(await rowState(page, id)), `${id}: perfil novo, nada instalado pelo app (ausente ou usando a do sistema)`);
       assert.deepEqual(await page.eval(`[...document.querySelectorAll('${PANEL} h2')].map((n) => n.textContent)`), ['No seu computador', 'Instaladas pelo app'], 'duas seções, sem placeholder');
       assert.equal(await page.eval(`document.querySelectorAll('${PANEL} li.tool:not(.sys) .tool-tag').length`), 0, 'nenhuma ferramenta marcada como "teste local"');
@@ -120,7 +123,7 @@ async function main() {
       await shot(page, 'tools-sistema');
       h.assertNoConsoleErrors(page);
       await app.stop();
-      step('sem entradas de teste: FFmpeg e FFprobe com versão e caminho (sem botões) e as 4 ferramentas oficiais, sem placeholder');
+      step('sem entradas de teste: FFmpeg e FFprobe com versão e caminho (sem botões), o FFmpeg do catálogo como de terceiros e as 4 ferramentas oficiais, sem placeholder');
     }
 
     // ---------- 2) sem FFmpeg no PATH: instruções, sem oferta de download ----------
@@ -133,23 +136,27 @@ async function main() {
         throw new Error(`o ffmpeg deveria estar escondido (PATH só com a pasta do sistema): ${JSON.stringify(await page.eval('BF.state.tools'))}`);
       } else {
         await showToolsTab(app);
-        assert.deepEqual([await rowState(page, 'ffmpeg'), await rowState(page, 'ffprobe')], ['absent', 'absent']);
+        assert.deepEqual([await sysState(page, 'ffmpeg'), await sysState(page, 'ffprobe')], ['absent', 'absent']);
         const text = await page.eval(`document.querySelector('${PANEL}').textContent`);
         assert.match(text, /não encontrado/i);
         assert.match(text, /ffmpeg\.org\/download\.html/, 'aponta a página oficial do projeto');
-        assert.match(text, /não baixa esta ferramenta/, 'explica por que o app não baixa o FFmpeg');
+        assert.doesNotMatch(text, /não baixa esta ferramenta/, 'o app baixa o FFmpeg agora: o texto antigo saiu');
+        assert.match(text, /O FFmpeg não está instalado/);
+        assert.match(text, /Prefiro instalar por conta própria/, 'a instalação à mão ficou como alternativa recolhida');
+        assert.equal(await page.eval(`document.querySelector('${PANEL} [data-help="ffmpeg"] details').open`), false, 'a instalação à mão começa recolhida');
         assert.doesNotMatch(text, /\bnull\b|undefined/);
         assert.match(text, /CORTE_FFMPEG/);
-        assert.deepEqual(await page.eval(`[...document.querySelectorAll('${PANEL} button')].filter((b) => !b.closest('li.tool:not(.sys)')).map((b) => b.dataset.act)`), ['recheck'], 'fora das ferramentas do registro só existe "Verificar de novo": nenhum botão de instalar o FFmpeg');
+        assert.deepEqual(await page.eval(`[...document.querySelectorAll('${PANEL} button')].filter((b) => !b.closest('li.tool:not(.sys)')).map((b) => b.dataset.act)`), ['recheck', 'install-ffmpeg'], 'fora das ferramentas do registro: "Verificar de novo" e o botão que instala o FFmpeg');
         assert.equal(await page.eval(`document.querySelectorAll('${PANEL} li.tool.sys button').length`), 0, 'as linhas do FFmpeg e do FFprobe não têm botão');
         assert.deepEqual(await page.eval(`[...document.querySelectorAll('${PANEL} li.tool:not(.sys) button[data-act="install"]')].map((b) => b.dataset.tool).sort()`), OFFICIAL_IDS, 'os botões Instalar são só das ferramentas oficiais do registro');
         assert.equal(await page.eval("document.querySelector('#tab-tools .tab-badge').textContent"), '!', 'a aba avisa que falta algo');
         assert.equal(await page.eval("document.getElementById('toolsWarn').hidden"), false);
+        assert.deepEqual(await page.eval("[...document.querySelectorAll('#toolsWarn button')].map((b) => b.textContent)"), ['Instalar o FFmpeg', 'Verificar de novo'], 'o aviso do topo oferece instalar');
         await shot(page, 'tools-semffmpeg');
         await page.eval(`document.querySelector('${PANEL} button[data-act="recheck"]').click()`);
         await waitFor(page, "/ainda não foi encontrado/.test(document.getElementById('toasts').textContent)", 15000, 'aviso de que o FFmpeg continua ausente');
         h.assertNoConsoleErrors(page);
-        step('sem FFmpeg: instruções claras na aba, aviso "!" na aba, nenhum botão que baixe o FFmpeg');
+        step('sem FFmpeg: botão Instalar o FFmpeg na aba e no aviso do topo, instalação à mão recolhida, aviso "!" na aba');
       }
       await app.stop();
     }
@@ -281,6 +288,77 @@ async function main() {
     assert.equal(prod.tools.some((t) => t.test || /teste local/.test(t.source)), false, 'entradas de teste ignoradas fora de NODE_ENV=test');
     await app.stop();
     step('com NODE_ENV diferente de "test" as entradas de teste são ignoradas');
+
+    // ---------- 4) o botão "Instalar o FFmpeg" do aviso do topo: confirmação, progresso, aviso some, remover traz de volta ----------
+    {
+      const ffZip = makeZip([
+        { name: 'pacote/bin/ffmpeg.exe', data: payload }, { name: 'pacote/bin/ffprobe.exe', data: 'MZ-ffprobe-de-teste' }, { name: 'pacote/bin/avcodec.dll', data: 'dll' }
+      ]);
+      const ffSrv = await startServer((req, res) => {
+        if (req.url === '/ffmpeg.zip') slowSend(res, ffZip, { chunk: 64 * 1024, everyMs: 60 });
+        else { res.writeHead(404); res.end(); }
+      });
+      try {
+        const ffEntry = {
+          ...makeEntry({ base: ffSrv.base, buf: ffZip, id: 'ffmpeg', version: '9.9.9', file: 'ffmpeg.zip', exe: 'bin/ffmpeg.exe', key: KEY, asset: { stripComponents: 1, alsoExe: { ffprobe: 'bin/ffprobe.exe' } } }),
+          label: 'FFmpeg (ler, converter e gravar vídeo)', source: 'compilação de terceiros (teste): https://exemplo.invalid/ffmpeg'
+        };
+        const bare = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32');
+        const ud = path.join(tmp, 'ud-instalar-ffmpeg');
+        const ffDir = path.join(ud, 'tools', 'ffmpeg');
+        const ffApp = await h.launchApp(ud, { env: { NODE_ENV: 'test', BF_TEST_TOOL_ENTRIES: JSON.stringify([ffEntry]), PATH: bare, CORTE_FFMPEG: '', CORTE_FFPROBE: '' } });
+        const fp = ffApp.page;
+        assert.equal(await fp.eval('BF.state.tools.ffmpeg || BF.state.tools.ffprobe'), null, 'o ffmpeg deveria estar escondido (PATH só com a pasta do sistema)');
+        await waitFor(fp, "!document.getElementById('toolsWarn').hidden", 20000, 'aviso do topo');
+        assert.notEqual(await fp.eval("document.getElementById('app').dataset.activeTab"), 'tools', 'o aviso aparece de qualquer tela, não só na aba Ferramentas');
+
+        // 1ª vez: o botão do aviso abre a aba Ferramentas e pergunta; recusar não baixa nada
+        await fp.eval("document.querySelector('#toolsWarn button[data-act=\"install-ffmpeg\"]').click()");
+        const asked = await answerModal(fp, false);
+        assert.equal(asked.title, 'Instalar o FFmpeg?');
+        assert.match(asked.message, /terceiros/, 'diz que é um programa de terceiros');
+        assert.match(asked.message, /GPL v3/, 'diz a licença');
+        assert.match(asked.message, /SHA-256/);
+        assert.match(asked.message, /cancelar/i);
+        assert.equal(await fp.eval("document.getElementById('app').dataset.activeTab"), 'tools', 'o botão do aviso leva à aba Ferramentas (onde o progresso aparece)');
+        await sleep(300);
+        assert.equal(fs.existsSync(ffDir), false, 'recusar não baixa nem grava nada');
+        assert.equal(await fp.eval('BF.state.tools.ffmpeg'), null);
+        assert.equal(await fp.eval("document.getElementById('toolsWarn').hidden"), false);
+        assert.equal(await rowState(fp, 'ffmpeg'), 'missing');
+
+        // 2ª vez: aceita; a barra de progresso aparece na linha e no bloco de ajuda; no fim o aviso some
+        await fp.eval("document.querySelector('#toolsWarn button[data-act=\"install-ffmpeg\"]').click()");
+        await answerModal(fp, true);
+        await watchRow(fp, 'ffmpeg', (s) => s.state === 'busy' && s.value >= 10);
+        assert.equal(await fp.eval(`document.querySelectorAll('${PANEL} [data-help="ffmpeg"] progress').length`), 1, 'o bloco de ajuda também mostra o progresso');
+        await waitFor(fp, 'BF.state.tools.ffmpeg && BF.state.tools.ffprobe', 60000, 'ffmpeg e ffprobe instalados pelo app');
+        const bin = path.join(ffDir, '9.9.9', 'bin');
+        assert.ok(samePath(await fp.eval('BF.state.tools.ffmpeg'), path.join(bin, 'ffmpeg.exe')));
+        assert.ok(samePath(await fp.eval('BF.state.tools.ffprobe'), path.join(bin, 'ffprobe.exe')), 'o ffprobe vem do mesmo pacote');
+        assert.equal(fs.existsSync(path.join(bin, 'avcodec.dll')), true, 'as DLLs ficam ao lado dos programas');
+        await waitFor(fp, "document.getElementById('toolsWarn').hidden", 15000, 'aviso do topo some');
+        await waitFor(fp, `document.querySelector('${row('ffmpeg')}').dataset.state === 'installed'`, 15000, 'linha do FFmpeg instalada');
+        assert.equal(await sysState(fp, 'ffmpeg'), 'found');
+        assert.match(await sysText(fp, 'ffmpeg'), /Instalado pelo app/, 'a linha do sistema diz que foi o app que instalou');
+        assert.match(await sysText(fp, 'ffprobe'), /Instalado pelo app/);
+        assert.equal(await fp.eval(`document.querySelector('${PANEL} [data-help]')`), null, 'sem ajuda quando nada falta');
+        assert.equal(await fp.eval("document.querySelector('#tab-tools .tab-badge').hidden"), true, 'a aba deixa de avisar');
+        await waitFor(fp, "/FFmpeg \\(ler, converter e gravar vídeo\\) instalado/.test(document.getElementById('toasts').textContent)", 5000, 'aviso de instalado');
+        await shot(fp, 'tools-ffmpeg-instalado');
+
+        // remover: confirmação; volta o aviso do topo e a pasta é apagada
+        await fp.eval(`document.querySelector('${row('ffmpeg')} button[data-act="remove"]').click()`);
+        await answerModal(fp, true);
+        await waitFor(fp, '!BF.state.tools.ffmpeg && !BF.state.tools.ffprobe', 20000, 'ffmpeg removido');
+        await waitFor(fp, "!document.getElementById('toolsWarn').hidden", 15000, 'aviso do topo volta');
+        assert.equal(fs.existsSync(ffDir), false);
+        assert.deepEqual(listTree(path.join(ud, 'tools')), [], 'nada sobrou na pasta de ferramentas');
+        h.assertNoConsoleErrors(fp);
+        await ffApp.stop();
+      } finally { await ffSrv.close(); }
+      step('botão "Instalar o FFmpeg" do aviso: leva à aba, pergunta (terceiros, GPL v3), recusar não baixa; aceitar mostra o progresso, instala o ffmpeg e o ffprobe e tira o aviso; remover o traz de volta');
+    }
 
     assert.deepEqual(listTree(tmp).filter((p) => p.endsWith('.part')), [], 'nenhum .part esquecido');
     console.log('\nE2E OK');

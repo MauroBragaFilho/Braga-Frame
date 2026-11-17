@@ -7,7 +7,8 @@
 const appInfo = Object.freeze({
   name: 'Braga Frame',
   tagline: 'Cortes verticais para criadores: analisa, revisa e exporta (a publicação é sua).',
-  appId: 'com.bragadev.bragaframe'
+  appId: 'com.bragadev.bragaframe',
+  repo: 'MauroBragaFilho/Braga-Frame' // onde as versões são publicadas (GitHub Releases): o aviso de versão nova consulta aqui
 });
 
 module.exports = appInfo;
