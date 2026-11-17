@@ -465,3 +465,19 @@ test('close() antes de o iframe ficar pronto só destrói', async () => {
   assert.equal(await host.close(), true);
   assert.equal(host.destroyed, true);
 });
+
+test('o destino do postMessage do iframe: a origem http(s) conhecida quando há; "*" para hospedeiro file:// (origem opaca "null" não é destino válido)', () => {
+  const targets = (hostOrigin) => {
+    const framed = fakeWindow('framed', { search: hostOrigin === undefined ? '' : `?hostOrigin=${encodeURIComponent(hostOrigin)}` });
+    const seen = [];
+    framed.parent = { postMessage: (data, target) => seen.push(target) };
+    const context = vm.createContext({ window: framed, document: fakeDocument(framed), console, URLSearchParams, Promise, setTimeout, clearTimeout, Object, Map, Set, Error, Number, Array });
+    vm.runInContext(BRIDGE_SOURCE, context, { filename: 'renderer/bridge.js' });
+    return seen;
+  };
+  assert.deepEqual([...new Set(targets('null'))], ['*'], 'hospedeiro file://: a origem opaca não vira destino');
+  assert.deepEqual([...new Set(targets(undefined))], ['*'], 'sem hostOrigin');
+  assert.deepEqual([...new Set(targets('http://127.0.0.1:5173'))], ['http://127.0.0.1:5173'], 'origem http conhecida: só ela recebe');
+  assert.deepEqual([...new Set(targets('https://studio.exemplo.com'))], ['https://studio.exemplo.com']);
+  assert.deepEqual([...new Set(targets('javascript:alert(1)'))], ['*'], 'valor estranho não vira destino');
+});

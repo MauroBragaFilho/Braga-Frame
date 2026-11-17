@@ -8,8 +8,6 @@
  */
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const vm = require('node:vm');
 const model = require('../src/core/projects/model');
 const params = require('../src/core/analysis/params');
@@ -36,7 +34,7 @@ Object.defineProperty(FakeNode.prototype, 'classList', {
   }
 });
 
-const CODE = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'features', 'analysis.js'), 'utf8');
+const { runAnalysis } = require('./analysis-scripts');
 const SOURCE = { path: 'C:\\lives\\a.mp4', size: 5000, duration: 600 };
 const OTHER = { path: 'C:\\lives\\obs-gravacao.mkv', size: 7000, duration: 650 };
 
@@ -99,7 +97,7 @@ function load({ ext, source = SOURCE, cuts = [], info = { duration: source.durat
       }
     }
   };
-  vm.runInContext(CODE, vm.createContext({ window: { BF, BFHumor: humor }, document: doc, setTimeout, URL }), { filename: 'analysis.js' });
+  runAnalysis(vm.createContext({ window: { BF, BFHumor: humor }, document: doc, setTimeout, URL }));
   const tab = tabs[0];
   const container = doc.register('container');
   tab.render(container);

@@ -133,6 +133,7 @@
   <script src="../src/core/ui/menuLayout.js"></script>
   <!-- dentro de um iframe do Braga Digital Studio não há preload: a ponte cria o window.bf por mensagens (em janela própria não faz nada) -->
   <script src="bridge.js"></script>
+  <script src="util.js"></script>
   <script src="app.js"></script>
   <!-- barras deslizantes: preenchimento até o botão (--slider-value), igual ao BDS -->
   <script src="slider-sync.js"></script>
@@ -141,6 +142,12 @@
   <!-- regras do enquadramento e dos layouts do canal: as MESMAS do processo principal (window.BFFraming e window.BFLayouts) -->
   <script src="../src/core/export/framing.js"></script>
   <script src="../src/core/export/layouts.js"></script>
+  <script src="features/export/logic.js"></script>
+  <script src="features/export/profile.js"></script>
+  <script src="features/export/framing.js"></script>
+  <script src="features/export/preview.js"></script>
+  <script src="features/export/view.js"></script>
+  <script src="features/export/layouts.js"></script>
   <script src="features/export.js"></script>
   <script src="features/queue.js"></script>
   <!-- regras "universais" (CommonJS no main, window.BF* no renderer); as abas as carregariam sozinhas, mas assim já vêm prontas e a CSP (script-src 'self') continua valendo -->
@@ -153,6 +160,12 @@
   <script src="features/aiOpenrouter.js"></script>
   <!-- perfil de humor do canal (window.BFHumor): as MESMAS regras do processo principal para limpar e limitar o que o usuário escreve; antes da Análise, que o usa -->
   <script src="../src/core/analysis/humor.js"></script>
+  <script src="features/analysis/logic.js"></script>
+  <script src="features/analysis/humor.js"></script>
+  <script src="features/analysis/engine.js"></script>
+  <script src="features/analysis/results.js"></script>
+  <script src="features/analysis/controls.js"></script>
+  <script src="features/analysis/provider.js"></script>
   <script src="features/analysis.js"></script>
   <script src="features/projects.js"></script>
   <script src="features/home.js"></script>

@@ -12,7 +12,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const model = require('../src/core/projects/model');
 
-const CODE = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'features', 'analysis.js'), 'utf8');
+const { runAnalysis } = require('./analysis-scripts');
 
 function load({ cuts = [], prefs = {} } = {}) {
   const emitted = [];
@@ -37,7 +37,7 @@ function load({ cuts = [], prefs = {} } = {}) {
   };
   const sandbox = { window: { BF }, requestAnimationFrame: (fn) => fn() };
   vm.createContext(sandbox);
-  vm.runInContext(CODE, sandbox, { filename: 'analysis.js' });
+  runAnalysis(sandbox);
   return { A: BF.analysis, BF, project, emitted, tabs, handlers };
 }
 
@@ -52,8 +52,9 @@ test('a aba registra id "analysis" na ordem 60 (tabela 1.4)', () => {
   assert.equal(tabs[0].order, 60);
   assert.equal(tabs[0].title, 'Análise');
   assert.equal(typeof tabs[0].render, 'function');
-  assert.match(CODE, /id: 'analysis',/);
-  assert.match(CODE, /order: 60,/);
+  const code = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'features', 'analysis.js'), 'utf8');
+  assert.match(code, /id: 'analysis',/);
+  assert.match(code, /order: 60,/);
 });
 
 test('isCovered: corte de qualquer status com pico dentro ou boa sobreposição cobre a sugestão', () => {
