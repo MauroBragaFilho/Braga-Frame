@@ -14,6 +14,15 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Instalar FFmpeg (os testes de mídia usam o de verdade)
+        run: choco install ffmpeg --no-progress -y
       - run: npm ci
+      - name: Diagnóstico icacls (temporário)
+        shell: pwsh
+        run: |
+          $f = Join-Path $env:RUNNER_TEMP 'x.json'; Set-Content $f '{}'
+          Write-Host "USERNAME=$env:USERNAME"
+          icacls $f /inheritance:r /grant:r "$($env:USERNAME):F"; Write-Host "exit=$LASTEXITCODE"
+          icacls $f
       - run: npm run lint
       - run: npm test
