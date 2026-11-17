@@ -13,11 +13,13 @@ echo [1] Rodar o aplicativo (instala as dependencias na primeira vez)
 echo [2] Rodar os testes (unitarios e de integracao)
 echo [3] Rodar os testes e2e (abre o app de verdade)
 echo [4] Verificar o codigo (lint)
+echo [5] Gerar .zip do codigo para enviar ao Gemini/GPT
 echo [0] Sair
 echo.
-choice /c 12340 /n /m "Escolha uma opcao: "
+choice /c 123450 /n /m "Escolha uma opcao: "
 if errorlevel 255 exit /b 1
-if errorlevel 5 goto end
+if errorlevel 6 goto end
+if errorlevel 5 goto zip
 if errorlevel 4 goto lint
 if errorlevel 3 goto e2e
 if errorlevel 2 goto tests
@@ -88,6 +90,17 @@ color 0a
 cls
 echo Verificando o codigo...
 call npm run lint
+pause
+goto menu
+
+:zip
+set retorno=zip2
+goto checknode
+:zip2
+color 0d
+cls
+echo Gerando o .zip do codigo atualizado...
+call node scripts\gerar-zip.js --abrir
 pause
 goto menu
 

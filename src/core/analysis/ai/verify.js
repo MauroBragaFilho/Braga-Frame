@@ -16,6 +16,7 @@
  */
 
 const { normText, cuesInRange, round3 } = require('../transcript/format');
+const { snapWithin } = require('../words');
 
 const SNAP_SEC = 4;           // ajuste máximo de um horário até o limite de fala mais próximo
 const MIN_SPEECH_RATIO = 0.2; // conversa e podcast: fração do intervalo com fala
@@ -27,6 +28,7 @@ const FUZZY_MIN = 0.75;       // fração das palavras do desfecho que precisa a
 
 const REASONS = Object.freeze({
   time: 'horário inválido',
+  phrase: 'as frases de abertura e de encerramento não existem na transcrição',
   range: 'fora do vídeo',
   window: 'fora do bloco enviado',
   nospeech: 'sem fala na transcrição nesse horário',
@@ -212,6 +214,11 @@ function verifyCandidate(c, x) {
     if (end - start < prefs.minDurationSec) end = Math.min(duration, start + prefs.minDurationSec);
     if (end - start < prefs.minDurationSec - 0.01) return fail('duration', 'o vídeo é curto demais para a duração mínima');
     if (end - start > prefs.maxDurationSec) return fail('duration');
+  }
+  // ajuste fino às PALAVRAS (transcrição gerada pelo Whisper): início depois de uma pausa e fim no encerramento da frase, sem cortar palavra
+  if (x.words && x.words.length) {
+    const w2 = snapWithin(start, end, x.words, { minSec: prefs.minDurationSec, maxSec: prefs.maxDurationSec, duration });
+    if (w2.snapped) { start = w2.start; end = w2.end; }
   }
   start = round3(Math.max(0, start));
   end = round3(Math.min(duration, end));

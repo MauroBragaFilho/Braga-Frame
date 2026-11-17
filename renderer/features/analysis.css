@@ -152,3 +152,8 @@
 .an-keywords { margin-top: -2px; }
 .an-keyword { color: var(--muted); background: var(--card-2); }
 .an-theme { font-weight: 600; }
+
+/* provedores de reserva (Provedor, chave e limites) */
+.an-fb-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.an-fb-list:empty { display: none; }
+.an-fb-item { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

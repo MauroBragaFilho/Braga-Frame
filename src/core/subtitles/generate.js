@@ -335,6 +335,7 @@ async function generateSubtitles(o) {
     report('done', 100, cues.length ? 'Legenda pronta.' : MESSAGES['no-speech']);
     return finish({
       cues, noSpeech: cues.length === 0, reason: cues.length ? null : 'no-speech', message: cues.length ? '' : MESSAGES['no-speech'],
+      ...(o.returnWords ? { words: keptWords.filter((w) => w.end - w.start >= 0 && String(w.word || '').trim()).map((w) => [round3(w.start), round3(w.end), String(w.word).trim()]) } : {}),
       discarded: discarded.slice(0, MAX_DISCARDED_LISTED), language: parsed.language || (language === 'auto' ? '' : language),
       speechSec: round3(speechSec), trimmedSec, device, deviceName, fellBack, fallbackReason, transcribeMs, audioSec: round3(audioSec),
       speed: transcribeMs > 0 ? Math.round((audioSec / (transcribeMs / 1000)) * 10) / 10 : null

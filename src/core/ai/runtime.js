@@ -25,7 +25,7 @@
 
 const path = require('node:path');
 const { writeJsonAtomic, readJsonFile } = require('../preferences/atomic');
-const { AiError, cancelled } = require('./errors');
+const { AiError, cancelled, classify } = require('./errors');
 const providers = require('./providers');
 const { SecretStore } = require('./secretStore');
 const { chatCompletion, listModels, redact } = require('./client');
@@ -55,6 +55,35 @@ const LIMIT_RANGES = Object.freeze({
   attempts: [1, 5, 3]             // tentativas por chamada (a primeira conta)
 });
 
+// ---- reserva entre provedores (docs/recursos/analise-ia.md, 17.12) ----
+const MAX_FALLBACK_PROVIDERS = 3;
+// Limite de TOKENS POR MINUTO de um provedor (a Groq o informa em cada resposta): um pedido tem de caber nele, entrada + saída. A saída ganha
+// um quarto do limite (entre 1024 e 16000) e sobra uma folga; o que resta é o que a ENTRADA pode ter. Abaixo de MIN_USABLE_INPUT nem o menor
+// bloco com as instruções do app cabe: o provedor de reserva é dispensado, com o motivo na tela.
+const TPM_OUTPUT_SHARE = 0.25;
+const TPM_MIN_OUTPUT = 1024;
+const TPM_MAX_OUTPUT = 16000;
+const TPM_MARGIN = 300;
+const MIN_USABLE_INPUT = 4800;
+const LEARNS_TPM = new Set(['gemini', 'groq']); // provedores que falam a verdade nos cabeçalhos (um servidor próprio pode repassar os de outro)
+const COOLDOWN_MS = Object.freeze({ transient: 30 * 1000, quota: 30 * 60 * 1000, rateDefault: 60 * 1000, rateMin: 15 * 1000, rateMax: 6 * 3600 * 1000 });
+
+function tpmBudget(tpm) {
+  const output = Math.min(TPM_MAX_OUTPUT, Math.max(TPM_MIN_OUTPUT, Math.floor(tpm * TPM_OUTPUT_SHARE)));
+  return { output, input: Math.max(0, tpm - output - TPM_MARGIN) };
+}
+const approxTokens = (text) => Math.ceil(String(text == null ? '' : text).length / 3.2);
+
+/** Lista de provedores de reserva limpa: só ids conhecidos, sem repetir, no máximo MAX_FALLBACK_PROVIDERS. */
+function cleanProviderList(list) {
+  const out = [];
+  for (const id of Array.isArray(list) ? list : []) {
+    if (typeof id === 'string' && providers.byId(id) && !out.includes(id)) out.push(id);
+    if (out.length >= MAX_FALLBACK_PROVIDERS) break;
+  }
+  return out;
+}
+
 function sanitizeLimits(raw) {
   const out = {};
   const src = raw && typeof raw === 'object' ? raw : {};
@@ -68,6 +97,7 @@ function sanitizeLimits(raw) {
 const emptyConfig = () => ({
   version: 1,
   provider: null, // nenhum provedor pré-selecionado: o usuário escolhe
+  fallback: [],   // provedores de reserva, na ordem (nunca o escolhido): trocam quando o escolhido falha por limite de uso ou erro do servidor
   providers: {},
   accepted: {},
   limits: sanitizeLimits({})
@@ -86,6 +116,7 @@ class AiRuntime {
   /**
    * @param {object} o
    * @param {string} o.dir            pasta `ai` dentro de userData
+   * @param {()=>number} [o.now]      relógio em ms (testes: o resfriamento dos provedores que falharam)
    * @param {object|(()=>object|null)} [o.safeStorage]  safeStorage do Electron (ou função que o devolve)
    * @param {Function} [o.fetchImpl]  fetch (testes)
    * @param {{describe:Function, chat:Function}|null} [o.host]  provedor do hospedeiro (BDS)
@@ -93,7 +124,7 @@ class AiRuntime {
    * @param {Function} [o.restrict]   restrição de permissão do arquivo de chaves (testes)
    * @param {object|null} [o.openrouter]  serviço do OpenRouter (`ctx.aiOpenrouter`: catálogo, guard, Pacer, fallback); sem ele o OpenRouter não fica pronto
    */
-  constructor({ dir, safeStorage = null, fetchImpl = null, host = null, hostName = null, restrict, openrouter = null } = {}) {
+  constructor({ dir, safeStorage = null, fetchImpl = null, host = null, hostName = null, restrict, openrouter = null, now = null } = {}) {
     if (!dir) throw new Error('AiRuntime: informe a pasta.');
     this.dir = dir;
     this.configFile = path.join(dir, 'config.json');
@@ -103,6 +134,8 @@ class AiRuntime {
     this.hostName = hostName || null;
     this.openrouter = openrouter && typeof openrouter.checkModel === 'function' && typeof openrouter.runWithFreeFallback === 'function' ? openrouter : null;
     this.noJsonMode = new Set();
+    this.now = typeof now === 'function' ? now : Date.now;
+    this.cooldown = new Map(); // id do provedor -> instante (ms) até o qual ele fica de lado, depois de falhar por limite de uso ou erro do servidor
   }
 
   get source() { return this.host ? 'host' : 'local'; }
@@ -127,8 +160,11 @@ class AiRuntime {
             entry.freeOnly = raw.freeOnly !== false; // ligado por padrão: só o valor false guardado desliga
             entry.fallbackModels = cleanModelList(raw.fallbackModels);
           }
+          // limite de tokens por minuto que o provedor informou na última resposta (veja _learnTpm)
+          if (LEARNS_TPM.has(preset.id) && Number.isFinite(raw.tpm) && raw.tpm >= 1000 && raw.tpm <= 1e8) entry.tpm = Math.round(raw.tpm);
           base.providers[preset.id] = entry;
         }
+        base.fallback = cleanProviderList(data.fallback);
         if (data.accepted && typeof data.accepted === 'object') {
           for (const [key, value] of Object.entries(data.accepted)) {
             if (/^[A-Za-z0-9:._-]{1,80}$/.test(key) && value && typeof value.origin === 'string') {
@@ -265,7 +301,12 @@ class AiRuntime {
         ...(guard.applies ? { freeCapable: true, freeOnly: guard.freeOnly } : {})
       };
     }
-    const p = this._providerOf(config);
+    return this._describeLocal(config, config.provider);
+  }
+
+  /** Estado de UM provedor local (o escolhido ou um de reserva): endereço, modelo, chave, aceite e se está pronto para enviar. */
+  _describeLocal(config, id) {
+    const p = this._providerOf(config, id);
     if (!p) {
       // nenhum provedor escolhido: nada está pronto e nada pode ser enviado
       return {
@@ -290,6 +331,7 @@ class AiRuntime {
       accepted: acceptedFor(config.accepted[p.id], p), privacy: localNetwork ? `${p.privacy} ${providers.LOCAL_NETWORK_NOTE}` : p.privacy,
       loopback: p.baseUrl ? providers.isLoopbackHost(new URL(p.baseUrl).hostname) : false,
       localNetwork, // http:// para outra máquina da rede local: a chave vai sem criptografia (a tela avisa)
+      tokensPerMinute: Number.isFinite((config.providers[p.id] || {}).tpm) ? config.providers[p.id].tpm : null, // o limite que o provedor informou (null = não se sabe)
       ...(p.freeCapable ? { freeCapable: true, freeOnly: p.freeOnly, fallbackModels: p.fallbackModels } : {})
     };
   }
@@ -313,6 +355,9 @@ class AiRuntime {
         ? 'A chave é guardada cifrada pelo Windows (só a sua conta lê).'
         : 'O sistema não oferece cifragem aqui: a chave fica em um arquivo local sem cifra, com permissão restrita à sua conta.'),
       limits: config.limits,
+      // os limites que valem de fato nesta análise: os acima, encolhidos para caber no limite por minuto do provedor da cadeia que tem o menor
+      effectiveLimits: this.source === 'host' ? config.limits : this.effectiveLimits(),
+      fallback: this.source === 'host' ? null : this._fallbackState(config),
       limitRanges: Object.fromEntries(Object.entries(LIMIT_RANGES).map(([k, [min, max]]) => [k, [min, max]]))
     };
   }
@@ -383,6 +428,17 @@ class AiRuntime {
       }
     }
     if (p.limits !== undefined) config.limits = sanitizeLimits({ ...config.limits, ...(p.limits && typeof p.limits === 'object' ? p.limits : {}) });
+    if (p.fallback !== undefined) {
+      if (!Array.isArray(p.fallback) || p.fallback.length > MAX_FALLBACK_PROVIDERS) throw new AiError('INVALID_ARGS', `Escolha até ${MAX_FALLBACK_PROVIDERS} provedores de reserva.`);
+      const list = [];
+      for (const raw of p.fallback) {
+        if (typeof raw !== 'string' || !providers.byId(raw)) throw new AiError('INVALID_ARGS', 'Um dos provedores de reserva é desconhecido.');
+        if (raw !== config.provider && !list.includes(raw)) list.push(raw);
+      }
+      config.fallback = list;
+    }
+    // outra chave pode ser de outro plano: o limite por minuto guardado vale só até o próximo pedido dizer o novo
+    if (id && ((typeof p.apiKey === 'string' && p.apiKey.trim()) || p.clearKey === true || dropKey)) delete own.tpm;
     if (id) config.providers[id] = own;
 
     if (typeof p.apiKey === 'string' && p.apiKey.trim()) {
@@ -400,10 +456,13 @@ class AiRuntime {
    * Registra (ou revoga) o aceite do aviso de privacidade para o provedor em uso. O aceite NÃO tem prazo: vale até o usuário revogá-lo
    * (ou até o destinatário mudar). `at` só registra QUANDO foi aceito; nada o lê para expirar.
    */
-  accept(accepted) {
+  accept(accepted, providerId = null) {
     const config = this._load();
-    const current = this.describe();
+    if (providerId && !this.host && !providers.byId(providerId)) throw new AiError('INVALID_ARGS', 'Provedor desconhecido.');
+    // `providerId`: o aviso de um provedor de RESERVA (o do aviso na tela é sempre o do provedor que vai receber os trechos)
+    const current = providerId && !this.host ? this._describeLocal(config, providerId) : this.describe();
     if (!current.consentKey) throw new AiError('NOT_CONFIGURED', 'Escolha o provedor de IA antes de aceitar o aviso.');
+    if (providerId && !this.host && !current.baseUrl) throw new AiError('NOT_CONFIGURED', 'Informe o endereço do servidor desse provedor antes de aceitar o aviso.');
     if (accepted === false) delete config.accepted[current.consentKey];
     else {
       config.accepted[current.consentKey] = this.source === 'host'
@@ -421,7 +480,7 @@ class AiRuntime {
   }
 
   /** Pedido de chat ao provedor em uso. Recusa (CONSENT_REQUIRED) enquanto o aviso de privacidade não foi aceito. */
-  async chat(params, { requireConsent = true } = {}) {
+  async chat(params, { requireConsent = true, onlyMain = false } = {}) {
     const current = this.describe();
     this._requireReady(current);
     if (requireConsent && !current.accepted) {
@@ -454,20 +513,155 @@ class AiRuntime {
         ...(out && typeof out.model === 'string' && out.model ? { answeredModel: out.model } : {})
       };
     }
-    const config = this._load();
-    const p = this._providerOf(config);
-    const apiKey = this.secrets.get(p.id);
-    if (p.freeCapable) return this._chatOpenRouter(params, p, apiKey);
-    const res = await chatCompletion({
-      baseUrl: p.baseUrl, apiKey, model: p.model, system: params.system, messages: params.messages, maxTokens: params.maxTokens,
-      temperature: params.temperature, jsonMode: params.jsonMode === true, signal: params.signal, timeoutMs: params.timeoutMs,
-      fetchImpl: this.fetchImpl || undefined, noJsonMode: this.noJsonMode
-    }).catch((err) => {
+    return this._chatChain(params, this._load(), requireConsent, onlyMain);
+  }
+
+  /**
+   * Os provedores que podem receber este pedido, na ordem: o escolhido e depois os de reserva que estão prontos, com o aviso de privacidade
+   * aceito (um provedor sem aceite NUNCA recebe nada) e com um limite por minuto em que ao menos o menor bloco cabe.
+   */
+  _chain(config, requireConsent, onlyMain) {
+    const ids = onlyMain ? [config.provider] : [config.provider, ...config.fallback.filter((id) => id !== config.provider)];
+    const out = [];
+    for (const id of ids) {
+      const d = this._describeLocal(config, id);
+      if (!d || !d.ready) continue;
+      if (requireConsent && !d.accepted) continue;
+      if (id !== config.provider && d.tokensPerMinute && tpmBudget(d.tokensPerMinute).input < MIN_USABLE_INPUT) continue;
+      out.push({ id, d });
+    }
+    return out;
+  }
+
+  /**
+   * Pedido de chat com reserva entre provedores. Tenta o escolhido; se ele falha por LIMITE DE USO (por minuto ou do dia), COTA ou ERRO DO
+   * SERVIDOR/REDE (o que esperar ou repetir não costuma resolver), passa ao próximo da cadeia e o deixa de lado por um tempo (resfriamento),
+   * para as chamadas seguintes irem direto ao que funciona. Chave recusada, modelo inexistente e pedido recusado no provedor escolhido NÃO
+   * trocam (o problema é a configuração, e a pessoa precisa saber); nos de reserva, qualquer falha só passa ao próximo. Os que estão em
+   * resfriamento ficam para o fim da fila: se todos falharam, ainda são tentados. Se toda a cadeia falha, vale o erro do primeiro.
+   * `params.onSwitch({ from, to, reason })` avisa cada troca.
+   */
+  async _chatChain(params, config, requireConsent, onlyMain) {
+    const chain = this._chain(config, requireConsent, onlyMain);
+    if (!chain.length) throw new AiError('NOT_CONFIGURED', 'O provedor de IA não está pronto.');
+    const now = this.now();
+    const resting = (c) => (this.cooldown.get(c.id) || 0) > now;
+    const order = [...chain.filter((c) => !resting(c)), ...chain.filter(resting)];
+    let first = null;
+    for (let i = 0; i < order.length; i += 1) {
+      const c = order[i];
+      try {
+        const out = await this._chatOne(c.id, params, config);
+        this.cooldown.delete(c.id);
+        return out;
+      } catch (err) {
+        if (err && err.code === 'CANCELLED') throw err;
+        if (!first) first = err;
+        const verdict = classify(err);
+        const switchable = verdict.kind === 'rate' || verdict.kind === 'quota' || verdict.kind === 'transient';
+        if (c.id === config.provider && !switchable) throw err;
+        if (switchable) this._coolDown(c.id, verdict);
+        const next = order[i + 1];
+        if (!next) throw first;
+        if (typeof params.onSwitch === 'function') {
+          try {
+            params.onSwitch({ from: `${c.d.label} (${c.d.model})`, to: `${next.d.label} (${next.d.model})`, reason: { code: (err && err.code) || 'SERVER', message: err && err.message ? String(err.message).slice(0, 200) : '' } });
+          } catch { /* ouvinte com defeito */ }
+        }
+      }
+    }
+    throw first;
+  }
+
+  /** Um pedido ao provedor `id` (com o limite por minuto dele, se conhecido: o pedido encolhe a saída ou nem sai se não cabe). */
+  async _chatOne(id, params, config) {
+    const p = this._providerOf(config, id);
+    const apiKey = this.secrets.get(id);
+    const tpm = Number.isFinite((config.providers[id] || {}).tpm) ? config.providers[id].tpm : null;
+    let maxTokens = params.maxTokens;
+    if (tpm) {
+      const input = approxTokens(params.system) + (Array.isArray(params.messages) ? params.messages : []).reduce((n, m) => n + approxTokens(m && m.content), 0);
+      if (input + TPM_MARGIN >= tpm) throw new AiError('REQUEST_TOO_BIG', `O pedido (~${input} tokens) não cabe no limite de ${tpm} tokens por minuto de ${p.label}.`, { tokens: input, limit: tpm });
+      if (Number.isFinite(maxTokens)) maxTokens = Math.max(256, Math.min(maxTokens, tpm - input - TPM_MARGIN));
+    }
+    if (p.freeCapable) return this._chatOpenRouter({ ...params, maxTokens }, p, apiKey);
+    try {
+      const res = await chatCompletion({
+        baseUrl: p.baseUrl, apiKey, model: p.model, system: params.system, messages: params.messages, maxTokens,
+        temperature: params.temperature, jsonMode: params.jsonMode === true, signal: params.signal, timeoutMs: params.timeoutMs,
+        fetchImpl: this.fetchImpl || undefined, noJsonMode: this.noJsonMode
+      });
+      if (res.rateLimit) this._learnTpm(id, res.rateLimit.tokensPerMinute);
+      return { ...res, provider: { id: p.id, label: p.label, model: p.model } };
+    } catch (err) {
       // defesa em profundidade: mesmo um erro inesperado nunca leva a chave adiante
       if (err && typeof err.message === 'string') err.message = redact(err.message, apiKey);
+      if (err && err.responseHeaders) this._learnTpm(id, Number(err.responseHeaders['x-ratelimit-limit-tokens']));
       throw err;
-    });
-    return { ...res, provider: { id: p.id, label: p.label, model: p.model } };
+    }
+  }
+
+  /** Deixa o provedor de lado por um tempo: o que ele mandou esperar (limite por minuto), meia hora (cota) ou meio minuto (erro do servidor). */
+  _coolDown(id, verdict) {
+    let ms = COOLDOWN_MS.transient;
+    if (verdict.kind === 'quota') ms = COOLDOWN_MS.quota;
+    else if (verdict.kind === 'rate') {
+      ms = Number.isFinite(verdict.retryAfterSec) ? Math.min(COOLDOWN_MS.rateMax, Math.max(COOLDOWN_MS.rateMin, verdict.retryAfterSec * 1000)) : COOLDOWN_MS.rateDefault;
+    }
+    this.cooldown.set(id, this.now() + ms);
+  }
+
+  /** Guarda o limite de tokens por minuto que o provedor informou (só os que falam a verdade nos cabeçalhos; só grava se mudou). */
+  _learnTpm(id, tpm) {
+    if (!LEARNS_TPM.has(id) || !Number.isFinite(tpm) || tpm < 1000 || tpm > 1e8) return;
+    const config = this._load();
+    const own = { ...(config.providers[id] || {}) };
+    if (own.tpm === Math.round(tpm)) return;
+    own.tpm = Math.round(tpm);
+    config.providers[id] = own;
+    try { this._save(config); } catch { /* sem gravar: o próximo pedido tenta de novo */ }
+  }
+
+  /**
+   * Limites desta análise: os do usuário, encolhidos para o menor limite por minuto da cadeia (o escolhido e os de reserva que estão prontos e
+   * aceitos). Blocos menores e saída menor cabem em qualquer um deles. `limitedBy` diz qual provedor limita (a tela mostra). Sem limite
+   * conhecido, ou com limites folgados, devolve os limites do usuário como estão.
+   */
+  effectiveLimits() {
+    const config = this._load();
+    const base = { ...config.limits };
+    if (this.host || !config.provider) return base;
+    let cap = null;
+    for (const id of [config.provider, ...config.fallback.filter((x) => x !== config.provider)]) {
+      const d = this._describeLocal(config, id);
+      if (!d || !d.ready || !d.tokensPerMinute) continue;
+      if (id !== config.provider && !d.accepted) continue;
+      const b = tpmBudget(d.tokensPerMinute);
+      if (id !== config.provider && b.input < MIN_USABLE_INPUT) continue;
+      if (!cap || b.input < cap.input) cap = { id, label: d.label, tokensPerMinute: d.tokensPerMinute, ...b };
+    }
+    if (!cap || cap.input >= base.maxInputTokens) return base;
+    return { ...base, maxInputTokens: cap.input, maxOutputTokens: cap.output, limitedBy: { id: cap.id, label: cap.label, tokensPerMinute: cap.tokensPerMinute } };
+  }
+
+  /** Para a tela: os provedores de reserva escolhidos (com o que falta em cada um) e as opções. */
+  _fallbackState(config) {
+    const main = config.provider;
+    return {
+      ids: config.fallback.slice(),
+      max: MAX_FALLBACK_PROVIDERS,
+      options: providers.PRESETS.filter((x) => x.id !== main).map((x) => ({ id: x.id, label: x.label })),
+      providers: config.fallback.filter((id) => id !== main).map((id) => {
+        const d = this._describeLocal(config, id);
+        const tpm = d.tokensPerMinute;
+        const usable = !tpm || tpmBudget(tpm).input >= MIN_USABLE_INPUT;
+        return {
+          id, label: d.label, model: d.model, host: d.host, ready: d.ready, accepted: d.accepted, reason: d.reason, privacy: d.privacy,
+          tokensPerMinute: tpm, usable,
+          note: usable ? '' : `O limite de ${tpm.toLocaleString('pt-BR')} tokens por minuto é pequeno demais para a análise: este provedor não é usado.`
+        };
+      })
+    };
   }
 
   /**
@@ -579,9 +773,9 @@ class AiRuntime {
     const current = this.describe();
     this._requireReady(current);
     const t0 = Date.now();
-    const res = await this.chat({ system: 'Responda apenas com a palavra: ok', messages: [{ role: 'user', content: 'Teste de conexão.' }], maxTokens: 16, temperature: 0, signal }, { requireConsent: false });
+    const res = await this.chat({ system: 'Responda apenas com a palavra: ok', messages: [{ role: 'user', content: 'Teste de conexão.' }], maxTokens: 16, temperature: 0, signal }, { requireConsent: false, onlyMain: true });
     return { ok: true, message: `Conexão ok com ${current.label} (${current.model}).`, ms: Date.now() - t0, replied: res.text.trim().length > 0 };
   }
 }
 
-module.exports = { AiRuntime, LIMIT_RANGES, sanitizeLimits };
+module.exports = { AiRuntime, LIMIT_RANGES, sanitizeLimits, tpmBudget, MAX_FALLBACK_PROVIDERS, MIN_USABLE_INPUT };

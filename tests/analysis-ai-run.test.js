@@ -704,3 +704,65 @@ test('conferência com bordas: a IA dá início e fim; o app leva às falas e s�
   assert.ok(block.indexOf('eu preciso muito de couro agora') < block.indexOf('no corte:'), 'a premissa aparece antes do corte');
   assert.ok(block.indexOf(m2.punch) > block.indexOf('no corte:'));
 });
+
+test('blocos menores: com teto de saída e de entrada baixos (limite por minuto), nenhum pedido passa deles e a conferência usa lotes menores', async () => {
+  const { analyzeWithAi } = require('../src/core/analysis/ai/analyze');
+  const { estimateTokens } = require('../src/core/analysis/ai/prompt');
+  const tr = F.makeTranscript({ minutes: 60, moments: [{ at: 600, punch: 'o bicho nem dropou couro' }, { at: 1800, punch: 'vinte e um reais uma espada' }] });
+  const { cues } = normalizeCues(tr.cues.map((c) => ({ start: c.start, end: c.end, text: c.text })), { duration: tr.duration });
+  const review = Array.from({ length: 25 }, (_, i) => ({ id: `x${i}`, start: 100 + i * 120, end: 130 + i * 120 }));
+  const run1 = async (limits) => {
+    const calls = [];
+    const out = await analyzeWithAi(
+      { duration: tr.duration, hasAudio: false, params: {}, transcript: { cues }, chat: null, meta: {}, existingCuts: [], review },
+      {
+        chat: async (p) => {
+          const content = p.messages[p.messages.length - 1].content;
+          calls.push({ maxTokens: p.maxTokens, tokens: estimateTokens(p.system) + estimateTokens(content), review: content.includes('=== TRECHOS'), pick: content.includes('=== CANDIDATOS ===') });
+          return { text: content.includes('=== TRECHOS') ? '{"reviews":[]}' : '{"cuts":[]}', usage: { promptTokens: 1, completionTokens: 1 }, finishReason: 'stop' };
+        },
+        provider: { label: 'Teste', model: 'm' }, limits: { maxCalls: 60, windowMinutes: 35, attempts: 1, ...limits }, sleep: async () => {}
+      }
+    );
+    return { calls, out };
+  };
+  const normal = await run1({ maxInputTokens: 24000 });
+  const small = await run1({ maxInputTokens: 5700, maxOutputTokens: 2000, limitedBy: { id: 'groq', label: 'Groq', tokensPerMinute: 8000 } });
+  const blocks = (r) => r.calls.filter((c) => !c.review && !c.pick);
+  assert.ok(blocks(small).length > blocks(normal).length * 2, `blocos: ${blocks(small).length} contra ${blocks(normal).length}`);
+  assert.ok(small.calls.every((c) => c.maxTokens <= 2000), 'a saída nunca passa do teto');
+  assert.ok(normal.calls.some((c) => c.maxTokens > 2000));
+  assert.ok(small.calls.every((c) => c.tokens <= 5700 + 300), `o maior pedido: ${Math.max(...small.calls.map((c) => c.tokens))} tokens`);
+  // cada veredito custa ~100 tokens de saída: com teto de 1000 são 10 por chamada (25 trechos = 3 chamadas); com o de sempre cabem todos em 1
+  const tiny = await run1({ maxInputTokens: 24000, maxOutputTokens: 1000 });
+  assert.equal(tiny.calls.filter((c) => c.review).length, 3);
+  assert.equal(normal.calls.filter((c) => c.review).length, 1);
+});
+
+test('blocos menores: o provedor de reserva de limite baixo encolhe os blocos da análise e a estimativa e o erro de limite de chamadas dizem por quê', async (t) => {
+  const s = setup(t, { minutes: 240 });
+  const mock = await F.startMockAi(() => ({ json: F.chatBody('{"cuts":[]}') }));
+  t.after(() => mock.close());
+  const { manager, runtime } = s.make(mock);
+  const ask = { projectId: 'proj1', path: VIDEO.path, size: VIDEO.size, duration: s.tr.duration };
+  const before = await manager.estimate(ask);
+  assert.equal(before.limitedBy, undefined);
+  // a Groq entra como reserva, com o aviso aceito e o limite de 8 mil tokens por minuto (o que o teste de conexão aprende)
+  runtime.save({ provider: 'groq', apiKey: F.KEY, model: 'llama-3.3-70b-versatile' });
+  runtime.accept(true);
+  runtime.save({ provider: 'custom' });
+  runtime.save({ fallback: ['groq'] });
+  runtime._learnTpm('groq', 8000);
+  const after = await manager.estimate(ask);
+  assert.deepEqual(after.limitedBy, { id: 'groq', label: 'Groq', tokensPerMinute: 8000 });
+  assert.equal(after.maxInputTokens, 5700);
+  assert.ok(after.calls > before.calls * 2, `chamadas: ${after.calls} contra ${before.calls}`);
+  assert.equal(after.exceedsLimit, true, 'passa do limite de 14 chamadas');
+  const r = await run(manager, {}, s.tr);
+  assert.equal(r.failed.code, 'TOO_MANY_CALLS');
+  assert.match(r.failed.message, /Os blocos ficaram menores \(~5700 tokens\) para caber no limite de 8\.000 tokens por minuto de Groq/);
+  assert.equal(mock.calls.length, 0, 'nada foi enviado');
+  // tirar a reserva volta aos blocos de sempre
+  runtime.save({ fallback: [] });
+  assert.equal((await manager.estimate(ask)).calls, before.calls);
+});

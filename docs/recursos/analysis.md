@@ -377,6 +377,8 @@ Medido na gameplay de CoD (4h18; gabarito de 51 momentos, 6 fortes e 28 fortes o
 
 **A IA confere o que só o algoritmo achou** (16/11/2026, ligado por padrão): depois das passadas dela, a IA lê a fala de cada sugestão que só o algoritmo trouxe e diz se vale um corte; a junção tira as recusadas e as guarda, com o motivo, numa seção recolhida. Ela também acerta o início e o fim de cada uma que fica (lê até 40 s antes e 15 s depois). Falha ou falta de resposta nunca tira sugestão. Detalhes e limites em `analise-ia.md`, 17.10 e 17.11.
 
+**Reserva entre provedores de IA** (16/11/2026): até 3 provedores de reserva, na ordem, assumem quando o escolhido falha por limite de uso, cota ou erro do servidor (chave recusada não troca). O app lê o limite de tokens por minuto que o provedor informa e, se ele é baixo (a Groq no plano gratuito, por exemplo), encolhe os blocos da análise para caber, com mais chamadas. Detalhes e limites em `analise-ia.md`, 17.12.
+
 ## Só os melhores (16/11/2026)
 
 Pedido do dono: o motor recomendar só quando o corte for bom ou forte. A aba ganhou o interruptor **"Só os melhores"** (`#anBestOnly`), acima de "Quantidade automática". Os dois são opostos: ligar um desliga o outro.

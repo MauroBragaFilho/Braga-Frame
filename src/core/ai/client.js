@@ -20,7 +20,12 @@ const { keyOverHttpAllowed } = require('./providers');
 
 const DEFAULT_TIMEOUT_MS = 120000;
 const MAX_ERROR_BODY_KEPT = 2000; // quanto do corpo de um erro HTTP fica no erro (já sem a chave), para quem explica a falha ao usuário
-const KEPT_RESPONSE_HEADERS = ['retry-after', 'x-ratelimit-limit', 'x-ratelimit-remaining', 'x-ratelimit-reset'];
+const KEPT_RESPONSE_HEADERS = [
+  'retry-after', 'x-ratelimit-limit', 'x-ratelimit-remaining', 'x-ratelimit-reset',
+  // os da Groq e de quem segue o mesmo padrão: o limite de TOKENS POR MINUTO (e de pedidos por dia) e o que ainda resta
+  'x-ratelimit-limit-tokens', 'x-ratelimit-remaining-tokens', 'x-ratelimit-reset-tokens',
+  'x-ratelimit-limit-requests', 'x-ratelimit-remaining-requests', 'x-ratelimit-reset-requests'
+];
 // "<id> is not a valid model ID" (o OpenRouter responde HTTP 400, não 404; observado em rede real) e variações: é modelo inválido, como o 404.
 // Um 400 que fala de response_format/JSON é outra coisa (a repetição sem JSON depende de continuar BAD_REQUEST).
 const INVALID_MODEL_RE = /is not a valid model|invalid model|unknown model|no such model|model[^.]{0,80}(?:does not exist|not found)/i;
@@ -71,6 +76,24 @@ function serverDetail(body, apiKey) {
     text = (e && (e.message || (typeof e === 'string' ? e : ''))) || '';
   } catch { text = String(body || '').replace(/\s+/g, ' '); }
   return clip(redact(text, apiKey).replace(/\s+/g, ' ').trim(), 160);
+}
+
+/**
+ * Limite de tokens por minuto que o provedor informa em cada resposta (`x-ratelimit-limit-tokens`, como a Groq): { tokensPerMinute,
+ * remainingTokens } ou null quando o provedor não informa. É o que o app usa para saber se um pedido cabe antes de mandá-lo.
+ */
+function rateLimitOf(res) {
+  const headers = res && res.headers;
+  if (!headers || typeof headers.get !== 'function') return null;
+  const read = (name, min) => {
+    let value = null;
+    try { value = headers.get(name); } catch { value = null; }
+    const n = value === null || value === undefined || value === '' ? NaN : Number(value);
+    return Number.isFinite(n) && n >= min ? Math.round(n) : null;
+  };
+  const tokensPerMinute = read('x-ratelimit-limit-tokens', 1);
+  if (!tokensPerMinute) return null;
+  return { tokensPerMinute, remainingTokens: read('x-ratelimit-remaining-tokens', 0) };
 }
 
 /** Só os cabeçalhos de limite de uso (nunca cookie, autorização ou o que mais vier) como objeto simples. */
@@ -221,7 +244,8 @@ async function chatCompletion(o) {
           ...(Number.isFinite(usage.cost) ? { cost: usage.cost } : {})
         },
         finishReason: choice.finish_reason || null,
-        model: typeof data.model === 'string' && data.model ? data.model.slice(0, 200) : null
+        model: typeof data.model === 'string' && data.model ? data.model.slice(0, 200) : null,
+        ...(rateLimitOf(res) ? { rateLimit: rateLimitOf(res) } : {})
       };
     } finally {
       clearTimeout(timer);
@@ -302,4 +326,4 @@ async function listModels({ baseUrl, apiKey, signal, timeoutMs = 20000, fetchImp
   }
 }
 
-module.exports = { chatCompletion, listModels, redact, retryAfterOf, serverDetail, NOT_CHAT_RE };
+module.exports = { chatCompletion, listModels, redact, retryAfterOf, rateLimitOf, serverDetail, NOT_CHAT_RE };

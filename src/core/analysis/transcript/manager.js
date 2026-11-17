@@ -97,22 +97,24 @@ class TranscriptManager extends EventEmitter {
       // retomada: mesmo vídeo, modelo, idioma e tamanho de pedaço
       let startAt = 0;
       let initialCues = [];
+      let initialWords = [];
       const draft = store.getDraft(job.projectId);
       if (draft && sameSource(draft.source, source) && draft.partial.modelId === run.modelId && draft.partial.language === language && draft.partial.chunkSec === chunkSec && draft.partial.doneUntil > 0 && draft.partial.doneUntil < duration) {
         startAt = draft.partial.doneUntil;
         initialCues = draft.cues;
+        initialWords = Array.isArray(draft.words) ? draft.words : [];
       }
       const result = await transcribeVideo({
-        input: file, duration, genOptions: run.genOptions, language, chunkSec, startAt, initialCues, signal: job.abort.signal,
+        input: file, duration, genOptions: run.genOptions, language, chunkSec, startAt, initialCues, initialWords, signal: job.abort.signal,
         generate: this.deps.generate,
         onProgress: progress,
-        onChunk: ({ cues, doneUntil }) => {
-          try { store.saveDraft(job.projectId, { source, partial: { doneUntil, chunkSec, modelId: run.modelId, language }, cues }); } catch { /* sem rascunho, só não retoma */ }
+        onChunk: ({ cues, words, doneUntil }) => {
+          try { store.saveDraft(job.projectId, { source, partial: { doneUntil, chunkSec, modelId: run.modelId, language }, cues, words }); } catch { /* sem rascunho, só não retoma */ }
         }
       });
       const described = this.deps.engine.describeRun(run, { device: result.device, deviceName: result.deviceName, fellBack: result.fellBack, noSpeech: !result.cues.length });
       const doc = buildDocument({
-        projectId: job.projectId, origin: 'generated', source, cues: result.cues, dropped: result.dropped,
+        projectId: job.projectId, origin: 'generated', source, cues: result.cues, dropped: result.dropped, words: result.words,
         engine: { modelId: run.modelId, modelLabel: run.model.label, language, device: result.device, deviceLabel: described.deviceLabel, fellBack: result.fellBack }
       });
       if (!result.cues.length) {

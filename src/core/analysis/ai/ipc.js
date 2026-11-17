@@ -31,6 +31,8 @@ const { SubtitleFileError, MAX_BYTES } = require('../transcript/subtitleFile');
 const { AiAnalysisManager } = require('./manager');
 const { SkillStore } = require('./skill');
 const { AnalysisError } = require('../errors');
+const { AnalysisCache, sourceKey } = require('../cache');
+const { extractAudio } = require('../audioSignal');
 
 function electronSafeStorage() {
   try {
@@ -67,7 +69,19 @@ function registerAiChannels(ctx) {
   const skill = new SkillStore(path.join(ctx.paths.userData, 'ai', 'skill')); // o guia de cortes do usuário (o padrão vai com o app)
   const aiManager = new AiAnalysisManager({
     runtime, store, skill, projects: ctx.projectStore || null, getTools: () => ctx.tools,
-    readChat: opts.readChat, probe: opts.probe, sleep: opts.sleep, retry: opts.retry
+    readChat: opts.readChat, probe: opts.probe, sleep: opts.sleep, retry: opts.retry,
+    // volume do áudio para o filtro de janelas candidatas: o cache de sinais do algoritmo (sig-audio) ou, se permitido, extraído agora
+    audioDb: opts.audioDb || (async ({ file, duration, signal, allowExtract, onProgress }) => {
+      const cache = new AnalysisCache(path.join(ctx.paths.cache, 'analysis'));
+      let key;
+      try { key = sourceKey(file); } catch { return null; }
+      const hit = cache.get('sig-audio', key);
+      if (hit && Array.isArray(hit.db)) return hit;
+      if (!allowExtract || !ctx.tools || !ctx.tools.ffmpeg) return null;
+      const data = await extractAudio({ ffmpeg: ctx.tools.ffmpeg, file, duration, signal, onProgress });
+      if (!data.partial) { try { cache.set('sig-audio', key, data); } catch { /* cache é opcional */ } }
+      return data;
+    })
   });
   const transcriptManager = new TranscriptManager({
     store, engine: opts.engine || {
@@ -103,7 +117,8 @@ function registerAiChannels(ctx) {
 
   ctx.handle('analysis:aiState', () => ({ ai: runtime.state() }));
   ctx.handle('analysis:aiSave', (payload) => ({ ai: runtime.save(payload) }));
-  ctx.handle('analysis:aiAccept', (payload) => ({ ai: runtime.accept(payload && payload.accepted !== false) }));
+  // `provider` (opcional): o aviso de um provedor de RESERVA; sem ele, o do provedor escolhido
+  ctx.handle('analysis:aiAccept', (payload) => ({ ai: runtime.accept(payload && payload.accepted !== false, payload && typeof payload.provider === 'string' ? payload.provider : null) }));
   ctx.handle('analysis:aiTest', async () => runtime.test({}));
   // a lista de modelos que a chave guardada pode usar (Gemini, Groq, Personalizado/LM Studio); o OpenRouter tem a própria
   ctx.handle('analysis:aiModels', async () => runtime.models({}));

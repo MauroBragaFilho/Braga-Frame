@@ -323,7 +323,7 @@ test('configuração: a chave nunca volta ao chamador nem aparece no arquivo; s�
   assert.ok(!F.mentions(after, F.KEY) && !F.mentions(runtime.state(), F.KEY) && !F.mentions(runtime.describe(), F.KEY));
   for (const f of F.readAll(dir)) assert.ok(!f.text.includes(F.KEY), f.file);
   const cfg = JSON.parse(fs.readFileSync(path.join(dir, 'ai', 'config.json'), 'utf8'));
-  assert.deepEqual(Object.keys(cfg).sort(), ['accepted', 'limits', 'provider', 'providers', 'version']);
+  assert.deepEqual(Object.keys(cfg).sort(), ['accepted', 'fallback', 'limits', 'provider', 'providers', 'version']);
   assert.equal(cfg.providers.groq.model, 'llama-x');
   // uma chave por provedor: trocar de provedor não leva a chave junto
   const other = runtime.save({ provider: 'gemini' });

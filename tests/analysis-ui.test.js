@@ -1441,6 +1441,37 @@ test('IA confere o algoritmo: ligado por padrão só no modo Algoritmo + IA, vai
   assert.equal(old.q('#anAiReviewDrops').hidden, true);
 });
 
+test('Enviar só os trechos candidatos: desligado por padrão, aparece com IA, vai no pedido (IA e Algoritmo + IA) e fica no projeto', async () => {
+  const ready = aiState({ selected: 'custom', ready: true, accepted: true }, { id: 'custom', label: 'Personalizado', baseUrl: 'http://127.0.0.1:9/v1', host: '127.0.0.1:9', model: 'm', keyRequired: false, ready: true, reason: '', accepted: true, privacy: '' });
+  const env = load({ api: aiApi(ready, transcriptApi(TRANSCRIPT)) });
+  await tick();
+  await tick();
+  assert.equal(env.q('#anAiWindows').checked, false, 'desligado por padrão');
+  assert.equal(env.q('.an-ai-windows').hidden, false, 'aparece nos modos com IA');
+  env.q('#anRun').click();
+  await tick();
+  await tick();
+  assert.equal(env.calls.find(([c]) => c === 'analysis:start')[1].aiWindows, undefined, 'desligado: o pedido não leva o campo');
+  env.q('#anAiWindows').checked = true;
+  env.q('#anAiWindows').dispatch('change');
+  assert.equal(env.project.ext.analysis.settings.aiWindows, true);
+  env.q('#anEngine-ai').click();
+  await tick();
+  assert.equal(env.q('.an-ai-windows').hidden, false);
+  const estimates = env.calls.filter(([c]) => c === 'analysis:aiEstimate');
+  assert.equal(estimates[estimates.length - 1][1].aiWindows, true, 'a estimativa também considera o modo');
+  env.mainHandlers.get('analysis:done')({ jobId: 'a1', result: { at: '2026-02-02T00:00:00.000Z', engine: 'both', fromCache: false, tookMs: 1, limit: 24, warnings: [], usedSignals: [], params: {}, signals: savedAnalysis(SOURCE, []).signals, ai: { calls: 1 }, suggestions: [] } });
+  env.q('#anRun').click();
+  await tick();
+  await tick();
+  const starts = env.calls.filter(([c]) => c === 'analysis:start');
+  assert.equal(starts[starts.length - 1][1].aiWindows, true);
+  env.mainHandlers.get('analysis:done')({ jobId: 'a1', result: { at: '2026-02-02T00:00:00.000Z', engine: 'both', fromCache: false, tookMs: 1, limit: 24, warnings: [], usedSignals: [], params: {}, signals: savedAnalysis(SOURCE, []).signals, ai: { calls: 1 }, suggestions: [] } });
+  env.q('#anEngine-algorithm').click();
+  await tick();
+  assert.equal(env.q('.an-ai-windows').hidden, true, 'sem IA o interruptor some');
+});
+
 test('IA confere o algoritmo com bordas: o resumo diz quantas a IA ajustou, o selo muda e o projeto guarda as bordas do algoritmo', async () => {
   const ready = aiState({ selected: 'custom', ready: true, accepted: true }, { id: 'custom', label: 'Personalizado', baseUrl: 'http://127.0.0.1:9/v1', host: '127.0.0.1:9', model: 'm', keyRequired: false, ready: true, reason: '', accepted: true, privacy: '' });
   const env = load({ api: aiApi(ready, transcriptApi(TRANSCRIPT)) });
@@ -1468,4 +1499,64 @@ test('IA confere o algoritmo com bordas: o resumo diz quantas a IA ajustou, o se
   assert.deepEqual([saved.suggestions[0].start, saved.suggestions[0].end], [275, 334]);
   assert.equal(saved.suggestions[1].reviewFrom, undefined);
   assert.equal(saved.review.adjusted, 1);
+});
+
+test('IA: provedores de reserva — as três escolhas, o que falta em cada um, o aviso de privacidade de cada um e o aviso de blocos menores', async () => {
+  const provider = { id: 'custom', label: 'Personalizado', baseUrl: 'https://a.exemplo/v1', host: 'a.exemplo', model: 'm', keyRequired: false, hasKey: true, keyStatus: 'ok', ready: true, reason: '', accepted: true, privacy: '', tokensPerMinute: null };
+  const groq = { id: 'groq', label: 'Groq', model: 'llama-3.3-70b-versatile', host: 'api.groq.com', ready: true, accepted: false, reason: '', privacy: 'Confira os termos da Groq.', tokensPerMinute: 8000, usable: true, note: '' };
+  const gemini = { id: 'gemini', label: 'Google Gemini', model: '', host: 'generativelanguage.googleapis.com', ready: false, accepted: false, reason: 'Informe o modelo.', privacy: '', tokensPerMinute: null, usable: true, note: '' };
+  const options = [{ id: 'gemini', label: 'Google Gemini' }, { id: 'groq', label: 'Groq' }, { id: 'openrouter', label: 'OpenRouter' }];
+  let current;
+  const make = (fallbackProviders, limited) => aiState({
+    selected: 'custom', ready: true, accepted: true,
+    effectiveLimits: limited ? { maxCalls: 14, maxInputTokens: 5700, maxOutputTokens: 2000, windowMinutes: 35, attempts: 3, limitedBy: { id: 'groq', label: 'Groq', tokensPerMinute: 8000 } } : { maxCalls: 14, maxInputTokens: 24000, windowMinutes: 35, attempts: 3 },
+    fallback: { ids: fallbackProviders.map((p) => p.id), max: 3, options, providers: fallbackProviders }
+  }, provider);
+  current = make([groq, gemini], true);
+  const env = load({ api: aiApi((channel, payload) => {
+    if (channel === 'analysis:aiAccept' && payload.provider === 'groq') current = make([{ ...groq, accepted: true }, gemini], true);
+    if (channel === 'analysis:aiSave' && payload.fallback) current = make(payload.fallback.map((id) => ({ groq, gemini }[id])), false);
+    return current;
+  }, transcriptApi(TRANSCRIPT)) });
+  await tick();
+  await tick();
+  assert.equal(env.q('#anFallbackBox').hidden, false);
+  const selects = [1, 2, 3].map((n) => env.q(`#anFallback${n}`));
+  assert.deepEqual(plain(selects[0].children.map((o) => text(o))), ['Nenhum', 'Google Gemini', 'Groq', 'OpenRouter'], 'o provedor escolhido não é opção de reserva');
+  assert.deepEqual(selects.map((s) => s.value), ['groq', 'gemini', '']);
+  // o que falta em cada reserva
+  const items = env.all('.an-fb-item');
+  assert.equal(items.length, 2);
+  assert.match(text(items[0]), /Aviso pendente.*Groq · llama-3\.3-70b-versatile · 8\.000 tokens por minuto/);
+  assert.match(text(items[0]), /Aceitar aviso/);
+  assert.match(text(items[1]), /Falta configurar.*Google Gemini.*limite por minuto ainda não conhecido.*Informe o modelo\./);
+  assert.doesNotMatch(text(items[1]), /Aceitar aviso/, 'sem configurar não há o que aceitar');
+  // blocos menores: o aviso diz qual provedor limita e o que fazer
+  assert.equal(env.q('#anFallbackNote').hidden, false);
+  assert.match(text(env.q('#anFallbackNote')), /limite de 8\.000 tokens por minuto de Groq faz a análise usar até ~5\.700 tokens por chamada \(o seu limite é 24\.000\)/);
+  assert.doesNotMatch(text(env.q('#anProvider')), /reserva:/, 'nenhuma reserva está pronta e aceita ainda');
+  // o aviso de privacidade da reserva é pedido com os dados DELA e vai com o id dela
+  const confirms = [];
+  env.BF.ui.confirm = async (opts) => { confirms.push(opts); return true; };
+  items[0].querySelector('.an-fb-accept').click();
+  await tick();
+  await tick();
+  assert.match(confirms[0].message, /Quem recebe: Groq \(api\.groq\.com\)/);
+  assert.match(confirms[0].message, /Confira os termos da Groq\./);
+  assert.deepEqual(plain(env.calls.find(([c]) => c === 'analysis:aiAccept')[1]), { accepted: true, provider: 'groq' });
+  assert.doesNotMatch(text(env.all('.an-fb-item')[0]), /Aviso pendente/);
+  assert.match(text(env.q('#anProvider')), /Personalizado · m · reserva: Groq/, 'a linha do provedor lembra as reservas prontas e aceitas');
+  // trocar as reservas grava a lista na ordem dos campos, sem repetir
+  selects[0].value = 'gemini';
+  selects[1].value = 'groq';
+  selects[2].value = 'groq';
+  selects[0].dispatch('change');
+  await tick();
+  assert.deepEqual(plain(env.calls.filter(([c]) => c === 'analysis:aiSave').pop()[1]), { fallback: ['gemini', 'groq'] });
+  assert.equal(env.q('#anFallbackNote').hidden, true, 'sem a Groq limitando, o aviso some');
+  // sem o campo no estado (outro modo) a seção nem aparece
+  const old = load({ api: aiApi(aiState({ selected: 'custom', ready: true, accepted: true }, provider), transcriptApi(TRANSCRIPT)) });
+  await tick();
+  await tick();
+  assert.equal(old.q('#anFallbackBox').hidden, true);
 });

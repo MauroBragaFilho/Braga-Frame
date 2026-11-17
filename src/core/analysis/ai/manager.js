@@ -6,7 +6,8 @@ const { AnalysisError } = require('../errors');
 const { AiError } = require('../../ai/errors');
 const { sameSource } = require('../transcript/format');
 const { analyzeWithAi, ALGO_VERSION, MAX_CANDIDATES_PER_BLOCK } = require('./analyze');
-const { buildWindows, estimate, describeEstimate } = require('./chunking');
+const { buildWindows, packCandidateBlocks, estimate, describeEstimate } = require('./chunking');
+const { findCandidateWindows } = require('./windows');
 const { profileBlock, profileSummary, estimateTokens, systemPrompt, SYSTEM_PROMPT } = require('./prompt');
 const { selectExamples } = require('./humorExamples');
 const humor = require('../humor');
@@ -18,7 +19,9 @@ const EXAMPLES_TTL_MS = 8000; // quanto tempo a estimativa reaproveita a leitura
 /** Por que o OpenRouter trocou de modelo (códigos de src/core/ai/openrouter/errors.js), em texto curto para a barra de progresso. */
 const SWITCH_WHY = Object.freeze({
   MODEL: 'não encontrado, expirado ou indisponível', DATA_POLICY: 'a política de dados da sua conta o recusa', RATE_LIMIT: 'limite de uso',
-  SERVER: 'erro do provedor', TIMEOUT: 'demorou demais', INTERRUPTED: 'a conexão caiu', BAD_RESPONSE: 'resposta inválida'
+  SERVER: 'erro do provedor', TIMEOUT: 'demorou demais', INTERRUPTED: 'a conexão caiu', BAD_RESPONSE: 'resposta inválida',
+  // troca ENTRE provedores (src/core/ai/runtime.js, _chatChain)
+  QUOTA: 'cota esgotada', NETWORK: 'sem conexão com o provedor'
 });
 
 /**
@@ -113,19 +116,57 @@ class AiAnalysisManager extends EventEmitter {
     } catch { return { body: '', extraTokens: 0 }; } // guia ilegível: segue com o padrão
   }
 
+  /**
+   * Janelas candidatas (modo opcional): o filtro local de áudio, chat e risadas. Nunca lança por falta de sinal: sem janelas suficientes
+   * devolve { windows: [], reason } e quem chama volta ao método de blocos. `allowExtract:false` (estimativa) só usa o áudio já em cache.
+   */
+  async _candidateWindows({ doc, chat, duration, hasAudio, file, signal, allowExtract, onProgress }) {
+    const found = await findCandidateWindows({ doc, chat, duration, hasAudio, file, audioDb: this.deps.audioDb, signal, allowExtract, onProgress });
+    if (!found.enough) {
+      const why = found.info.windows ? `só ${found.info.windows} janela(s) candidata(s)` : 'nenhum trecho candidato (sem picos de áudio, de chat nem risadas)';
+      return { windows: [], info: found.info, reason: `O filtro local achou ${why}; foi usado o método de blocos, que lê a transcrição inteira.` };
+    }
+    return { windows: found.windows, info: found.info, reason: '' };
+  }
+
   /** Estimativa honesta antes de rodar: { windows, calls, tokens, label, exceedsLimit, limit }. Não envia nada. */
-  async estimate({ projectId, path: file, size, duration, chatPath, profile: rawProfile }) {
+  async estimate({ projectId, path: file, size, duration, chatPath, profile: rawProfile, aiWindows }) {
     const source = { path: file, size: Number(size) || 0, duration: Number(duration) || 0 };
     const doc = this._transcriptFor(projectId, source);
-    const limits = this.deps.runtime.limits();
+    const limits = this._limits();
     const chat = await this._loadChat(chatPath, []);
     const { blockText, pickText } = this.humorFor(projectId, rawProfile);
     const skill = this._skill();
     const windows = buildWindows(doc.cues, source.duration || doc.source.duration, {
       windowSec: limits.windowMinutes * 60, maxInputTokens: limits.maxInputTokens, chat, profileTokens: estimateTokens(blockText) + skill.extraTokens
     });
-    const est = estimate(windows, { candidatesPerBlock: MAX_CANDIDATES_PER_BLOCK, pickExtraTokens: estimateTokens(pickText) + skill.extraTokens });
-    return { ...est, label: describeEstimate(est), limit: limits.maxCalls, exceedsLimit: est.calls > limits.maxCalls };
+    const blocksEst = estimate(windows, { candidatesPerBlock: MAX_CANDIDATES_PER_BLOCK, pickExtraTokens: estimateTokens(pickText) + skill.extraTokens });
+    let est = blocksEst;
+    let windowsInfo = null;
+    if (aiWindows === true) {
+      const hasAudio = true;
+      const found = await this._candidateWindows({ doc, chat, duration: source.duration || doc.source.duration, hasAudio, file, signal: null, allowExtract: false });
+      if (found.windows.length) {
+        const packed = packCandidateBlocks(found.windows, doc.cues, source.duration || doc.source.duration, { maxInputTokens: limits.maxInputTokens, chat, profileTokens: estimateTokens(blockText) + skill.extraTokens });
+        const winEst = estimate(packed, { candidatesPerBlock: Math.max(1, ...packed.map((b) => b.packed.length)), pickExtraTokens: estimateTokens(pickText) + skill.extraTokens });
+        est = winEst;
+        windowsInfo = { mode: 'candidates', ...found.info, blocksTokens: blocksEst.totalTokens, blocksCalls: blocksEst.calls, savedPercent: blocksEst.totalTokens ? Math.round((1 - winEst.totalTokens / blocksEst.totalTokens) * 100) : 0 };
+      } else {
+        windowsInfo = { mode: 'blocks', fallback: true, reason: found.info.audio === 'not-cached' ? 'O áudio ainda não foi lido; rode o algoritmo uma vez (ou a análise) para o filtro local ter o volume. Estimativa pelo método de blocos.' : found.reason, ...found.info };
+      }
+    }
+    return {
+      ...est, label: describeEstimate(est), limit: limits.maxCalls, exceedsLimit: est.calls > limits.maxCalls,
+      ...(windowsInfo ? { windowsInfo } : {}),
+      // blocos encolhidos para caber no limite por minuto de um provedor da cadeia (a tela diz qual)
+      ...(limits.limitedBy ? { limitedBy: limits.limitedBy, maxInputTokens: limits.maxInputTokens } : {})
+    };
+  }
+
+  /** Os limites desta análise: os do usuário, encolhidos para o limite por minuto do provedor da cadeia que tem o menor (runtime.effectiveLimits). */
+  _limits() {
+    const { runtime } = this.deps;
+    return typeof runtime.effectiveLimits === 'function' ? runtime.effectiveLimits() : runtime.limits();
   }
 
   /**
@@ -147,7 +188,7 @@ class AiAnalysisManager extends EventEmitter {
   }
 
   /** Valida e começa em segundo plano. Lança AnalysisError/AiError se não puder começar. */
-  start({ projectId, path: file, size, duration, params, chatPath, meta, existingCuts, profile, review } = {}) {
+  start({ projectId, path: file, size, duration, params, chatPath, meta, existingCuts, profile, review, aiWindows } = {}) {
     if (this.job) throw new AnalysisError('BUSY', 'Já existe uma análise em andamento. Espere terminar ou cancele-a.');
     const { current, source, doc } = this.check({ projectId, path: file, size, duration });
 
@@ -164,7 +205,7 @@ class AiAnalysisManager extends EventEmitter {
     const toReview = Array.isArray(review)
       ? review.filter((c) => c && c.id != null && Number.isFinite(c.start) && Number.isFinite(c.end)).slice(0, 600).map((c) => ({ id: String(c.id), start: Number(c.start), end: Number(c.end) }))
       : [];
-    this._run(job, { doc, source, params, chatPath, meta: meta && typeof meta === 'object' ? meta : {}, existingCuts: cuts, provider: current, projectId, profile, review: toReview }).catch((err) => {
+    this._run(job, { doc, source, params, chatPath, meta: meta && typeof meta === 'object' ? meta : {}, existingCuts: cuts, provider: current, projectId, profile, review: toReview, aiWindows: aiWindows === true }).catch((err) => {
       this.job = null;
       this.emit('failed', { jobId: job.id, code: 'ERROR', message: err && err.message ? err.message : 'Erro inesperado na análise.' });
     });
@@ -180,7 +221,7 @@ class AiAnalysisManager extends EventEmitter {
     this.emit('progress', { jobId: job.id, p: ev.p, stage: ev.stage, message: ev.message, ...(typeof ev.stageP === 'number' ? { stageP: ev.stageP } : {}) });
   }
 
-  async _run(job, { doc, source, params, chatPath, meta, existingCuts, provider, projectId, profile, review }) {
+  async _run(job, { doc, source, params, chatPath, meta, existingCuts, provider, projectId, profile, review, aiWindows }) {
     const progress = (ev) => this._progress(job, ev);
     try {
       progress({ p: 0, stage: 'prepare', message: 'Preparando…' });
@@ -208,6 +249,20 @@ class AiAnalysisManager extends EventEmitter {
       }
       const chat = await this._loadChat(chatPath, warnings);
       const humorProfile = this.humorFor(projectId, profile, { fresh: true }); // perfil de humor do canal e os exemplos dele, lidos agora (nada sai sem o aceite do provedor)
+      // modo janelas candidatas (opcional): só os trechos que o filtro local marcou vão para a IA; sem sinais suficientes volta aos blocos
+      let candidateWindows = null;
+      let windowsInfo = null;
+      if (aiWindows) {
+        progress({ p: 0.01, stage: 'prepare', message: 'Procurando os trechos candidatos (áudio, chat e risadas)…' });
+        const found = await this._candidateWindows({
+          doc, chat, duration, hasAudio, file: source.path, signal: job.abort.signal, allowExtract: true,
+          onProgress: (p) => progress({ p: 0.01 + 0.07 * Math.min(1, Math.max(0, Number(p) || 0)), stage: 'prepare', message: 'Lendo o volume do áudio…', stageP: p })
+        });
+        windowsInfo = found.info;
+        if (found.windows.length) candidateWindows = found.windows;
+        else warnings.push({ code: 'AI_WINDOWS_FALLBACK', message: found.reason });
+        if (job.abort.signal.aborted) throw new AnalysisError('CANCELLED', 'Análise cancelada. Nada foi alterado no projeto.');
+      }
       const switches = [];
       const onSwitch = (ev) => {
         switches.push(ev);
@@ -217,7 +272,7 @@ class AiAnalysisManager extends EventEmitter {
       // pedido pago ANTES de sair; se mesmo assim vier custo (ex.: um modelo que passou a ser pago depois da lista), a análise avisa.
       let reportedCost = 0;
       const result = await analyzeWithAi(
-        { duration, hasAudio, params, transcript: doc, chat, meta, existingCuts, profile: humorProfile.profile, examples: humorProfile.examples, skill: this._skill().body, review },
+        { duration, hasAudio, params, transcript: doc, chat, meta, existingCuts, profile: humorProfile.profile, examples: humorProfile.examples, skill: this._skill().body, review, candidateWindows },
         {
           chat: async (p) => {
             const out = await this.deps.runtime.chat({ ...p, onSwitch });
@@ -226,7 +281,7 @@ class AiAnalysisManager extends EventEmitter {
             return out;
           },
           provider: { label: provider.label, model: provider.model },
-          limits: this.deps.runtime.limits(),
+          limits: this._limits(),
           signal: job.abort.signal,
           onProgress: progress,
           sleep: this.deps.sleep,
@@ -249,6 +304,8 @@ class AiAnalysisManager extends EventEmitter {
         const usd = Number(reportedCost.toFixed(6)).toLocaleString('pt-BR', { maximumFractionDigits: 6 });
         warnings.push({ code: 'AI_COST_REPORTED', message: `O OpenRouter informou custo (US$ ${usd}) em pedidos desta análise, apesar de "Usar apenas modelos gratuitos" estar ligado. Confira o uso e os créditos no painel do OpenRouter.` });
       }
+      if (windowsInfo && result.ai && result.ai.windows) result.ai.windows.filter = windowsInfo;
+      else if (windowsInfo && result.ai) result.ai.windows = { mode: 'blocks', fallback: true, filter: windowsInfo };
       result.warnings = [...warnings, ...result.warnings];
       result.source.hasAudio = hasAudio;
       this.job = null;

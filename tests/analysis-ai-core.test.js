@@ -398,3 +398,14 @@ test('pedido da conferência com bordas: separa a fala de antes, a do corte e a 
   assert.match(msg, /perder a premissa/);
   assert.doesNotMatch(msg, /Os horários não mudam/);
 });
+
+test('buildWindows: com teto de entrada pequeno a reserva do chat e o número de linhas do chat encolhem junto; no teto de sempre nada muda', () => {
+  const t = F.makeTranscript({ minutes: 40 });
+  const chat = { messages: Array.from({ length: 400 }, (_, i) => ({ t: 30 + i * 5, user: 'fulano', text: `mensagem ${i} do chat` })) };
+  const normal = buildWindows(t.cues, t.duration, { windowSec: 35 * 60, maxInputTokens: 24000, chat });
+  assert.equal(Math.max(...normal.map((w) => w.chatLines.length)), 150, 'no teto de sempre o chat vai até 150 linhas');
+  const small = buildWindows(t.cues, t.duration, { windowSec: 35 * 60, maxInputTokens: 6000, chat });
+  assert.ok(Math.max(...small.map((w) => w.chatLines.length)) <= 37, 'com 6 mil tokens: 15% de reserva e uma linha a cada ~24 tokens');
+  assert.ok(small.length > normal.length);
+  assert.ok(small.every((w) => w.tokens <= 6000 + 400), `o maior bloco: ${Math.max(...small.map((w) => w.tokens))} tokens`);
+});

@@ -238,6 +238,7 @@
       bestOnly: false,
       filterWeak: d && typeof d.filterWeak === 'boolean' ? d.filterWeak : true,
       aiReview: true, // modo Algoritmo + IA: a IA confere as sugestões que só o algoritmo achou
+      aiWindows: false, // IA vê só os trechos candidatos (áudio, chat, risadas) em vez da transcrição inteira
       textWeights: d && d.textWeights ? { ...d.textWeights } : { laugh: 1, exclaim: 1, pace: 1, repeat: 1, meta: 1, humor: 1, structure: 1 },
       chat: {
         keywords: Array.isArray(fromPrefs) ? fromPrefs.map(String) : (d ? [...d.chat.keywords] : []),
@@ -264,6 +265,7 @@
       bestOnly: saved.bestOnly === true,
       filterWeak: typeof saved.filterWeak === 'boolean' ? saved.filterWeak : base.filterWeak,
       aiReview: typeof saved.aiReview === 'boolean' ? saved.aiReview : base.aiReview,
+      aiWindows: saved.aiWindows === true,
       textWeights: { ...base.textWeights, ...(saved.textWeights || {}) },
       chat: { ...base.chat, ...(saved.chat || {}), keywords: Array.isArray(saved.chat && saved.chat.keywords) ? saved.chat.keywords : base.chat.keywords },
       image: { ...base.image, ...(saved.image || {}) },
@@ -461,10 +463,11 @@
   // ---------- execução ----------
 
   /** Aviso de privacidade ANTES do primeiro envio ao provedor (lembrado por provedor). true = pode enviar. */
-  async function ensureConsent() {
-    if (state.ai && state.ai.accepted) return true;
+  async function ensureConsent(target = null) {
+    // `target`: um provedor de RESERVA (state.ai.fallback.providers); sem ele, o provedor escolhido
+    if (!target && state.ai && state.ai.accepted) return true;
     if (!state.ai || !state.ai.provider) return false;
-    const p = state.ai.provider;
+    const p = target || state.ai.provider;
     const where = p.source === 'host'
       ? `o provedor configurado no ${p.hostName || 'aplicativo'} (${p.label}${p.model ? `, ${p.model}` : ''})`
       : `${p.label}${p.host ? ` (${p.host})` : ''}`;
@@ -486,7 +489,7 @@
       cancelLabel: 'Agora não'
     });
     if (!ok) return false;
-    const res = await BF.api('analysis:aiAccept', { accepted: true });
+    const res = await BF.api('analysis:aiAccept', { accepted: true, ...(target ? { provider: target.id } : {}) });
     if (!res.ok || !res.ai) { BF.ui.toast(res.message || 'Não foi possível guardar o aceite.', 'error'); return false; }
     state.ai = res.ai;
     renderAll();
@@ -494,11 +497,12 @@
   }
 
   /** O que a análise por IA manda ao processo principal (a chave nunca passa por aqui: quem a guarda é o processo principal). */
-  function aiPayload(project, chosen) {
+  function aiPayload(project, chosen = null) {
     const origin = project.source.origin || {};
     const profile = humorProfile(); // perfil de humor do canal (critérios, listas e a opção de exemplos); o processo principal escolhe os exemplos
     return {
       engine: 'ai',
+      ...(chosen && chosen.aiWindows ? { aiWindows: true } : {}),
       ...(profile ? { profile } : {}),
       projectId: project.id,
       path: project.source.path,
@@ -553,7 +557,7 @@
       if (useEngine === 'both') {
         // Algoritmo + IA: o pedido do algoritmo mais o que a IA precisa (metadados, cortes que já existem, perfil do canal)
         const extra = aiPayload(project, chosen);
-        payload = { ...payload, engine: 'both', meta: extra.meta, existingCuts: extra.existingCuts, ...(extra.profile ? { profile: extra.profile } : {}), review: chosen.aiReview !== false };
+        payload = { ...payload, engine: 'both', meta: extra.meta, existingCuts: extra.existingCuts, ...(extra.profile ? { profile: extra.profile } : {}), ...(chosen.aiWindows ? { aiWindows: true } : {}), review: chosen.aiReview !== false };
       }
     }
     const res = await BF.api('analysis:start', payload);
@@ -759,6 +763,10 @@
     ui.aiReview = el('input', { type: 'checkbox', id: 'anAiReview', class: 'bds-switch', role: 'switch', onchange: onControlChange });
     ui.aiReviewRow = switchRow('an-switch-row an-ai-review', 'anAiReview', 'IA confere o algoritmo',
       el('span', { class: 'small' }, 'No modo Algoritmo + IA, a IA lê a fala de cada sugestão que só o algoritmo achou e tira as que não valem um corte. Gasta de 1 a 3 chamadas a mais.'), ui.aiReview);
+    // modo janelas candidatas: um filtro local (volume do áudio, picos de chat e risadas) marca onde pode haver corte e a IA lê só esses trechos
+    ui.aiWindows = el('input', { type: 'checkbox', id: 'anAiWindows', class: 'bds-switch', role: 'switch', onchange: () => { onControlChange(); refreshEstimate(); } });
+    ui.aiWindowsRow = switchRow('an-switch-row an-ai-windows', 'anAiWindows', 'Enviar só os trechos candidatos',
+      el('span', { class: 'small' }, 'Um filtro no seu computador (volume, picos de chat e risadas) marca onde pode haver corte e a IA lê só esses trechos, com 15 s de contexto: menos texto enviado, menos chamadas e menos erro de limite. O volume não é enviado. Sem sinais suficientes, usa o método de sempre.'), ui.aiWindows);
     ui.sensitivity = el('input', { type: 'range', id: 'anSensitivity', min: '1', max: '5', step: '1', onchange: onControlChange, oninput: syncOutputs });
     ui.sensitivityOut = el('output', { for: 'anSensitivity', class: 'an-out' });
     ui.perHour = el('input', { type: 'range', id: 'anPerHour', min: '1', max: '20', step: '1', onchange: onControlChange, oninput: syncOutputs });
@@ -784,7 +792,7 @@
     ui.reset = el('button', { type: 'button', id: 'anReset', class: 'sm', onclick: resetSettings }, 'Restaurar padrões');
     ui.fresh = el('button', { type: 'button', id: 'anFresh', class: 'secondary sm', onclick: () => run({ fresh: true }) }, 'Analisar de novo, sem usar o guardado');
     // ajustes travados enquanto a análise roda (os sinais são tratados em renderHints)
-    ui.lockables = [ui.profile, ui.episodes, ui.autoQty, ui.bestOnly, ui.filterWeak, ui.aiReview, ui.sensitivity, ui.perHour, ...SIGNALS.map((sig) => ui.weights[sig.id]), ...TEXT_WEIGHTS.map((feat) => ui.textWeights[feat.id]), ui.keywords, ui.lag, ui.win, ui.fast, ui.reset];
+    ui.lockables = [ui.profile, ui.episodes, ui.autoQty, ui.bestOnly, ui.filterWeak, ui.aiReview, ui.aiWindows, ui.sensitivity, ui.perHour, ...SIGNALS.map((sig) => ui.weights[sig.id]), ...TEXT_WEIGHTS.map((feat) => ui.textWeights[feat.id]), ui.keywords, ui.lag, ui.win, ui.fast, ui.reset];
 
     ui.signalsBlock = el('div', { class: 'an-block', id: 'anSignals' },
       el('h3', { class: 'panel-title' }, 'O que procurar'),
@@ -827,7 +835,7 @@
           el('span', { class: 'small' }, 'Sem teto por hora. Com o filtro abaixo valendo, a busca fica um degrau mais sensível e só entra a reação confirmada por outra pista (mais cortes para revisar).'), ui.autoQty),
         switchRow('an-switch-row an-filter-weak', 'anFilterWeak', 'Descartar ideias fracas',
           el('span', { class: 'small' }, 'Com transcrição, tira o que não tem reação de voz (riso, exclamação, comentário) nem do chat (num chat pequeno, a risada escrita conta).'), ui.filterWeak),
-        ui.aiReviewRow),
+        ui.aiReviewRow, ui.aiWindowsRow),
       ui.runArea,
       ui.advanced);
   }
@@ -843,6 +851,7 @@
     ui.bestOnly.checked = Boolean(s.bestOnly);
     ui.filterWeak.checked = Boolean(s.filterWeak);
     ui.aiReview.checked = s.aiReview !== false;
+    ui.aiWindows.checked = s.aiWindows === true;
     ui.sensitivity.value = String(s.sensitivity);
     ui.perHour.value = String(s.perHour);
     for (const sig of SIGNALS) ui.weights[sig.id].value = String(s.weights[sig.id]);
@@ -886,6 +895,7 @@
       bestOnly: ui.bestOnly.checked,
       filterWeak: ui.filterWeak.checked,
       aiReview: ui.aiReview.checked,
+      aiWindows: ui.aiWindows.checked,
       sensitivity: num(ui.sensitivity.value, base.sensitivity),
       perHour: num(ui.perHour.value, base.perHour),
       weights: Object.fromEntries(SIGNALS.map((sig) => [sig.id, Math.min(2, Math.max(0, num(ui.weights[sig.id].value, base.weights[sig.id])))])),
@@ -987,6 +997,7 @@
     }
     ui.ffmpegWarn.hidden = !algo || !ffmpegMissing;
     ui.signalWarn.hidden = !algo || !noSignal || state.running;
+    if (ui.aiWindowsRow) ui.aiWindowsRow.hidden = !ai;
     if (ui.aiReviewRow) ui.aiReviewRow.hidden = !(algo && ai); // a conferência só existe quando os dois motores rodam
     ui.aiWarn.hidden = !ai || noProject || blockers.ok || state.running;
     if (ai && !ui.aiWarn.hidden) ui.aiWarn.textContent = blockers.why.join(' ');
@@ -1356,7 +1367,8 @@
     const profile = humorProfile();
     const res = await BF.api('analysis:aiEstimate', {
       projectId: project.id, path: project.source.path, size: project.source.size || 0, duration: project.source.duration || 0,
-      params: {}, chatPath: project.chat && project.chat.path ? project.chat.path : null, ...(profile ? { profile } : {})
+      params: {}, chatPath: project.chat && project.chat.path ? project.chat.path : null, ...(profile ? { profile } : {}),
+      ...(state.ui && state.ui.aiWindows && state.ui.aiWindows.checked ? { aiWindows: true } : {})
     });
     if (seq !== estimateSeq || BF.state.project !== project) return; // chegou depois de a situação mudar
     state.estimate = res.ok && res.estimate ? res.estimate : null;
@@ -1567,6 +1579,56 @@
     const res = await BF.api('analysis:aiAccept', { accepted: false });
     if (res.ok && res.ai) state.ai = res.ai;
     renderAll();
+  }
+
+  const fmtN = (n) => Number(n).toLocaleString('pt-BR');
+
+  /** Grava os provedores de reserva, na ordem dos três campos (sem repetir). */
+  function saveFallback() {
+    const ids = [];
+    for (const select of state.ui.fbSelects) if (select.value && !ids.includes(select.value)) ids.push(select.value);
+    saveAi({ fallback: ids });
+  }
+
+  /** O aviso de privacidade de um provedor de reserva: sem ele, nada é enviado a esse provedor. */
+  async function acceptFallback(provider) {
+    if (await ensureConsent(provider)) renderAll();
+  }
+
+  /** Os provedores de reserva: os três campos, o que falta em cada um e o aviso de blocos menores. */
+  function renderProviderFallback(ai, host) {
+    const ui = state.ui;
+    const fb = ai && !host ? ai.fallback : null;
+    ui.fbBox.hidden = !fb;
+    if (!fb) return;
+    const options = Array.isArray(fb.options) ? fb.options : [];
+    const chosen = (Array.isArray(fb.ids) ? fb.ids : []).filter((id) => id !== ai.selected);
+    const key = options.map((o) => o.id).join();
+    ui.fbSelects.forEach((select, i) => {
+      if (select.dataset.key !== key) { // só refaz as opções quando mudam (redesenhar com a lista aberta a fecharia)
+        select.replaceChildren(el('option', { value: '' }, 'Nenhum'), ...options.map((o) => el('option', { value: o.id }, o.label)));
+        select.dataset.key = key;
+      }
+      select.value = chosen[i] && options.some((o) => o.id === chosen[i]) ? chosen[i] : '';
+    });
+    ui.fbList.replaceChildren(...(fb.providers || []).map((q) => {
+      let chip = ['bds-chip-ok', 'Pronto'];
+      if (!q.ready) chip = ['bds-chip-warn', 'Falta configurar'];
+      else if (!q.usable) chip = ['bds-chip-warn', 'Limite baixo'];
+      else if (!q.accepted) chip = ['bds-chip-warn', 'Aviso pendente'];
+      const limit = q.tokensPerMinute ? `${fmtN(q.tokensPerMinute)} tokens por minuto` : 'limite por minuto ainda não conhecido (use "Testar conexão" nele)';
+      const detail = [q.model ? `${q.label} · ${q.model}` : q.label, limit, !q.ready ? q.reason : '', q.note].filter(Boolean).join(' · ');
+      return el('li', { class: 'an-fb-item' },
+        el('span', { class: `bds-chip ${chip[0]}` }, chip[1]),
+        el('span', { class: 'small' }, detail),
+        q.ready && q.usable && !q.accepted ? el('button', { type: 'button', class: 'sm an-fb-accept', onclick: () => acceptFallback(q) }, 'Aceitar aviso') : null);
+    }));
+    const eff = ai.effectiveLimits;
+    const lim = eff && eff.limitedBy;
+    ui.fbNote.hidden = !lim;
+    ui.fbNote.textContent = lim
+      ? `Blocos menores: o limite de ${fmtN(lim.tokensPerMinute)} tokens por minuto de ${lim.label} faz a análise usar até ~${fmtN(eff.maxInputTokens)} tokens por chamada (o seu limite é ${fmtN(ai.limits.maxInputTokens)}). Isso gera mais chamadas: confira a estimativa antes de analisar, e aumente "Chamadas por análise" se precisar. Tirar ${lim.label} das reservas volta aos blocos de sempre.`
+      : '';
   }
 
   function changeLimit(key, input) {
@@ -2012,6 +2074,16 @@
     ui.orBlock = el('div', { class: 'an-field an-field-wide an-or', id: 'anOrBlock', hidden: true },
       el('span', { class: 'an-field-label' }, 'Modelo'), ui.orPickerHost, ui.orReserveBox);
     ui.estFree = el('p', { class: 'small', id: 'anEstimateFree', hidden: true });
+    // provedores de reserva (src/core/ai/runtime.js, _chatChain): se o escolhido falhar por limite de uso ou erro do servidor, o app passa ao próximo
+    ui.fbSelects = [1, 2, 3].map((n) => el('select', { id: `anFallback${n}`, 'aria-label': `${n}ª reserva`, onchange: saveFallback }));
+    ui.fbList = el('ul', { class: 'an-fb-list', id: 'anFallbackList' });
+    ui.fbNote = el('p', { class: 'small an-caution', id: 'anFallbackNote', hidden: true });
+    ui.fbBox = el('div', { class: 'an-adv-group', id: 'anFallbackBox', hidden: true },
+      el('h4', { class: 'an-group-title' }, 'Provedores de reserva'),
+      el('p', { class: 'muted small' }, 'Se o provedor escolhido falhar por limite de uso, cota ou erro do servidor, o app passa ao próximo, na ordem, e avisa na análise. Chave recusada não troca. Cada reserva precisa estar configurada e com o aviso de privacidade aceito (sem o aceite, nada é enviado a ela). Para configurar um provedor, escolha-o em "Provedor" acima, informe a chave e o modelo, use "Testar conexão" (ela descobre o limite por minuto) e volte ao provedor principal.'),
+      el('div', { class: 'an-adv-grid an-adv-two' }, ui.fbSelects.map((select, i) => field(`${i + 1}ª reserva`, select))),
+      ui.fbList, ui.fbNote);
+    ui.cfgTpm = el('p', { class: 'muted small', id: 'anCfgTpm', hidden: true });
     ui.limits = {};
     const limitFields = [
       ['maxCalls', 'Chamadas por análise (máx.)'], ['maxInputTokens', 'Tokens por chamada (máx.)'],
@@ -2040,7 +2112,9 @@
         ui.cfgHostNote,
         ui.hostFreeBox,
         el('div', { class: 'an-adv-actions' }, ui.cfgTest, ui.cfgTestOut),
+        ui.cfgTpm,
         switchRow('an-switch-row', 'anCfgAccept', 'Aviso de privacidade aceito', el('span', { class: 'small' }, 'Sem o aceite, nada é enviado. Vale até você revogar'), ui.cfgAccept),
+        ui.fbBox,
         el('div', { class: 'an-adv-group' },
           el('h4', { class: 'an-group-title' }, 'Limites'),
           el('div', { class: 'an-adv-grid an-adv-two' }, limitFields),
@@ -2061,7 +2135,7 @@
         el('p', { class: 'small' }, 'O texto que ensina a IA a escolher os cortes: o que vale, onde começar e terminar, o que descartar. Vai em cada chamada, para qualquer provedor. Adapte ao seu canal: exemplos do que você gosta e do que não gosta ajudam.'),
         ui.skillText, ui.skillInfo,
         el('div', { class: 'an-adv-actions' }, ui.skillSave, ui.skillReset, ui.skillOut)));
-    ui.aiLockables = [ui.cfgProvider, ui.cfgBaseUrl, ui.cfgModel, ui.cfgModelsBtn, ui.cfgModelPick, ui.cfgKey, ui.cfgKeySave, ui.cfgKeyClear, ui.cfgAccept, ui.hostFree, ...ui.orReserve, ...Object.values(ui.limits)];
+    ui.aiLockables = [ui.cfgProvider, ui.cfgBaseUrl, ui.cfgModel, ui.cfgModelsBtn, ui.cfgModelPick, ui.cfgKey, ui.cfgKeySave, ui.cfgKeyClear, ui.cfgAccept, ui.hostFree, ...ui.orReserve, ...ui.fbSelects, ...Object.values(ui.limits)];
     ui.pCard = el('div', { class: 'an-card', id: 'anProviderCard' },
       el('div', { class: 'an-split' }, el('strong', {}, 'Provedor de IA'), ui.pChip),
       ui.pLine, ui.orChipHost, ui.estLine, ui.estFree, ui.aiConfig, ui.skillBox);
@@ -2171,7 +2245,8 @@
     } else if (none) {
       ui.pLine.textContent = 'Escolha o provedor e o modelo de IA. Nada é enviado antes de você escolher, informar a chave e aceitar o aviso de privacidade.';
     } else {
-      ui.pLine.textContent = p.ready ? `${p.label} · ${modelLabel(p)}` : `${p.label}: ${p.reason}`;
+      const spare = ai.fallback && Array.isArray(ai.fallback.providers) ? ai.fallback.providers.filter((q) => q.ready && q.accepted && q.usable).map((q) => q.label) : [];
+      ui.pLine.textContent = p.ready ? `${p.label} · ${modelLabel(p)}${spare.length ? ` · reserva: ${spare.join(', ')}` : ''}` : `${p.label}: ${p.reason}`;
     }
     const ready = p.ready;
     ui.pChip.className = `bds-chip ${ready ? (ai.accepted ? 'bds-chip-ok' : 'bds-chip-warn') : 'bds-chip-warn'}`;
@@ -2182,6 +2257,10 @@
       ui.estLine.textContent = est.exceedsLimit
         ? `Estimativa: ${est.label}. Passa do limite de ${est.limit} chamadas: aumente em "Provedor, chave e limites" ou use o algoritmo.`
         : `Estimativa: ${est.label}. Nada é enviado antes de você confirmar o aviso de privacidade.`;
+      const wi = est.windowsInfo;
+      if (wi && wi.mode === 'candidates') ui.estLine.textContent += ` Só os trechos candidatos: ${wi.windows} janelas, cerca de ${wi.savedPercent}% menos texto que o método de sempre.`;
+      else if (wi && wi.fallback && wi.reason) ui.estLine.textContent += ` ${wi.reason}`;
+      if (est.limitedBy) ui.estLine.textContent += ` Blocos menores para caber no limite por minuto de ${est.limitedBy.label}.`;
     }
     // OpenRouter: a estimativa comparada com os pedidos gratuitos que restam hoje (avisa; não bloqueia)
     const free = state.orFree;
@@ -2245,6 +2324,9 @@
       if (!typing(ui.limits[key]) && ai.limits) ui.limits[key].value = String(ai.limits[key]);
     }
     renderOpenRouter(ai, p);
+    ui.cfgTpm.hidden = host || none || !p.tokensPerMinute;
+    ui.cfgTpm.textContent = ui.cfgTpm.hidden ? '' : `Limite informado pelo provedor: ${fmtN(p.tokensPerMinute)} tokens por minuto.`;
+    renderProviderFallback(ai, host);
     for (const node of ui.aiLockables) node.disabled = state.running;
     if (none) for (const node of [ui.cfgModel, ui.cfgKey, ui.cfgKeySave, ui.cfgAccept]) node.disabled = true; // sem provedor escolhido não há o que configurar
     if (host) ui.cfgAccept.disabled = state.running;

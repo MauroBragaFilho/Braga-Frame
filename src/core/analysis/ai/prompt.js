@@ -63,6 +63,21 @@ const CUT_SCHEMA = [
   '} ] }'
 ].join('\n');
 
+// Modo JANELAS CANDIDATAS: a IA vê só trechos que o filtro local marcou, vários por chamada, e devolve UM veredito por janela.
+// Os horários NÃO são pedidos: o app os acha procurando as frases na transcrição (e no Whisper por palavra), então uma IA que erra
+// números de horário não estraga o corte.
+const WINDOW_SCHEMA = [
+  '{ "windows": [ {',
+  '  "id": "w1",                        // o id do cabeçalho da janela, igual',
+  '  "is_valid_clip": true | false,     // false = nada publicável nesta janela',
+  '  "hook_score": 1 a 10,              // força do gancho e do desfecho',
+  '  "suggested_title": "título curto e chamativo (máx. 80 caracteres)",',
+  '  "start_phrase": "frase de abertura do corte, COPIADA PALAVRA POR PALAVRA da transcrição da janela",',
+  '  "end_phrase": "frase de encerramento do corte, COPIADA PALAVRA POR PALAVRA da transcrição da janela",',
+  '  "category": "humor" | "gameplay" | "react"',
+  '} ] }'
+].join('\n');
+
 /** Nome do tipo de vídeo (params.profile) como o guia de cortes o chama. */
 const PROFILE_LABEL = Object.freeze({ gameplay: 'gameplay ou live de jogo', conversa: 'conversa ou podcast' });
 
@@ -147,6 +162,27 @@ function buildBlockMessage({ window, meta, duration, prefs, maxCandidates, profi
   return parts.join('\n');
 }
 
+/**
+ * Mensagem da 1ª passada no modo janelas candidatas. `block.packed` = [{ id, from, to, ctxFrom, ctxTo, lines, chatLines }]
+ * (chunking.js, packCandidateBlocks): cada janela traz o núcleo marcado pelo filtro local e o contexto de antes e depois.
+ */
+function buildWindowsMessage({ block, meta, duration, prefs, profile = '' }) {
+  const parts = [
+    metaLine(meta, duration, prefs && prefs.profile),
+    `Abaixo estão ${block.packed.length} janela${block.packed.length === 1 ? '' : 's'} de uma live, marcadas por um filtro local como lugares onde PODE haver um corte (nem toda janela tem um). Cada uma mostra o trecho marcado (núcleo) e um pouco de contexto antes e depois.`,
+    `Para CADA janela decida se há UM corte publicável de ${Math.round(prefs.minDurationSec)} a ${Math.round(prefs.maxDurationSec)} segundos. Se houver, "start_phrase" e "end_phrase" são a primeira e a última fala do corte, copiadas palavra por palavra da transcrição DA MESMA JANELA (o app procura essas frases para achar os horários exatos; não escreva horários). Se não houver, is_valid_clip false e o resto vazio.`,
+    ...(profile ? ['', profile] : []),
+    '',
+    'Formato da resposta (somente JSON, um item por janela):',
+    WINDOW_SCHEMA
+  ];
+  for (const w of block.packed) {
+    parts.push('', `=== JANELA ${w.id} | núcleo ${clock(w.from)} a ${clock(w.to)} | contexto ${clock(w.ctxFrom)} a ${clock(w.ctxTo)} ===`, w.lines.join('\n'));
+    if (w.chatLines && w.chatLines.length) parts.push(`--- chat da janela (m:ss usuário: texto) ---`, w.chatLines.join('\n'));
+  }
+  return parts.join('\n');
+}
+
 /** Mensagem da 2ª passada: só resumos e horários dos candidatos já conferidos (nunca o texto inteiro). `profile` = texto de profileSummary (opcional). */
 function buildPickMessage({ candidates, meta, duration, limit, prefs, profile = '' }) {
   const rows = candidates.map((c) => {
@@ -213,4 +249,4 @@ function buildReviewMessage({ items, meta, duration, prefs, profile = '' }) {
 /** Lembrete anexado ao pedido quando a resposta anterior não era JSON válido. */
 const JSON_NUDGE = 'Sua resposta anterior não era um JSON válido no formato pedido. Responda de novo SOMENTE com o JSON, sem texto antes nem depois e sem cercas de código.';
 
-module.exports = { clock, estimateTokens, SYSTEM_PROMPT, systemPrompt, CUT_SCHEMA, REVIEW_SCHEMA, buildBlockMessage, buildPickMessage, buildReviewMessage, profileBlock, profileSummary, JSON_NUDGE, metaLine };
+module.exports = { WINDOW_SCHEMA, buildWindowsMessage, clock, estimateTokens, SYSTEM_PROMPT, systemPrompt, CUT_SCHEMA, REVIEW_SCHEMA, buildBlockMessage, buildPickMessage, buildReviewMessage, profileBlock, profileSummary, JSON_NUDGE, metaLine };

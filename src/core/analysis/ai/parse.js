@@ -142,6 +142,52 @@ function parseCandidates(raw) {
   return { items, invalid, salvaged };
 }
 
+/** Categorias do modo janelas ("humor | gameplay | react") nas do app. */
+const WINDOW_CATEGORY = Object.freeze({ humor: 'Engraçado', gameplay: 'Jogada', react: 'Hype', reação: 'Hype', reacao: 'Hype' });
+
+/** "true", "sim", 1… -> boolean; null se ilegível. */
+function boolOf(v) {
+  if (typeof v === 'boolean') return v;
+  if (typeof v === 'number') return v !== 0;
+  return keepOfText(v);
+}
+function keepOfText(v) {
+  if (typeof v !== 'string') return null;
+  const t = v.trim().toLowerCase();
+  if (/^(true|sim|yes|1)$/.test(t)) return true;
+  if (/^(false|n[aã]o|no|0)$/.test(t)) return false;
+  return null;
+}
+
+/**
+ * Resposta do modo janelas candidatas: { items:[{ id, valid, hookScore (0..10), title, category, startPhrase, endPhrase, start, end, reasons, keywords }], invalid, salvaged }.
+ * `start`/`end` (opcionais, em segundos) só existem se o modelo os deu; quem chama os trata como palpite e prefere as frases.
+ */
+function parseWindowVerdicts(raw) {
+  const { value, salvaged } = extractJson(raw);
+  const list = Array.isArray(value) ? value : (value && (value.windows || value.janelas || value.cuts || value.clips)) || null;
+  if (!Array.isArray(list)) throw new AiError('BAD_JSON', 'A resposta da IA não traz a lista "windows" pedida.');
+  const items = [];
+  let invalid = 0;
+  for (const it of list) {
+    if (!it || typeof it !== 'object' || typeof it.id !== 'string' || !it.id.trim()) { invalid += 1; continue; }
+    const valid = boolOf(it.is_valid_clip !== undefined ? it.is_valid_clip : it.valid);
+    if (valid === null) { invalid += 1; continue; }
+    let score = typeof it.hook_score === 'string' ? Number(it.hook_score.replace(',', '.')) : it.hook_score;
+    score = Number.isFinite(score) ? Math.min(10, Math.max(0, score)) : null;
+    const category = str(it.category, 30).toLowerCase();
+    items.push({
+      id: it.id.trim().slice(0, 30), valid, hookScore: score,
+      title: str(it.suggested_title !== undefined ? it.suggested_title : it.title, 100),
+      category: WINDOW_CATEGORY[category] || CATEGORIES.find((c) => c.toLowerCase() === category) || '',
+      startPhrase: str(it.start_phrase, 300), endPhrase: str(it.end_phrase, 300),
+      start: clockOrNull(it.start), end: clockOrNull(it.end),
+      reasons: listOf(it.reasons, 3, 90), keywords: keywordsOf(it.keywords)
+    });
+  }
+  return { items, invalid, salvaged };
+}
+
 /** Resposta da passada de escolha: { picks:[{ id, relevance, title, category, reasons }], salvaged }. */
 function parsePicks(raw) {
   const { value, salvaged } = extractJson(raw);
@@ -201,4 +247,4 @@ function parseReviews(raw) {
   return { reviews, salvaged };
 }
 
-module.exports = { CATEGORIES, LAYOUTS, FLAGS, keywordsOf, parseClock, extractJson, parseCandidates, parsePicks, parseReviews, balancedFrom };
+module.exports = { CATEGORIES, LAYOUTS, FLAGS, keywordsOf, parseClock, extractJson, parseCandidates, parseWindowVerdicts, WINDOW_CATEGORY, parsePicks, parseReviews, balancedFrom };

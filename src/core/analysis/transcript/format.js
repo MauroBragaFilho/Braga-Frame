@@ -10,10 +10,13 @@
  *     importedFrom?: 'nome.srt',                             // só quando importada
  *     createdAt, updatedAt, coveredSec,                      // coveredSec = fim da última fala
  *     stats: { cues, speechSec, laughs, dropped: { invalid, beyond, repeats } },
- *     cues: [{ start, end, text, laugh? }] }                 // segundos desde o início do vídeo, em ordem
+ *     cues: [{ start, end, text, laugh? }],                  // segundos desde o início do vídeo, em ordem
+ *     words?: [[start, end, text], …] }                      // opcional (só transcrição gerada): palavras com tempo, para o ajuste fino (words.js)
  *
  * Funções puras (sem disco) para validar e normalizar as falas, venham do Whisper ou de um .srt/.vtt.
  */
+
+const { normalizeWords, packWords } = require('../words');
 
 const FORMAT = 'bf-transcript-1';
 const VERSION = 1;
@@ -90,7 +93,7 @@ function statsOf(cues, dropped) {
   return { cues: cues.length, speechSec: round3(speechSec), laughs, dropped: dropped || { invalid: 0, beyond: 0, repeats: 0 } };
 }
 
-function buildDocument({ projectId, origin, source, cues, dropped, engine, importedFrom, createdAt }) {
+function buildDocument({ projectId, origin, source, cues, dropped, engine, importedFrom, createdAt, words }) {
   const now = new Date().toISOString();
   const last = cues.length ? cues[cues.length - 1].end : 0;
   const doc = {
@@ -106,6 +109,8 @@ function buildDocument({ projectId, origin, source, cues, dropped, engine, impor
     cues
   };
   if (engine) doc.engine = engine;
+  const packed = Array.isArray(words) && words.length ? packWords(normalizeWords(words)) : [];
+  if (packed.length) doc.words = packed;
   if (importedFrom) doc.importedFrom = String(importedFrom).slice(0, 200);
   return doc;
 }
@@ -118,7 +123,8 @@ function readDocument(data) {
   const doc = buildDocument({
     projectId: String(data.projectId || ''), origin: data.origin === 'imported' ? 'imported' : 'generated',
     source: data.source || {}, cues, dropped: data.stats && data.stats.dropped ? data.stats.dropped : dropped,
-    engine: data.engine && typeof data.engine === 'object' ? data.engine : null, importedFrom: data.importedFrom, createdAt: data.createdAt
+    engine: data.engine && typeof data.engine === 'object' ? data.engine : null, importedFrom: data.importedFrom, createdAt: data.createdAt,
+    words: data.words
   });
   if (typeof data.updatedAt === 'string') doc.updatedAt = data.updatedAt;
   return doc;
@@ -148,6 +154,7 @@ function summarize(doc, source) {
     duration,
     coverage: duration > 0 ? Math.min(1, doc.coveredSec / duration) : null,
     cues: doc.stats.cues,
+    hasWords: Array.isArray(doc.words) && doc.words.length > 0,
     laughs: doc.stats.laughs,
     speechSec: doc.stats.speechSec,
     dropped: doc.stats.dropped,

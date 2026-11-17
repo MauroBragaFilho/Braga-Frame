@@ -18,6 +18,7 @@ const { generateSubtitles } = require('../../subtitles/generate');
 const { REASONS } = require('../../subtitles/hallucinations');
 const { isCancelled } = require('../../subtitles/errors');
 const { normalizeCues, isLaughter, round3 } = require('./format');
+const { normalizeWords } = require('../words');
 
 const DEFAULT_CHUNK_SEC = 600;
 const MIN_TAIL_SEC = 0.5; // sobra menor que isto no fim do vídeo não vale um pedaço
@@ -44,6 +45,7 @@ function planChunks(duration, chunkSec = DEFAULT_CHUNK_SEC, from = 0) {
  * @param {number} [o.chunkSec]
  * @param {number} [o.startAt]    retomada: começa neste tempo
  * @param {object[]} [o.initialCues]  falas já prontas (de antes de startAt)
+ * @param {Array[]} [o.initialWords]  palavras com tempo já prontas (de antes de startAt), [início, fim, texto]
  * @param {AbortSignal} [o.signal]
  * @param {(ev:{p:number, doneUntil:number, message:string})=>void} [o.onProgress]
  * @param {(ev:{cues:object[], doneUntil:number})=>void} [o.onChunk]   chamado depois de cada pedaço
@@ -55,6 +57,7 @@ async function transcribeVideo(o) {
   const chunkSec = Math.min(1500, Math.max(60, o.chunkSec || DEFAULT_CHUNK_SEC));
   const chunks = planChunks(duration, chunkSec, o.startAt || 0);
   const cues = Array.isArray(o.initialCues) ? o.initialCues.map((c) => ({ ...c })) : [];
+  const words = Array.isArray(o.initialWords) ? o.initialWords.map((w) => [...w]) : []; // [início, fim, texto] em segundos do vídeo
   const info = { device: 'CPU', deviceName: null, fellBack: false, fallbackReason: null, transcribeMs: 0, audioSec: 0, discarded: 0 };
   const t0 = Date.now();
   const report = (p, doneUntil, message) => { if (o.onProgress) { try { o.onProgress({ p: p >= 1 - 1e-6 ? 1 : Math.min(1, Math.max(0, p)), doneUntil, message }); } catch { /* ouvinte com defeito */ } } };
@@ -68,13 +71,14 @@ async function transcribeVideo(o) {
     let res;
     try {
       res = await generate({
-        ...genOptions, input, start: from, end: to, language: o.language || 'pt', maxChars: 60, signal,
+        ...genOptions, input, start: from, end: to, language: o.language || 'pt', maxChars: 60, returnWords: true, signal,
         onProgress: (ev) => report((from + ((ev.percent || 0) / 100) * (to - from)) / duration, from, `Transcrevendo${label}… ${Math.round(((from + ((ev.percent || 0) / 100) * (to - from)) / duration) * 100)}%`)
       });
     } catch (err) {
       if (isCancelled(err)) throw Object.assign(new Error('Cancelado.'), { code: 'CANCELLED', doneUntil: from });
       throw err;
     }
+    for (const w of res.words || []) words.push([round3(from + w[0]), round3(from + w[1]), w[2]]);
     for (const c of res.cues || []) cues.push({ start: from + c.start, end: from + c.end, text: c.text });
     // o motor descarta "*Risos*" como anotação de áudio; para a análise a risada é uma pista valiosa: volta como fala marcada
     for (const d of res.discarded || []) {
@@ -87,12 +91,12 @@ async function transcribeVideo(o) {
     info.transcribeMs += res.transcribeMs || 0;
     info.audioSec += res.audioSec || 0;
     info.discarded += (res.discarded || []).length;
-    if (o.onChunk) o.onChunk({ cues: cues.map((c) => ({ ...c })), doneUntil: to });
+    if (o.onChunk) o.onChunk({ cues: cues.map((c) => ({ ...c })), words: words.map((w) => [...w]), doneUntil: to });
     report(to >= duration - 0.01 ? 1 : to / duration, to, to >= duration - 0.01 ? 'Transcrição pronta.' : `Transcrevendo${label}… concluído`);
   }
 
   const { cues: finalCues, dropped } = normalizeCues(cues, { duration });
-  return { cues: finalCues, dropped, ...info, elapsedMs: Date.now() - t0, chunks: chunks.length };
+  return { cues: finalCues, words: normalizeWords(words), dropped, ...info, elapsedMs: Date.now() - t0, chunks: chunks.length };
 }
 
 module.exports = { transcribeVideo, planChunks, DEFAULT_CHUNK_SEC };
