@@ -37,7 +37,7 @@ let defaultCache = null;
 /** O guia padrão (lido uma vez). */
 function defaultSkill() {
   if (!defaultCache) {
-    const text = fs.readFileSync(DEFAULT_PATH, 'utf8');
+    const text = fs.readFileSync(DEFAULT_PATH, 'utf8').replace(/\r\n?/g, '\n'); // o checkout no Windows pode trazer CRLF
     defaultCache = { text, ...parseSkill(text) };
   }
   return defaultCache;

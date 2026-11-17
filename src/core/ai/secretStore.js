@@ -27,7 +27,9 @@ function restrictToUser(file) {
     if (process.platform === 'win32') {
       const user = process.env.USERNAME;
       if (!user) return;
-      execFileSync('icacls', [file, '/inheritance:r', '/grant:r', `${user}:F`], { stdio: 'ignore', timeout: 5000, windowsHide: true });
+      // Num processo ELEVADO (administrador) o Windows cria o arquivo com SYSTEM e Administradores já explícitos (a DACL padrão do token), e
+      // /inheritance:r não os tira: eles saem à parte, pelos SIDs conhecidos (vale em qualquer idioma do Windows). Verificado no CI do GitHub.
+      execFileSync('icacls', [file, '/inheritance:r', '/grant:r', `${user}:F`, '/remove:g', '*S-1-5-18', '*S-1-5-32-544'], { stdio: 'ignore', timeout: 5000, windowsHide: true });
     } else {
       fs.chmodSync(file, 0o600);
     }
