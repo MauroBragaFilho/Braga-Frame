@@ -344,12 +344,22 @@
       actions ? el('div', { class: 'subs-need-actions' }, actions) : null);
   }
 
-  function setupBlock() {
+  /** "Instalar tudo e gerar": instala o que falta (uma confirmação, tamanho total) e, se deu certo, já gera a legenda deste corte. */
+  async function installAndGenerate(cut) {
+    const ok = await BF.transcription.install({ modelId: choices().modelId });
+    if (!ok) return;
+    await loadStatus();
+    generate(cut);
+  }
+
+  function setupBlock(cut) {
     if (!status) return null;
     const { modelId } = choices();
     const model = status.models.find((m) => m.id === modelId) || status.models[0];
     const rows = [];
-    let primaryUsed = false; // um só destaque primário na região: a primeira ação possível; as outras ficam secundárias
+    // com o módulo de transcrição, o destaque primário é o botão único "Instalar tudo e gerar" (as ações de cada item ficam secundárias)
+    const canInstallAll = Boolean(cut && BF.transcription && status.ffmpeg.found && (status.engine.installed || status.engine.available) && !engineBusy && modelBusy.size === 0 && !gen);
+    let primaryUsed = canInstallAll; // um só destaque primário na região: a primeira ação possível; as outras ficam secundárias
     const action = (attrs, text, extra = {}) => {
       const primary = !primaryUsed && !extra.cancel && !attrs.disabled;
       if (primary) primaryUsed = true;
@@ -396,7 +406,8 @@
       el('div', { class: 'subs-card-head' },
         el('h3', { class: 'panel-title' }, 'Antes de gerar'),
         el('span', { class: 'muted small' }, 'Só na primeira vez')),
-      el('ul', { class: 'subs-needs bds-list' }, rows));
+      el('ul', { class: 'subs-needs bds-list' }, rows),
+      canInstallAll ? el('div', { class: 'subs-need-actions' }, el('button', { type: 'button', class: 'primary', dataset: { act: 'install-all' }, onclick: () => installAndGenerate(cut) }, icon('auto_awesome'), 'Instalar tudo e gerar a legenda')) : null);
   }
 
   async function installEngine() {
@@ -1206,7 +1217,7 @@
       nodes.push(installHint(), emptyState('subtitles', 'Escolha um corte', 'Aqui você vê, cria e edita a legenda dele.', { center: true }));
       return nodes.filter(Boolean);
     }
-    nodes.push(setupBlock(), ...mainBlock(cut), el('section', { class: 'panel subs-adv' }, styleDetails(cut), moreDetails(cut)));
+    nodes.push(setupBlock(cut), ...mainBlock(cut), el('section', { class: 'panel subs-adv' }, styleDetails(cut), moreDetails(cut)));
     return nodes.filter(Boolean);
   }
 

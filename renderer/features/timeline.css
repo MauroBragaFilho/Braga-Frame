@@ -1,7 +1,7 @@
 /* Timeline detalhada em #timelineSlot (dono: review). Cartão do BDS (16px, --card); as cores das regiões dos cortes são desenhadas
    no canvas pelo timeline.js a partir dos mesmos tokens: manual = --status-info, sugerido = --accent-solid, rejeitado = --muted. */
 .tl { display: flex; flex-direction: column; gap: 8px; padding: 12px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-md); }
-.tl-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 28px; }
+.tl-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 28px; }
 .tl-btn { padding: 0 12px; }
 .tl-btn.tl-zoom { width: 28px; min-width: 28px; padding: 0; font-size: 16px; line-height: 1; }
 .tl-legend { margin-left: auto; }
@@ -11,7 +11,7 @@
 .tl-info.error, .tl-info.warn { color: var(--status-warn); }
 .tl .link { padding: 0; font-size: 12px; }
 .tl-legend { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; color: var(--muted); white-space: nowrap; }
-.tl-legend .dot { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-left: 6px; }
+.tl-legend .dot { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-left: 8px; }
 .tl-legend .dot.manual { background: var(--status-info); }
 .tl-legend .dot.auto { background: var(--accent-solid); }
 .tl-legend .dot.rejected { background: var(--muted); }

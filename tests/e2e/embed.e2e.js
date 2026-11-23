@@ -333,7 +333,7 @@ async function main() {
     await host.eval("document.getElementById('hostTheme').click()");
     await frame.waitFor("document.documentElement.getAttribute('data-theme') === 'light'", 8000, 'tema claro repassado ao iframe');
     assert.equal(await frame.eval("getComputedStyle(document.body).backgroundColor !== 'rgb(0, 0, 0)'"), true, 'o tema claro realmente muda as cores');
-    await frame.eval("document.getElementById('btnTheme').click()");
+    await frame.eval("BF.ui.setTheme(BF.ui.theme() === 'light' ? 'dark' : 'light'); true");
     await waitFor(host, "window.__host.themeFromFrame === 'dark' && document.documentElement.getAttribute('data-theme') === 'dark'", 8000, 'tema escolhido no app volta ao hospedeiro');
     assert.equal(await frame.eval("document.documentElement.getAttribute('data-theme')"), 'dark');
     await host.eval("document.getElementById('hostTheme').click()"); // claro de novo

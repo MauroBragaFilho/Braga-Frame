@@ -254,15 +254,15 @@ async function main() {
     step('menu lateral recolhe para o trilho de 64px, a escolha persiste ao recarregar e a marca expande de novo');
 
     // tema claro/escuro: alterna, muda as cores pelos mesmos tokens e persiste
-    assert.deepEqual(await page.eval("[document.documentElement.getAttribute('data-theme'), document.getElementById('btnTheme').getAttribute('aria-label'), document.getElementById('btnTheme').firstElementChild.textContent]"), ['dark', 'Usar tema claro', 'light_mode']);
-    await page.eval("document.getElementById('btnTheme').click()");
+    assert.deepEqual(await page.eval("[document.documentElement.getAttribute('data-theme')]"), ['dark']);
+    await page.eval("BF.ui.setTheme(BF.ui.theme() === 'light' ? 'dark' : 'light'); true");
     await sleep(400); // as cores têm transição curta
-    assert.deepEqual(await page.eval("[document.documentElement.getAttribute('data-theme'), getComputedStyle(document.body).backgroundColor, getComputedStyle(document.querySelector('.sidebar')).backgroundColor, document.getElementById('btnTheme').getAttribute('aria-label'), window.localStorage.getItem('bf.theme')]"),
-      ['light', 'rgb(244, 244, 244)', 'rgb(255, 255, 255)', 'Usar tema escuro', 'light']);
+    assert.deepEqual(await page.eval("[document.documentElement.getAttribute('data-theme'), getComputedStyle(document.body).backgroundColor, getComputedStyle(document.querySelector('.sidebar')).backgroundColor, window.localStorage.getItem('bf.theme')]"),
+      ['light', 'rgb(244, 244, 244)', 'rgb(255, 255, 255)', 'light']);
     assert.deepEqual(await page.eval("[getComputedStyle(document.getElementById('btnOpen')).backgroundColor, getComputedStyle(document.getElementById('btnOpen')).color]"), ['rgb(0, 0, 0)', 'rgb(255, 255, 255)'], 'tema claro: botão primário preto com texto branco');
     await reload();
     assert.equal(await page.eval("document.documentElement.getAttribute('data-theme')"), 'light', 'lembra o tema depois de reabrir');
-    await page.eval("document.getElementById('btnTheme').click()");
+    await page.eval("BF.ui.setTheme(BF.ui.theme() === 'light' ? 'dark' : 'light'); true");
     await sleep(400);
     assert.deepEqual(await page.eval("[document.documentElement.getAttribute('data-theme'), getComputedStyle(document.body).backgroundColor, getComputedStyle(document.getElementById('btnOpen')).backgroundColor, getComputedStyle(document.getElementById('btnOpen')).color, window.localStorage.getItem('bf.theme')]"),
       ['dark', 'rgb(0, 0, 0)', 'rgb(255, 255, 255)', 'rgb(0, 0, 0)', 'dark'], 'tema escuro: botão primário branco com texto preto');

@@ -560,7 +560,7 @@
     ui.intro = el('p', { class: 'muted small an-intro', id: 'anIntro' });
     return el('div', { class: 'an', id: 'analysis' },
       ui.intro,
-      el('section', { class: 'panel an-setup' }, ui.engineBar, ui.tCard, ui.hCard, ui.aiRoot, ui.controlsRoot),
+      el('section', { class: 'panel an-setup' }, ui.engineBar, ui.tCard, ui.hCard, ui.aiRoot, ui.controlsRoot, ui.runArea),
       ui.notice,
       ui.results);
   }

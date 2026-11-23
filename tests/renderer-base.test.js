@@ -98,7 +98,7 @@ test('a CSP tem exatamente a política esperada (fecha também object-src, base-
 
 test('o esqueleto tem os pontos de montagem do contrato', () => {
   for (const id of ['appName', 'sourceName', 'btnOpen', 'toolsWarn', 'workspace', 'video', 'timelineSlot', 'tabBar', 'subTabs', 'tabPanels', 'log', 'toasts', 'modalRoot', 'app',
-    'sidebar', 'sidebarToggleBtn', 'toolState', 'stateDot', 'stateText', 'btnTheme', 'pageTitle', 'windowControls', 'win-full', 'win-min', 'win-max', 'win-close']) {
+    'sidebar', 'sidebarToggleBtn', 'toolState', 'stateDot', 'stateText', 'pageTitle', 'windowControls', 'win-full', 'win-min', 'win-max', 'win-close']) {
     assert.match(html, new RegExp(`id="${id}"`), `falta #${id}`);
   }
   assert.ok(html.indexOf('id="timelineSlot"') > html.indexOf('id="video"'), '#timelineSlot abaixo do player');
@@ -108,7 +108,7 @@ test('estrutura do shell no padrão do BDS: sidebar (marca, abas, rodapé) e col
   const at = (needle) => { const i = html.indexOf(needle); assert.ok(i >= 0, `falta ${needle}`); return i; };
   assert.match(html, /<div id="app" class="app app-shell no-project"/);
   // ordem do DOM: sidebar { marca, abas, rodapé } antes da coluna principal { cabeçalho (com o estado #log), avisos, conteúdo }
-  const order = ['<aside class="sidebar"', 'class="brand-mark"', 'id="appName"', 'id="tabBar"', 'class="sidebar-footer"', 'id="toolState"', 'id="btnTheme"', 'Desenvolvido por',
+  const order = ['<aside class="sidebar"', 'class="brand-mark"', 'id="appName"', 'id="tabBar"', 'class="sidebar-footer"', 'id="toolState"',
     '<div class="main-column">', '<header class="global-header"', 'id="pageTitle"', 'id="log"', 'id="btnOpen"', 'id="win-close"', 'id="toolsWarn"', 'id="workspace"'];
   order.reduce((previous, needle) => { const i = at(needle); assert.ok(i > previous, `${needle} fora de ordem`); return i; }, -1);
   assert.match(html, /class="brand-mark"[^>]*>BF</, 'marca "BF"');

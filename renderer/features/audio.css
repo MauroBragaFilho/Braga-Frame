@@ -6,12 +6,12 @@
 .audio .panel { min-width: 0; }
 
 .audio-pick select { width: 100%; min-width: 0; }
-.audio-meta { margin-top: -6px; overflow-wrap: anywhere; }
+.audio-meta { margin-top: -8px; overflow-wrap: anywhere; }
 .audio-empty.center { padding: 32px 24px; }
 
 /* avisos: informam, nunca bloqueiam (ícone por ligadura da fonte de ícones) */
 .audio-notes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.audio-note { position: relative; margin: 0; padding: 10px 12px 10px 40px; border-radius: var(--radius-sm); background: var(--card-2); color: var(--muted); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.audio-note { position: relative; margin: 0; padding: 12px 12px 12px 40px; border-radius: var(--radius-sm); background: var(--card-2); color: var(--muted); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
 .audio-note::before, .audio-measure::before {
   content: 'info';
   position: absolute;
@@ -38,19 +38,19 @@
 .audio-controls { gap: 20px; }
 .audio-body.is-muted .audio-gain,
 .audio-body.is-muted .audio-fades { opacity: .5; }
-.audio-gain { display: flex; flex-direction: column; gap: 10px; }
+.audio-gain { display: flex; flex-direction: column; gap: 12px; }
 .audio-field { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
 .audio-field label { color: var(--text); font-size: 13px; font-weight: 500; }
 .audio-num { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
 .audio-unit { min-width: 1.4em; color: var(--muted); font-size: var(--fs-label); }
-.audio input[type="number"] { width: 84px; min-width: 0; min-height: 34px; height: 34px; padding: 0 10px; text-align: right; }
+.audio input[type="number"] { width: 84px; min-width: 0; min-height: 34px; height: 34px; padding: 0 12px; text-align: right; }
 .audio-scale { display: flex; justify-content: space-between; }
 .audio-check { display: flex; align-items: center; justify-content: space-between; gap: 16px; cursor: pointer; }
 .audio-check-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .audio-check-text strong { color: var(--text); font-size: 14px; font-weight: 600; }
 .audio-check-text .small { color: var(--muted); }
 .audio-fades { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
-.audio-fades .audio-field { flex-direction: column; align-items: stretch; gap: 6px; }
+.audio-fades .audio-field { flex-direction: column; align-items: stretch; gap: 8px; }
 .audio-fades .audio-field label { color: var(--muted); font-size: var(--fs-label); font-weight: 600; }
 .audio-fades .audio-num { width: 100%; }
 .audio-fades input[type="number"] { flex: 1; width: auto; min-width: 0; }
@@ -58,7 +58,7 @@
 .audio-flash { color: var(--status-warn); }
 
 /* medição do trecho */
-.audio-measure { position: relative; padding: 10px 12px 10px 40px; border-radius: var(--radius-sm); background: var(--card-2); color: var(--text); font-size: 13px; overflow-wrap: anywhere; }
+.audio-measure { position: relative; padding: 12px 12px 12px 40px; border-radius: var(--radius-sm); background: var(--card-2); color: var(--text); font-size: 13px; overflow-wrap: anywhere; }
 .audio-measure::before { content: 'graphic_eq'; color: var(--accent-text); }
 
 .audio-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
@@ -69,10 +69,10 @@
 .audio-details { padding: 12px 0; }
 .audio-details + .audio-details { border-top: 1px solid var(--line); }
 .audio-details > summary { width: 100%; padding: 2px 0; color: var(--text); font-size: 14px; }
-.audio-details > p { margin: 10px 0 0; }
-.audio-history-list { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; }
-.audio-history-list li { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--card-2); border-radius: var(--radius-sm); }
-.audio-details > .muted.small:last-child { margin-top: 10px; }
+.audio-details > p { margin: 12px 0 0; }
+.audio-history-list { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto; }
+.audio-history-list li { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: var(--card-2); border-radius: var(--radius-sm); }
+.audio-details > .muted.small:last-child { margin-top: 12px; }
 .audio-h-time { min-width: 4.6em; font-variant-numeric: tabular-nums; }
 .audio-h-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.audio-filter { display: block; margin-top: 10px; padding: 10px 12px; background: var(--card-2); border-radius: var(--radius-sm); font: 12px/1.45 Consolas, "Cascadia Mono", monospace; overflow-wrap: anywhere; user-select: text; }
+.audio-filter { display: block; margin-top: 12px; padding: 12px 12px; background: var(--card-2); border-radius: var(--radius-sm); font: 12px/1.45 Consolas, "Cascadia Mono", monospace; overflow-wrap: anywhere; user-select: text; }

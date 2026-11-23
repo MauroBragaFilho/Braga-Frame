@@ -6,7 +6,7 @@
 /* avisos no topo (recuperação, conflitos pendentes, executor ausente…): cartão com ícone, texto e ações */
 .q-notices { display: flex; flex-direction: column; gap: 12px; }
 .q-notices:empty { display: none; }
-.q-notice { display: flex; align-items: flex-start; gap: 12px; padding: 14px 20px; border-radius: var(--radius-md); background: var(--accent-light); overflow-wrap: anywhere; }
+.q-notice { display: flex; align-items: flex-start; gap: 12px; padding: 16px 20px; border-radius: var(--radius-md); background: var(--accent-light); overflow-wrap: anywhere; }
 .q-notice > .material-symbols-rounded { flex: none; font-size: 22px; color: var(--accent-text); }
 .q-notice.q-info { background: color-mix(in srgb, var(--status-info) 12%, var(--card)); }
 .q-notice.q-info > .material-symbols-rounded { color: var(--status-info); }
@@ -14,7 +14,7 @@
 .q-notice.q-warn > .material-symbols-rounded { color: var(--status-warn); }
 .q-notice.q-error { background: var(--danger-bg); }
 .q-notice.q-error > .material-symbols-rounded { color: var(--danger-fg); }
-.q-notice-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.q-notice-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 .q-notice-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
 /* pílulas Fila | Concluídos | Falhas (com a contagem) e, à direita, as ações da tela */
@@ -23,7 +23,7 @@
 .q-pill { font-variant-numeric: tabular-nums; }
 .q-pill.q-pill-bad:not([aria-pressed="true"]) { color: var(--danger-fg); }
 .q-bar-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-left: auto; }
-.q-bar-actions > button { min-height: 36px; padding: 0 18px; }
+.q-bar-actions > button { min-height: 36px; padding: 0 16px; }
 .q-bar-actions > button[hidden] { display: none; }
 /* o ícone do botão de pausa vem do estado (o texto do botão fica só com o rótulo) */
 #q-pause::before { content: 'pause'; font-family: 'Material Symbols Rounded'; font-size: 18px; font-weight: normal; letter-spacing: normal; font-feature-settings: 'liga'; }
@@ -33,7 +33,7 @@
 .q-resources { margin: 4px 0 0; font-size: var(--fs-label); color: var(--muted); font-variant-numeric: tabular-nums; }
 .q-resources[hidden] { display: none; }
 
-.q-paused { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 10px 16px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--status-info) 12%, var(--card-2)); font-size: 13px; }
+.q-paused { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 12px 16px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--status-info) 12%, var(--card-2)); font-size: 13px; }
 .q-paused[hidden] { display: none; }
 .q-paused::before { content: 'pause_circle'; font-family: 'Material Symbols Rounded'; font-size: 20px; line-height: 1; color: var(--status-info); font-feature-settings: 'liga'; }
 .q-paused .link { font-size: 13px; }
@@ -46,7 +46,7 @@
 .q-list[hidden] { display: none; }
 
 /* um trabalho = um cartão interno (--card-2): ícone do estado, título e perfil, selo, ações e a alça de reordenar */
-.q-job { position: relative; display: flex; flex-direction: column; gap: 12px; padding: 14px 20px; background: var(--card-2); border: 1px solid transparent; border-radius: var(--radius-md); transition: border-color var(--dur-base) var(--ease); }
+.q-job { position: relative; display: flex; flex-direction: column; gap: 12px; padding: 16px 20px; background: var(--card-2); border: 1px solid transparent; border-radius: var(--radius-md); transition: border-color var(--dur-base) var(--ease); }
 .q-job:hover { border-color: var(--line); }
 .q-job.q-live { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
 .q-job[data-state="failed"] { border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
@@ -57,7 +57,7 @@
 .q-job.q-drop-before::before { top: -7px; }
 .q-job.q-drop-after::after { bottom: -7px; }
 
-.q-main { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; }
+.q-main { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
 /* ícone do estado: o selo ao lado sempre diz o estado em texto; o ícone e a cor só reforçam */
 .q-lead { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radius-sm); background: var(--card); color: var(--muted); }
 .q-lead .material-symbols-rounded { font-size: 22px; }
@@ -73,7 +73,7 @@
 .q-actions:empty { display: none; }
 .q-actions .sm { margin-right: 4px; }
 /* alça de reordenar à direita; subir/descer a substituem quando o mouse ou o teclado chega perto (o teclado sempre alcança os botões) */
-.q-reorder { position: relative; flex: none; align-self: stretch; width: 24px; min-height: 40px; margin-right: -6px; }
+.q-reorder { position: relative; flex: none; align-self: stretch; width: 24px; min-height: 40px; margin-right: -8px; }
 .q-grip { position: absolute; inset: 0; display: grid; place-items: center; font-size: 22px; color: var(--muted); user-select: none; transition: opacity var(--dur-fast) var(--ease); }
 .q-move { position: absolute; left: 0; width: 24px; min-height: 18px; height: 18px; border-radius: 6px; opacity: 0; }
 .q-move[data-act="up"] { top: 2px; }
@@ -88,14 +88,14 @@
 .q-chip:not([class*="bds-chip-"]) { background: var(--card); }
 
 /* barra de progresso (a nativa, no estilo do BDS) com % e tempo restante */
-.q-prog { display: flex; flex-direction: column; gap: 6px; }
+.q-prog { display: flex; flex-direction: column; gap: 8px; }
 .q-prog progress { background: var(--card); }
 .q-prog progress::-webkit-progress-bar { background: var(--card); }
 .q-prog progress:indeterminate { background: linear-gradient(90deg, var(--card) 0 35%, var(--accent) 35% 65%, var(--card) 65%) 0 0 / 300% 100%; }
 .q-prog-text { color: var(--muted); font-size: var(--fs-label); font-variant-numeric: tabular-nums; }
 .q-note { color: var(--muted); font-size: var(--fs-label); overflow-wrap: anywhere; }
 
-.q-error { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px; background: var(--danger-bg); border-radius: var(--radius-sm); font-size: 13px; overflow-wrap: anywhere; }
+.q-error { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; background: var(--danger-bg); border-radius: var(--radius-sm); font-size: 13px; overflow-wrap: anywhere; }
 .q-error > .material-symbols-rounded { flex: none; font-size: 20px; color: var(--danger-fg); }
 .q-error-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .q-error-msg { color: var(--danger-fg); font-weight: 600; }
@@ -127,7 +127,7 @@
 .q-settings { padding: 16px 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-md); }
 .q-settings > summary { font-size: 14px; }
 .q-settings-body { display: flex; flex-direction: column; margin-top: 8px; }
-.q-field { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 14px 0; color: var(--text); }
+.q-field { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 16px 0; color: var(--text); }
 .q-field + .q-field { border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
 .q-field-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
 .q-field-label { font-size: 13px; font-weight: 600; }

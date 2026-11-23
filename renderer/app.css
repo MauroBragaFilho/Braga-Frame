@@ -229,7 +229,7 @@ input[type="range"]::-webkit-slider-thumb {
   appearance: none;
   width: var(--slider-thumb-size, 14px);
   height: var(--slider-thumb-size, 14px);
-  margin-top: calc((var(--slider-track-height, 6px) - var(--slider-thumb-size, 14px)) / 2);
+  margin-top: calc((var(--slider-track-height, 8px) - var(--slider-thumb-size, 16px)) / 2);
   border-radius: 50%;
   background: var(--slider-thumb-color, var(--slider-fill-color, var(--accent)));
   border: none;
@@ -245,7 +245,7 @@ input[type="range"]:focus-visible { outline-offset: 4px; border-radius: 999px; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   min-height: 34px;
   padding: 0 16px;
   background: var(--card-2);
@@ -286,7 +286,7 @@ button .material-symbols-rounded { font-size: 18px; flex: none; }
 .link:hover:not(:disabled) { background: none; border: 0; text-decoration: underline; }
 /* Compacto, para linhas densas (listas de cortes, filas) */
 .sm { min-height: 28px; padding: 0 12px; font-size: 12px; }
-.primary.sm, .secondary.sm, .danger.sm { min-height: 30px; padding: 0 14px; }
+.primary.sm, .secondary.sm, .danger.sm { min-height: 30px; padding: 0 16px; }
 /* Botão quadrado só com ícone (use aria-label) */
 .icon-btn { width: 34px; min-height: 34px; padding: 0; background: transparent; border-color: transparent; color: var(--muted); }
 .icon-btn:hover:not(:disabled) { background: var(--card-2); border-color: transparent; color: var(--text); }
@@ -299,13 +299,13 @@ button .material-symbols-rounded { font-size: 18px; flex: none; }
   border-radius: var(--radius-sm);
   background: var(--input-bg);
   color: var(--text);
-  padding: 0 14px;
+  padding: 0 16px;
   font: inherit;
   font-size: 13px;
   outline: none;
   transition: border-color var(--dur-base) var(--ease), box-shadow var(--dur-base) var(--ease);
 }
-:where(textarea) { padding: 10px 14px; line-height: 1.45; resize: vertical; }
+:where(textarea) { padding: 12px 16px; line-height: 1.45; resize: vertical; }
 :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):hover, select:hover, textarea:hover) { border-color: color-mix(in srgb, var(--text) 25%, var(--input-border)); }
 :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus, select:focus, textarea:focus) { border-color: var(--muted); }
 :where(input:focus-visible, select:focus-visible, textarea:focus-visible) { outline: var(--focus-ring); outline-offset: 2px; }
@@ -327,7 +327,7 @@ select option { background: var(--card); color: var(--text); }
 :where(input[type="color"]) { width: 40px; height: 40px; padding: 4px; border: 1px solid var(--input-border); border-radius: var(--radius-sm); background: var(--input-bg); cursor: pointer; }
 :where(label) { color: var(--muted); }
 /* Rótulo em cima do campo: <label class="field"><span>Nome</span><input></label> */
-.field { display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-label); font-weight: 600; }
+.field { display: flex; flex-direction: column; gap: 8px; font-size: var(--fs-label); font-weight: 600; }
 .field > :not(span):not(small) { font-weight: 400; }
 
 /* Interruptor: <input type="checkbox" class="bds-switch" role="switch"> */
@@ -368,7 +368,7 @@ select option { background: var(--card); color: var(--text); }
   display: flex;
   min-height: 24px; /* alvo mínimo de 24 px (WCAG 2.2, 2.5.8) */
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   width: fit-content;
   cursor: pointer;
   color: var(--muted);
@@ -445,18 +445,17 @@ progress:indeterminate { background: linear-gradient(90deg, var(--card-2) 0 35%,
   width: 56px;
   height: 56px;
   border-radius: var(--radius-md);
-  background: var(--accent-light);
-  color: var(--accent);
+  background: var(--card-2);
+  color: var(--muted);
   font-size: 32px;
 }
-[data-theme="light"] .empty-state-icon { color: var(--accent-text); } /* o vermelho puro sobre o rosa claro dava 2,9:1 (ícone pede 3:1) */
 .empty-state-text { min-width: 0; }
 .empty-state-text strong { display: block; font-family: var(--font-title); font-size: var(--fs-section); letter-spacing: -0.01em; }
 .empty-state-text p { margin: 4px 0 0; color: var(--muted); }
 .empty-state.center { flex-direction: column; text-align: center; padding: 40px 24px; }
 
 /* Chips (pílula pequena). Texto >= 4,5:1 nos dois temas */
-.bds-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: var(--radius-pill); background: var(--card-2); color: var(--text); font-size: var(--fs-label); font-weight: 600; }
+.bds-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 12px; border-radius: var(--radius-pill); background: var(--card-2); color: var(--text); font-size: var(--fs-label); font-weight: 600; }
 .bds-chip-accent { background: var(--accent-light); color: var(--accent-text); }
 .bds-chip-ok { background: color-mix(in srgb, var(--status-ok) 14%, transparent); color: var(--status-ok); }
 .bds-chip-warn { background: color-mix(in srgb, var(--status-warn) 14%, transparent); color: var(--status-warn); }
@@ -465,7 +464,7 @@ progress:indeterminate { background: linear-gradient(90deg, var(--card-2) 0 35%,
 
 /* Sub-abas em pílula dentro de uma aba: <div class="bds-tabs" role="tablist"><button class="bds-tab" aria-selected="true">… */
 .bds-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
-.bds-tab { min-height: 0; padding: 8px 18px; background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: var(--radius-pill); font-size: 13px; font-weight: 600; }
+.bds-tab { min-height: 0; padding: 8px 16px; background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: var(--radius-pill); font-size: 13px; font-weight: 600; }
 .bds-tab:hover:not(:disabled) { color: var(--text); background: var(--card-2); border-color: var(--line); }
 .bds-tab.active, .bds-tab[aria-selected="true"], .bds-tab[aria-pressed="true"] { color: var(--accent-text); background: var(--accent-light); border-color: transparent; }
 
@@ -545,7 +544,7 @@ progress:indeterminate { background: linear-gradient(90deg, var(--card-2) 0 35%,
   gap: 12px;
   width: 100%;
   min-height: 44px;
-  padding: 10px 16px;
+  padding: 12px 16px;
   background: transparent;
   color: var(--muted);
   border: 0;
@@ -556,9 +555,9 @@ progress:indeterminate { background: linear-gradient(90deg, var(--card-2) 0 35%,
   transition: background var(--dur-base) var(--ease), color var(--dur-base) var(--ease), transform var(--dur-fast) var(--ease), padding var(--dur-slow) var(--ease);
 }
 .tab-button .material-symbols-rounded { font-size: 22px; flex: none; transition: transform var(--dur-base) var(--ease); }
-.tab-button:hover:not(:disabled) { background: var(--card-2); color: var(--text); border: 0; }
-.tab-button[aria-selected="true"], .tab-button.active { background: var(--accent-light); color: var(--accent-text); }
-.tab-button[aria-selected="true"]:hover:not(:disabled) { background: var(--accent-light); color: var(--accent-text); }
+.tab-button:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 6%, transparent); color: var(--text); border: 0; }
+.tab-button[aria-selected="true"], .tab-button.active { background: var(--card-2); color: var(--text); }
+.tab-button[aria-selected="true"]:hover:not(:disabled) { background: var(--card-2); color: var(--text); }
 .tab-button[aria-selected="true"] .material-symbols-rounded { color: var(--accent); }
 .tab-button:focus-visible { outline: var(--focus-ring); outline-offset: -2px; }
 .tab-button:disabled { opacity: 0.4; }
@@ -584,7 +583,7 @@ progress:indeterminate { background: linear-gradient(90deg, var(--card-2) 0 35%,
 /* Abas internas de um item do menu (Cortes: Cortes, Análise, Legendas, Áudio e Exportar; Configurações: Preferências e Ferramentas), em cima do painel:
    texto com a linha vermelha embaixo da ativa, como as abas do editor do desenho (BF.ui.registerTab + src/core/ui/menuLayout.js). */
 .subtabs-host { flex: none; }
-.subtabs { display: flex; flex-wrap: wrap; gap: 2px 22px; margin: 0 0 8px; padding: 14px 26px 0; border-bottom: 1px solid var(--line); }
+.subtabs { display: flex; flex-wrap: wrap; gap: 2px 24px; margin: 0 0 8px; padding: 16px 24px 0; border-bottom: 1px solid var(--line); }
 .subtabs[hidden] { display: none; }
 .subtab { position: relative; display: inline-flex; align-items: center; min-height: 0; margin-bottom: -1px; padding: 8px 2px; background: transparent; color: var(--muted); border: 0; border-bottom: 2px solid transparent; border-radius: 0; font-size: 14px; font-weight: 600; }
 .subtab:hover:not(:disabled) { background: transparent; color: var(--text); border: 0; border-bottom: 2px solid color-mix(in srgb, var(--text) 30%, transparent); }
@@ -604,7 +603,7 @@ progress:indeterminate { background: linear-gradient(90deg, var(--card-2) 0 35%,
   gap: 8px;
   width: fit-content;
   max-width: 100%;
-  margin: 4px auto 6px;
+  margin: 4px auto 8px;
   padding: 8px 16px;
   background: color-mix(in srgb, var(--text) 4%, transparent);
   border: 1px solid var(--line);
@@ -623,7 +622,7 @@ progress:indeterminate { background: linear-gradient(90deg, var(--card-2) 0 35%,
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   min-height: 32px;
   padding: 0 12px;
   border: 0;
@@ -635,7 +634,6 @@ progress:indeterminate { background: linear-gradient(90deg, var(--card-2) 0 35%,
 }
 .sidebar-link:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--text); border: 0; }
 .sidebar-link .material-symbols-rounded { font-size: 18px; }
-.sidebar-credit { margin: 4px 0 0; font-size: 11px; letter-spacing: 0.2px; color: var(--muted); }
 
 /* Menu recolhido (trilho de 64px) e modo embutido: só ícones; a marca vira o botão de expandir */
 .collapsed .brand, .embedded .brand { padding: 16px 0; justify-content: center; gap: 0; }
@@ -645,12 +643,11 @@ progress:indeterminate { background: linear-gradient(90deg, var(--card-2) 0 35%,
 .collapsed .tabs, .embedded .tabs { padding: 12px 8px; }
 .collapsed .tab-button, .embedded .tab-button { justify-content: center; padding: 12px; gap: 0; }
 .collapsed .tab-label, .embedded .tab-label { display: none; }
-.theme-locked #btnTheme { display: none; }
 .collapsed .tab-button .tab-badge, .embedded .tab-button .tab-badge { position: absolute; top: 2px; right: 2px; min-width: 16px; height: 16px; padding: 0 4px; margin: 0; font-size: 10px; }
 .collapsed .sidebar-footer, .embedded .sidebar-footer { padding: 12px 0; }
-.collapsed .tool-state, .embedded .tool-state { padding: 0; border: 0; background: transparent; margin: 6px 0; }
+.collapsed .tool-state, .embedded .tool-state { padding: 0; border: 0; background: transparent; margin: 8px 0; }
 .collapsed #stateText, .embedded #stateText { display: none; }
-.collapsed .sidebar-link-label, .embedded .sidebar-link-label, .collapsed .sidebar-credit, .embedded .sidebar-credit { display: none; }
+.collapsed .sidebar-link-label, .embedded .sidebar-link-label { display: none; }
 .collapsed .sidebar-link, .embedded .sidebar-link { padding: 0; width: 36px; }
 /* embutido: a marca e o botão de recolher não existem (o app não é dono da janela) */
 .embedded .brand { display: none; }
@@ -730,7 +727,7 @@ progress:indeterminate { background: linear-gradient(90deg, var(--card-2) 0 35%,
 .bf-modal label { color: var(--muted); font-size: var(--fs-label); font-weight: 600; }
 .bf-modal-input { width: 100%; }
 /* confirmação com caixa de marcar (ui.confirmCheck): a linha inteira é o rótulo */
-.bf-modal-check { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 14px; background: var(--card-2); border-radius: var(--radius-sm); cursor: pointer; }
+.bf-modal-check { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 16px; background: var(--card-2); border-radius: var(--radius-sm); cursor: pointer; }
 .bf-modal-check-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .bf-modal-check-text strong { color: var(--text); font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
 .bf-modal-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 12px; margin-top: 8px; }

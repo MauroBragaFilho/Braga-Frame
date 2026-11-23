@@ -58,9 +58,18 @@
     }
 
     // ---------- transcrição do vídeo ----------
+    /** Falta o motor ou o modelo, e o módulo de transcrição sabe instalar: o botão "Transcrever" instala (uma confirmação) e segue sozinho. */
+    const canInstallFirst = (eng) => Boolean(BF.transcription && eng && !eng.ready && eng.needs && (eng.needs.engine || eng.needs.model));
+
     async function generateTranscript() {
       const project = BF.state.project;
       if (!project || state.tjob || state.tstarting || state.running) return;
+      if (canInstallFirst(state.tengine)) {
+        const done = await BF.transcription.install({ modelId: (state.tengine && state.tengine.modelId) || null });
+        if (!done) return;
+        await refreshTranscript();
+        if (!(state.tengine && state.tengine.ready) || BF.state.project !== project) return;
+      }
       state.tstarting = true;
       state.notice = null;
       renderAll();
@@ -229,11 +238,13 @@
       ui.tSub.textContent = sub;
       ui.tSub.hidden = !sub;
       const has = Boolean(t && t.exists && !t.stale);
-      ui.tGenerate.textContent = t && t.draft && !has ? 'Continuar a transcrição' : (has ? 'Transcrever de novo' : 'Transcrever o vídeo');
-      ui.tGenerate.disabled = running || state.running || !BF.state.project || !(eng && eng.ready);
-      ui.tGenerate.title = eng && !eng.ready ? eng.reason : '';
-      // falta o motor ou o modelo (o FFmpeg tem o próprio aviso no topo): o botão leva ao que instala tudo de uma vez
-      ui.tInstall.hidden = running || !(eng && !eng.ready && eng.needs && (eng.needs.engine || eng.needs.model)) || !BF.transcription;
+      // falta o motor ou o modelo (o FFmpeg tem o próprio aviso no topo): o mesmo botão instala tudo (uma confirmação) e já transcreve
+      const installFirst = canInstallFirst(eng);
+      ui.tGenerate.textContent = installFirst ? 'Instalar e transcrever o vídeo' : (t && t.draft && !has ? 'Continuar a transcrição' : (has ? 'Transcrever de novo' : 'Transcrever o vídeo'));
+      ui.tGenerate.disabled = running || state.running || !BF.state.project || !(eng && (eng.ready || installFirst));
+      ui.tGenerate.title = installFirst ? 'Baixa o que falta (motor e modelo, só na primeira vez) e transcreve em seguida.' : (eng && !eng.ready ? eng.reason : '');
+      ui.tInstall.hidden = true; // o botão de instalar separado deu lugar ao "Instalar e transcrever"
+      ui.tGenerate.classList.toggle('primary', false); // o destaque primário da tela é "Analisar"; este botão fica secundário
       ui.tImport.disabled = running || state.running || !BF.state.project;
       ui.tRemove.hidden = !(t && t.exists);
       ui.tRemove.disabled = running || state.running;

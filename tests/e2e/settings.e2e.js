@@ -49,14 +49,14 @@ async function main() {
     assert.deepEqual(looks, [['dark', 'rgb(0, 0, 0)', 112, 68], ['light', 'rgb(244, 244, 244)', 112, 68]], 'cada opção mostra uma janelinha no tema dela');
     await ev("document.querySelector('#tabpanel-general .gen-theme[data-theme=light]').click()");
     await sleep(400);
-    assert.deepEqual(await ev("[document.documentElement.getAttribute('data-theme'), window.localStorage.getItem('bf.theme'), document.getElementById('btnTheme').getAttribute('aria-label')]"), ['light', 'light', 'Usar tema escuro'], 'o tema trocou de verdade e o botão do menu acompanha');
+    assert.deepEqual(await ev("[document.documentElement.getAttribute('data-theme'), window.localStorage.getItem('bf.theme')]"), ['light', 'light'], 'o tema trocou de verdade e o botão do menu acompanha');
     assert.deepEqual(await themes(), [['dark', 'false', false], ['light', 'true', false]]);
     const chosen = await ev("getComputedStyle(document.querySelector('#tabpanel-general .gen-theme[aria-checked=true]')).borderTopColor");
     const other = await ev("getComputedStyle(document.querySelector('#tabpanel-general .gen-theme[aria-checked=false]')).borderTopColor");
     assert.notEqual(chosen, other, 'a opção em uso tem o contorno de destaque');
     await shot('settings-geral-claro');
-    // o botão do rodapé do menu também troca, e a tela acompanha
-    await ev("document.getElementById('btnTheme').click()");
+    // trocar o tema por código (o botão do rodapé do menu saiu) e a tela acompanha
+    await ev("BF.ui.setTheme(BF.ui.theme() === 'light' ? 'dark' : 'light'); true");
     await sleep(300);
     assert.deepEqual(await themes(), [['dark', 'true', false], ['light', 'false', false]], 'a tela acompanha o botão do menu');
     step('Aparência: Escuro e Claro trocam o tema de verdade, cada opção mostra o tema dela e a tela acompanha o botão do menu');

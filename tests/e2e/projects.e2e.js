@@ -207,7 +207,7 @@ async function deleteScenario(tmp) {
     await waitFor(page, "BF.state.project && BF.state.project.source.path.endsWith('aberto.mp4')", 30000, 'projeto aberto pela miniatura');
     await waitFor(page, "document.getElementById('tab-cuts').getAttribute('aria-selected') === 'true'", 10000, 'aba Cortes');
     await page.eval("BF.ui.selectTab('projects')");
-    await waitFor(page, `!!(${cardOf('aberto')}) && !!(${cardOf('aberto')}).querySelector('.bds-chip-accent')`, 10000, 'o cartão marcado como aberto');
+    await waitFor(page, `!!(${cardOf('aberto')}) && [...(${cardOf('aberto')}).querySelectorAll('.bds-chip')].some((x) => /Aberto agora/.test(x.textContent))`, 10000, 'o cartão marcado como aberto');
     await page.eval('window.__antesDeApagar = true');
     await trash('aberto');
     info = await modalInfo(page);
@@ -332,9 +332,9 @@ async function main() {
 
     // voltando à lista: o projeto aberto fica marcado
     await ev("BF.ui.selectTab('projects')");
-    await waitFor(page, "!!document.querySelector('#tabpanel-projects .prj-card .bds-chip-accent')", 10000, 'marca "Aberto agora"');
-    assert.match(await ev("document.querySelector('#tabpanel-projects .prj-card .bds-chip-accent').textContent"), /Aberto agora/);
-    assert.equal(await ev("[...document.querySelectorAll('#tabpanel-projects .prj-card')].filter((c) => c.querySelector('.bds-chip-accent')).length"), 1);
+    await waitFor(page, "[...document.querySelectorAll('#tabpanel-projects .prj-card .bds-chip')].some((c) => /Aberto agora/.test(c.textContent))", 10000, 'marca "Aberto agora"');
+    assert.match(await ev("[...document.querySelectorAll('#tabpanel-projects .prj-card .bds-chip')].map((c) => c.textContent).join('|')"), /Aberto agora/);
+    assert.equal(await ev("[...document.querySelectorAll('#tabpanel-projects .prj-card')].filter((c) => [...c.querySelectorAll('.bds-chip')].some((x) => /Aberto agora/.test(x.textContent))).length"), 1);
     step('o projeto aberto aparece como "Aberto agora" (botão Continuar)');
 
     // mudar uma decisão atualiza o estado na lista

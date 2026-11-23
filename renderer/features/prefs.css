@@ -19,10 +19,10 @@
 .prefs-input { max-width: 100%; min-width: 0; }
 select.prefs-input { width: 240px; }
 .prefs-wide { width: 280px; }
-.prefs-unit { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px 0 4px; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: var(--radius-sm); color: var(--muted); font-size: 13px; transition: border-color var(--dur-base) var(--ease); }
+.prefs-unit { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px 0 4px; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: var(--radius-sm); color: var(--muted); font-size: 13px; transition: border-color var(--dur-base) var(--ease); }
 .prefs-unit:hover { border-color: color-mix(in srgb, var(--text) 25%, var(--input-border)); }
 .prefs-unit:focus-within { border-color: var(--muted); }
-.prefs-number { width: 72px; min-height: 36px; padding: 0 6px 0 10px; border: 0; background: transparent; text-align: right; font-variant-numeric: tabular-nums; }
+.prefs-number { width: 72px; min-height: 36px; padding: 0 8px 0 12px; border: 0; background: transparent; text-align: right; font-variant-numeric: tabular-nums; }
 .prefs-number:focus-visible { outline: none; }
 .prefs-unit:has(.prefs-number:focus-visible) { outline: var(--focus-ring); outline-offset: 2px; }
 .prefs-unit-suffix { min-width: 14px; }
@@ -33,26 +33,26 @@ select.prefs-input { width: 240px; }
 .prefs-notice-icon { font-size: 24px; color: var(--status-warn); }
 .prefs-notice-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .prefs-notice-title { font-weight: 600; }
-.prefs-outside { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+.prefs-outside { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
 .prefs-outside li { display: flex; gap: 12px; align-items: baseline; justify-content: space-between; padding: 4px 0; }
 
 /* jogo e canal do projeto */
 .prefs-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.prefs-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; color: var(--muted); font-size: var(--fs-label); font-weight: 600; }
+.prefs-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; color: var(--muted); font-size: var(--fs-label); font-weight: 600; }
 .prefs-field input { color: var(--text); font-weight: 400; }
 
 /* escopo: sub-abas em pílula (Geral / Jogo / Canal) e, nos dois últimos, o nome */
-.prefs-scopecard { gap: 14px; }
+.prefs-scopecard { gap: 16px; }
 .prefs-scope { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .prefs-scope > input { flex: 1; min-width: 160px; max-width: 360px; }
 
 /* grupos: um cartão por grupo; linhas com título + selo + descrição à esquerda e o controle à direita */
 .prefs-group { gap: 4px; }
 .prefs-rows { display: flex; flex-direction: column; }
-.prefs-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 24px; padding: 14px 0; color: var(--text); }
+.prefs-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 24px; padding: 16px 0; color: var(--text); }
 .prefs-row + .prefs-row { border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
 .prefs-label { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 260px; }
-.prefs-label-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.prefs-label-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
 .prefs-label-title { font-size: 14px; font-weight: 600; }
 .prefs-label-hint { font-size: var(--fs-label); line-height: 1.45; color: var(--muted); }
 .prefs-controls { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex: none; min-width: 0; max-width: 100%; }
@@ -74,22 +74,22 @@ select.prefs-input { width: 240px; }
 /* preferências aprendidas */
 .prefs-learn-toggle { cursor: pointer; padding-bottom: 4px; }
 .prefs-learned-list { display: flex; flex-direction: column; gap: 12px; }
-.prefs-learned { display: flex; flex-direction: column; gap: 8px; padding: 14px 18px; background: var(--card-2); border: 1px solid transparent; border-radius: var(--radius-md); }
+.prefs-learned { display: flex; flex-direction: column; gap: 8px; padding: 16px 16px; background: var(--card-2); border: 1px solid transparent; border-radius: var(--radius-md); }
 .prefs-learned.off { opacity: .7; }
 .prefs-learned-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
-.prefs-learned-title { display: flex; flex-direction: column; gap: 6px; flex: 1 1 240px; min-width: 0; }
+.prefs-learned-title { display: flex; flex-direction: column; gap: 8px; flex: 1 1 240px; min-width: 0; }
 .prefs-learned-name { font-size: 14px; font-weight: 600; }
-.prefs-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.prefs-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .prefs-learned .bds-chip:not([class*="bds-chip-"]) { background: var(--card); }
 .prefs-learned select, .prefs-learned .prefs-unit { background-color: var(--card); }
 .prefs-learned-restore { padding-left: 56px; }
 .prefs-evidence { padding-left: 56px; }
 .prefs-empty { background: transparent; }
 .prefs-waiting > summary { font-size: 13px; }
-.prefs-waiting ul { margin-top: 6px; padding-left: 28px; display: flex; flex-direction: column; gap: 2px; }
+.prefs-waiting ul { margin-top: 8px; padding-left: 28px; display: flex; flex-direction: column; gap: 2px; }
 
 /* histórico */
-.prefs-history li { display: flex; gap: 12px; align-items: baseline; justify-content: space-between; padding: 10px 0; }
+.prefs-history li { display: flex; gap: 12px; align-items: baseline; justify-content: space-between; padding: 12px 0; }
 .prefs-history li + li { border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
 .prefs-history-text { overflow-wrap: anywhere; }
 .prefs-history-date { white-space: nowrap; }

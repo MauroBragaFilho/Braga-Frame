@@ -70,25 +70,14 @@
   $('brand').addEventListener('click', (event) => { if (userCollapsed && !sidebarButton.contains(event.target)) BF.ui.setSidebarCollapsed(false); });
   compactQuery.addEventListener('change', applyRail);
 
-  const themeButton = $('btnTheme');
-  function showTheme(theme) {
-    const toLight = theme !== 'light'; // o botão oferece o tema que NÃO está em uso
-    themeButton.firstElementChild.textContent = toLight ? 'light_mode' : 'dark_mode';
-    themeButton.querySelector('.sidebar-link-label').textContent = toLight ? 'Tema claro' : 'Tema escuro';
-    themeButton.setAttribute('aria-label', toLight ? 'Usar tema claro' : 'Usar tema escuro');
-    themeButton.title = toLight ? 'Usar tema claro' : 'Usar tema escuro';
-  }
   /** Troca o tema ('dark' | 'light') e guarda a escolha. */
   BF.ui.setTheme = function setTheme(theme) {
     const next = theme === 'light' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', next);
     BF.local.set('theme', next);
-    showTheme(next);
     BF.bus.emit('theme:changed', { theme: next });
   };
   BF.ui.theme = () => (document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark');
-  themeButton.addEventListener('click', () => BF.ui.setTheme(BF.ui.theme() === 'light' ? 'dark' : 'light'));
-  showTheme(BF.ui.theme());
   applyRail();
 
   // ---------- controles da janela (sem moldura): window:* no processo principal ----------

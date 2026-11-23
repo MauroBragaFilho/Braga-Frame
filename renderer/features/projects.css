@@ -1,13 +1,13 @@
 /* Aba Projetos (tela larga): lista de cartões, um por vídeo. Usa só tokens e componentes do app.css. */
-.projects { display: flex; flex-direction: column; gap: 14px; }
+.projects { display: flex; flex-direction: column; gap: 16px; }
 .prj-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; }
 .prj-intro { flex: 1 1 280px; margin: 0; color: var(--muted); }
 .prj-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
 .prj-search { flex: 1 1 260px; max-width: 420px; }
 .prj-sort { flex: 0 0 auto; width: auto; min-width: 150px; }
 .prj-count { margin: 0; }
-.prj-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.prj-card { display: flex; align-items: center; gap: 16px; padding: 14px 16px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-md); }
+.prj-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.prj-card { display: flex; align-items: center; gap: 16px; padding: 16px 16px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-md); }
 .prj-card:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
 .prj-card.missing { border-style: dashed; }
 /* miniatura do vídeo (16:9); sem quadro (carregando, vídeo que não abre, ffmpeg ausente) mostra o ícone do tipo de vídeo */
@@ -22,7 +22,7 @@
 .prj-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .prj-title { font-family: var(--font-title); font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .prj-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.prj-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.prj-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .prj-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
 .prj-delete:hover:not(:disabled), .prj-delete:focus-visible { color: var(--danger-fg); background: var(--danger-bg); }
 .prj-none { padding: 16px 0; }

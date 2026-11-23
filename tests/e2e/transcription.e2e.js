@@ -138,14 +138,15 @@ async function main() {
     step('Legendas, com vídeo e sem corte: o aviso com o botão "Instalar a transcrição" (antes não havia onde instalar)');
 
     await ev("BF.ui.selectTab('analysis')");
-    await waitFor(page, "document.getElementById('anTInstall') && !document.getElementById('anTInstall').hidden", 20000, 'o botão Instalar a transcrição na Análise');
-    assert.equal(await ev("document.getElementById('anTGenerate').disabled"), true, 'sem motor, "Transcrever o vídeo" fica desabilitado');
+    await waitFor(page, "document.getElementById('anTGenerate') && /Instalar e transcrever/.test(document.getElementById('anTGenerate').textContent)", 20000, 'o botão "Instalar e transcrever o vídeo" na Análise');
+    assert.equal(await ev("document.getElementById('anTGenerate').disabled"), false, 'sem motor, o botão único instala e transcreve (não fica desabilitado)');
+    assert.equal(await ev("document.getElementById('anTInstall').hidden"), true, 'não há mais um botão de instalar separado');
     assert.match(await ev("document.getElementById('anTSub').textContent"), /aba Ferramentas/, 'o texto aponta para a aba Ferramentas');
     await a11y('Análise sem transcrição');
-    step('Análise: o cartão da transcrição ganha "Instalar a transcrição" e o texto aponta a aba Ferramentas');
+    step('Análise: o botão único vira "Instalar e transcrever o vídeo" (habilitado) e o texto aponta a aba Ferramentas');
 
     // ---------- 2) recusar a confirmação: nada é baixado ----------
-    await ev("document.getElementById('anTInstall').click()");
+    await ev("document.getElementById('anTGenerate').click()");
     const asked = await answerModal(page, false);
     assert.equal(asked.title, 'Instalar a transcrição?');
     assert.match(asked.message, /motor Whisper \(.*(KB|MB).*GitHub/);
@@ -161,7 +162,7 @@ async function main() {
     step('recusar a confirmação (que diz motor, modelo, tamanho total, origem, SHA-256 e cancelar) não baixa nada nem sai da Análise');
 
     // ---------- 3) aceitar: Ferramentas, "Passo 1 de 2" e "Passo 2 de 2", e volta para a Análise ----------
-    await ev("document.getElementById('anTInstall').click()");
+    await ev("BF.transcription.install({ modelId: null }); true"); // só a instalação: o botão da Análise também começaria a transcrever, e o motor deste teste é de mentira
     await answerModal(page, true);
     const samples = await watch((s) => s.state === 'ready' && s.tab === 'analysis', 60000);
     const flows = samples.filter((s) => s && s.flow);
@@ -173,6 +174,7 @@ async function main() {
     }
     assert.equal(await tab(), 'analysis', 'terminou: o usuário volta para a Análise, de onde saiu');
     await waitFor(page, "document.getElementById('anTInstall').hidden && !document.getElementById('anTGenerate').disabled", 20000, '"Transcrever o vídeo" liberado e o botão de instalar escondido');
+    assert.equal(await ev("document.getElementById('anTGenerate').textContent"), 'Transcrever o vídeo');
     assert.ok(fs.existsSync(exe), 'o motor no lugar');
     assert.ok(fs.existsSync(smallFile), `o modelo Pequeno no lugar (${smallFile})`);
     assert.ok(samePath(await ev('BF.state.tools.whisper'), exe), 'BF.state.tools.whisper aponta o motor instalado');
@@ -249,9 +251,9 @@ async function main() {
     assert.equal(fs.existsSync(smallFile), false);
     await a11y('cartão sem modelo');
     await ev("BF.ui.selectTab('analysis')");
-    await waitFor(page, "!document.getElementById('anTInstall').hidden", 15000, 'a Análise percebe que o modelo saiu');
+    await waitFor(page, "/Instalar e transcrever/.test(document.getElementById('anTGenerate').textContent)", 15000, 'a Análise percebe que o modelo saiu');
     assert.match(await ev("document.getElementById('anTSub').textContent"), /modelo Pequeno.*aba Ferramentas/);
-    await ev("document.getElementById('anTInstall').click()");
+    await ev("BF.transcription.install({ modelId: null }); true");
     const onlyModel = await answerModal(page, true);
     assert.match(onlyModel.message, /modelo Pequeno/);
     assert.doesNotMatch(onlyModel.message, /motor Whisper/, 'o motor já está instalado: só o modelo entra na conta');

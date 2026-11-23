@@ -151,7 +151,6 @@
           switchRow('an-switch-row an-filter-weak', 'anFilterWeak', 'Descartar ideias fracas',
             el('span', { class: 'small' }, 'Com transcrição, tira o que não tem reação de voz (riso, exclamação, comentário) nem do chat (num chat pequeno, a risada escrita conta).'), ui.filterWeak),
           ui.aiReviewRow, ui.aiWindowsRow),
-        ui.runArea,
         ui.advanced);
     }
 

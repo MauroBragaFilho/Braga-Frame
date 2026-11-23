@@ -25,7 +25,7 @@
 .tr-model > .tr-progress, .tr-model > .tr-error, .tr-model > .tr-note { flex: 1 1 100%; }
 
 /* barra de progresso: a trilha precisa se destacar do cartão interno (--card-2) */
-.tr-progress { display: flex; flex-direction: column; gap: 6px; }
+.tr-progress { display: flex; flex-direction: column; gap: 8px; }
 .tr-progress-text { font-variant-numeric: tabular-nums; }
 .tr-progress progress:not(:indeterminate) { background: var(--card); }
 .tr-progress progress:indeterminate { background: linear-gradient(90deg, var(--card) 0 35%, var(--accent) 35% 65%, var(--card) 65%) 0 0 / 300% 100%; }

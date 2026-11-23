@@ -14,7 +14,7 @@
 }
 
 /* campos */
-.exp-field { display: flex; flex-direction: column; gap: 6px; }
+.exp-field { display: flex; flex-direction: column; gap: 8px; }
 .exp-label { color: var(--muted); font-size: 12px; font-weight: 600; }
 .exp-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .exp-label strong, .exp-field strong { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -24,7 +24,7 @@
 /* detalhes recolhidos */
 .exp-details > summary { font-size: 13px; }
 .exp-details > summary { max-width: 100%; }
-.exp-body { display: flex; flex-direction: column; gap: 14px; margin-top: 12px; padding: 16px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-md); }
+.exp-body { display: flex; flex-direction: column; gap: 16px; margin-top: 12px; padding: 16px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-md); }
 .exp-warns > summary { color: var(--status-warn); }
 .exp-warns > .exp-body { padding: 0; background: none; border: 0; gap: 0; }
 .exp-qc { display: flex; flex-direction: column; gap: 12px; }
@@ -32,8 +32,8 @@
 .exp-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 
 /* sub-abas em pílula (.bds-tabs): modos de enquadramento e partes da pilha */
-.exp .bds-tabs { gap: 6px; }
-.exp .bds-tab { padding: 6px 12px; }
+.exp .bds-tabs { gap: 8px; }
+.exp .bds-tab { padding: 8px 12px; }
 .exp .bds-tab[aria-pressed="true"] { color: var(--accent-text); background: var(--accent-light); border-color: transparent; }
 .exp-hint { line-height: 1.45; }
 
@@ -53,9 +53,9 @@
 .exp-target { font-size: 12px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
 .exp .link { align-self: flex-start; justify-content: flex-start; }
 .exp-target-row .link { flex: none; font-size: 12px; }
-.exp-stage { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; transition: opacity var(--dur-base); }
+.exp-stage { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; transition: opacity var(--dur-base); }
 .exp-stage.is-loading .exp-prev img { opacity: 0.55; }
-.exp-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.exp-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .exp-col:first-child { flex: 1 1 200px; align-self: center; }
 .exp-stage[data-orient="vertical"] .exp-col:last-child { flex: 0 0 132px; }
 .exp-stage[data-orient="horizontal"] .exp-col:last-child, .exp-stage[data-orient="square"] .exp-col:last-child { flex: 1 1 200px; }
@@ -72,18 +72,18 @@
 .exp-rect + .exp-rect { box-shadow: none; }
 .exp-rect.dim { opacity: 0.55; z-index: 1; }
 .exp-rect:focus-visible { outline: 2px solid var(--on-accent); outline-offset: 1px; }
-.exp-rect-tag { position: absolute; left: 2px; top: 2px; max-width: calc(100% - 4px); padding: 0 6px; font-size: 10px; font-weight: 600; line-height: 16px; color: var(--on-accent); background: rgba(0, 0, 0, 0.7); border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+.exp-rect-tag { position: absolute; left: 2px; top: 2px; max-width: calc(100% - 4px); padding: 0 8px; font-size: 10px; font-weight: 600; line-height: 16px; color: var(--on-accent); background: rgba(0, 0, 0, 0.7); border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
 .exp-handle { position: absolute; right: -2px; bottom: -2px; width: 14px; height: 14px; background: var(--on-accent); border: 2px solid var(--accent); border-radius: 3px; cursor: nwse-resize; }
 .exp-rect.webcam .exp-handle { border-color: var(--status-ok); }
 .exp-time { display: flex; align-items: center; gap: 12px; }
 .exp-time input { flex: 1; min-width: 0; }
 .exp-time span { flex: none; font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .exp-time .link { flex: none; font-size: 12px; white-space: nowrap; }
-.exp-ctl { display: flex; flex-direction: column; gap: 14px; }
+.exp-ctl { display: flex; flex-direction: column; gap: 16px; }
 
 /* cortes a exportar */
 .exp-cuts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto; }
-.exp-cut { display: flex; align-items: center; gap: 10px; padding: 6px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card); }
+.exp-cut { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card); }
 .exp-cut.on { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: color-mix(in srgb, var(--accent) 7%, var(--card)); }
 .exp-cut.off .exp-cut-main { opacity: 0.6; }
 .exp-cut-main { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; min-height: 40px; padding: 4px 0; border: 0; border-radius: 0; background: none; color: var(--text); text-align: left; font-weight: 600; }
@@ -91,14 +91,14 @@
 .exp-cut-default { padding-left: 12px; }
 .exp-cut-title { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .exp-cut-sub { font-size: 11px; font-weight: 500; color: var(--muted); }
-.exp-badge { flex: none; padding: 3px 10px; border-radius: var(--radius-pill); font-size: 11px; font-weight: 600; color: var(--accent-text); background: var(--accent-light); }
+.exp-badge { flex: none; padding: 3px 12px; border-radius: var(--radius-pill); font-size: 11px; font-weight: 600; color: var(--accent-text); background: var(--accent-light); }
 .exp-origin { flex: none; font-size: 11px; white-space: nowrap; }
 .exp-bulk select { width: 100%; max-width: 300px; }
 .exp-layout-list { max-height: none; overflow: visible; }
 .exp-layout-row .bds-chip { flex: none; font-size: 11px; }
 
 /* layouts do canal: salvar como padrão e quadros de referência do detector */
-.exp-layout-save { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.exp-layout-save { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .exp-layout-save select { flex: 1 1 180px; width: auto; min-width: 0; }
 .exp-detect > summary { font-size: 13px; }
 .exp-ref-group { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
@@ -113,7 +113,7 @@
 #exp-detect-status.exp-msg { padding-left: 40px; }
 
 /* destino */
-.exp-dir-row { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 14px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.exp-dir-row { display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 16px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm); }
 .exp-dir-row > .material-symbols-rounded { flex: none; font-size: 20px; color: var(--muted); }
 .exp-dir { flex: 1; min-width: 0; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
 
@@ -126,7 +126,7 @@
 .exp-qc-status.busy::before { content: 'hourglass_top'; }
 .exp-issues { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .exp-issues:empty { display: none; }
-.exp-issue, .exp-msg { position: relative; padding: 10px 12px 10px 40px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.exp-issue, .exp-msg { position: relative; padding: 12px 12px 12px 40px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .exp-issue::before, .exp-msg::before { position: absolute; left: 12px; top: 9px; }
 .exp-issue.warn, .exp-msg.warn { background: var(--warn-bg); border-color: color-mix(in srgb, var(--status-warn) 35%, transparent); }
 .exp-issue.warn::before, .exp-msg.warn::before { content: 'warning'; color: var(--status-warn); }
@@ -140,7 +140,7 @@
 
 /* rodapé: um único primário. z-index acima dos retângulos de enquadramento (.exp-rect, z-index 2) e fundo sólido:
    nada pode aparecer por baixo do botão. O painel da aba tem 24px de respiro (.tabpanel): a margem negativa faz o rodapé cobri-lo. */
-.exp-foot { display: flex; flex-direction: column; gap: 10px; position: sticky; bottom: 0; z-index: 5; margin: 0 -24px -24px; padding: 14px 24px 20px; background: var(--bg); border-top: 1px solid var(--line); }
+.exp-foot { display: flex; flex-direction: column; gap: 12px; position: sticky; bottom: 0; z-index: 5; margin: 0 -24px -24px; padding: 16px 24px 20px; background: var(--bg); border-top: 1px solid var(--line); }
 .exp-foot .primary { width: 100%; min-height: 44px; font-size: 14px; }
 .exp-note { font-size: 11px; color: var(--muted); text-align: center; }
 #exp-enqueue-why { text-align: center; font-size: 12px; color: var(--muted); }

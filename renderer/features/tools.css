@@ -34,7 +34,7 @@
 .tool-actions:empty { display: none; }
 
 /* o estado também está escrito no selo; a cor só reforça */
-.tool-progress { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.tool-progress { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .tool-progress-text { font-variant-numeric: tabular-nums; }
 /* a trilha da barra precisa se destacar do cartão interno (--card-2) */
 .tool-progress progress:not(:indeterminate) { background: var(--card); }
@@ -45,19 +45,19 @@
 .tool > .tool-meta { margin-top: 8px; }
 .tool-details { margin-top: 8px; font-size: var(--fs-label); }
 .tool-details > summary { font-size: var(--fs-label); }
-.tool-details > div { margin-top: 4px; padding-left: 26px; color: var(--muted); overflow-wrap: anywhere; }
+.tool-details > div { margin-top: 4px; padding-left: 24px; color: var(--muted); overflow-wrap: anywhere; }
 
 /* FFmpeg ausente: instrução de instalação num cartão de aviso */
 .tool-help { display: flex; align-items: flex-start; gap: 12px; padding: 16px 20px; background: color-mix(in srgb, var(--status-warn) 10%, var(--card-2)); border-radius: var(--radius-md); font-size: 13px; }
 .tool-help > .material-symbols-rounded { flex: none; font-size: 22px; color: var(--status-warn); }
-.tool-help-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tool-help-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .tool-help strong { font-family: var(--font-title); font-size: 15px; letter-spacing: -0.01em; }
 .tool-help p { color: var(--muted); }
-.tool-help-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.tool-help-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .tool-help-manual { margin-top: 4px; }
 .tool-help-manual summary { cursor: pointer; color: var(--muted); }
 .tool-help-manual ol { margin-top: 8px; }
-.tool-help ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; color: var(--muted); }
+.tool-help ol { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 4px; color: var(--muted); }
 
 /* carregando: duas linhas fantasma, discretas */
 .tools-skeleton { display: flex; flex-direction: column; gap: 12px; }
