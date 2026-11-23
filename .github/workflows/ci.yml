@@ -6,9 +6,34 @@ on:
   pull_request:
 
 jobs:
+  # Lint e testes unitários nas duas versões do Node em uso: 22 (LTS mínima, veja "engines" no package.json) e 24 (a do desenvolvimento).
   test:
+    name: test (Node ${{ matrix.node }})
     runs-on: windows-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - uses: ./.github/actions/instalar-ffmpeg
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+
+  # E2E críticos no app Electron de verdade (perfil temporário, vídeos gerados com o FFmpeg, sem rede): a jornada abrir ->
+  # analisar -> revisar/aprovar -> legendar -> exportar -> reiniciar. A lista e o motivo de cada um estão em docs/testes-pulados.md.
+  e2e:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      BF_E2E_OFFLINE: '1'
+      BF_E2E_SHOTDIR: ${{ github.workspace }}/e2e-shots
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -17,8 +42,15 @@ jobs:
           cache: npm
       - uses: ./.github/actions/instalar-ffmpeg
       - run: npm ci
-      - run: npm run lint
-      - run: npm test
+      - name: E2E críticos
+        run: node scripts/run-e2e.js app analysis review subtitles-ui subtitles-transcript integration-export system
+      - name: Capturas da janela (só se falhar)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-shots
+          path: e2e-shots
+          if-no-files-found: ignore
 
   # O instalador de verdade (Etapa 6): gera duas versões, instala em silêncio, abre o programa instalado, atualiza por cima,
   # confere que os dados ficaram, desinstala e confere que nada sobrou. Usa uma identidade própria ("Braga Frame Teste").

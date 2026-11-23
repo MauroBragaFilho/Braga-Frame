@@ -8,7 +8,7 @@ Programa separado do Braga Digital Studio (BDS), com a mesma base técnica (Elec
 
 ## Pré-requisitos
 
-- **Windows 10/11** (único sistema em que o app foi executado; o código de Linux/macOS existe, mas não foi testado), **Node.js** (desenvolvido com Node 24) e `npm install` (traz o Electron).
+- **Windows 10/11** (único sistema em que o app foi executado; o código de Linux/macOS existe, mas não foi testado), **Node.js** 22 ou mais novo (desenvolvido com o 24; o CI testa o 22 e o 24) e `npm install` (traz o Electron).
 - **FFmpeg e ffprobe** no PATH (ou `CORTE_FFMPEG` / `CORTE_FFPROBE` apontando para os executáveis). No Windows 64 bits a aba **Ferramentas** (e o aviso vermelho do topo) tem o botão **Instalar o FFmpeg**, que baixa uma compilação de terceiros (Gyan Doshi, licença GPL v3) com tamanho e SHA-256 conferidos, só quando você clica; nos outros sistemas, ou se preferir, instale à mão (a aba mostra a versão detectada e como instalar). Para legenda incorporada o FFmpeg precisa do filtro `subtitles` (libass; as builds "full" têm); a aceleração por placa NVIDIA (NVENC) é opcional e testada de verdade antes de ser usada.
 - Opcionais, instalados pelo próprio app (aba **Ferramentas**, só de releases oficiais, com URL fixa, tamanho e SHA-256 conferidos): **yt-dlp** e **Deno** (VODs do YouTube/Twitch), **TwitchDownloaderCLI** (chat da Twitch) e **whisper.cpp** (legendas automáticas). Baixar depende de internet e, no caso dos VODs, de acesso e disponibilidade da fonte ([docs/recursos/tools.md](docs/recursos/tools.md)).
 
@@ -62,6 +62,7 @@ npm run lint
 - O `npm test` roda 2 arquivos de teste por vez (`--test-concurrency=2`): a análise usa prioridade abaixo do normal e, com muita concorrência, os prazos estouram por lentidão e não por erro. Um único teste baixa ~40 MB (o motor e o modelo do Whisper): `BF_SKIP_NETWORK_TESTS=1 npm test` o pula; sem internet ele já se pula com o motivo.
 - Os e2e usam porta de depuração dinâmica e um perfil de usuário temporário, então não interferem nos seus projetos e podem rodar em paralelo. `BF_E2E_SHOTDIR=<pasta>` guarda capturas da janela; `BF_E2E_OFFLINE=1` pula a parte de rede real do e2e de Novo projeto (`sources`).
 - Variáveis de ambiente úteis: `CORTE_FFMPEG`, `CORTE_FFPROBE`, `CORTE_YTDLP`, `CORTE_WHISPER`, `CORTE_TWITCHDOWNLOADER` (caminhos), `BF_NETWORK_TESTS`, `BF_NETWORK_TOOLS_ALL`, `BF_REQUIRE_NETWORK`, `BF_PERF_TESTS` (listadas em [docs/arquitetura.md](docs/arquitetura.md), seção 5.14).
+- O CI (GitHub Actions) roda o lint e o `npm test` no Node 22 e no 24, os e2e da jornada principal (abrir, analisar, aprovar, legendar, exportar, reiniciar) e o teste do instalador. Cada teste pulado, com o motivo e como ligá-lo: [docs/testes-pulados.md](docs/testes-pulados.md).
 
 Agentes de IA (servidor MCP local, desligado por padrão): [docs/recursos/mcp.md](docs/recursos/mcp.md). Arquitetura e contratos: [docs/arquitetura.md](docs/arquitetura.md); como acrescentar um recurso: [docs/recursos/base.md](docs/recursos/base.md); um documento por recurso em [docs/recursos/](docs/recursos/).
 

@@ -23,6 +23,9 @@
     "eslint": "^9.39.5",
     "globals": "^17.13.0"
   },
+  "engines": {
+    "node": ">=22"
+  },
   "author": "Mauro Braga Filho",
   "homepage": "https://github.com/MauroBragaFilho/Braga-Frame",
   "repository": {
