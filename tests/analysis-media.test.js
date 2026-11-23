@@ -63,7 +63,7 @@ test.before(() => {
   files.late = path.join(tmp, 'late.mp4');
   childProcess.execFileSync(tools.ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y',
     '-f', 'lavfi', '-i', 'color=c=gray:s=160x90:r=10:d=30', '-itsoffset', '2',
-    '-f', 'lavfi', '-i', "anoisesrc=d=28:c=white:r=44100:a=1,volume='0.003+0.5*between(t,10,12)':eval=frame,aformat=channel_layouts=mono",
+    '-f', 'lavfi', '-i', "anoisesrc=d=28:c=white:r=44100:a=1:seed=7,volume='0.003+0.5*between(t,10,12)':eval=frame,aformat=channel_layouts=mono",
     '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-map', '0:v', '-map', '1:a', files.late], { windowsHide: true });
 });
 

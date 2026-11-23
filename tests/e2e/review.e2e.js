@@ -633,9 +633,13 @@ async function main() {
     await page.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 300, y: await page.eval('BF.review.timeline.info().canvas.top + 60'), deltaX: 0, deltaY: -100, modifiers: 2 });
     await sleep(200);
     assert.ok(await page.eval('BF.review.timeline.info().view.span') < spanBeforeCtrl, 'Ctrl + roda para cima aproxima');
-    await page.eval(`BF.review.select(${j(lanceId)}); document.querySelector('.tl-btn[title^="Aproximar"]').click(); true`);
-    await sleep(500);
-    await waitFor(page, 'BF.review.timeline.info().detailBuckets > 0', 30000, 'detalhe da onda (zoom) carregado');
+    await page.eval(`BF.review.select(${j(lanceId)}); true`);
+    // o detalhe só carrega quando o zoom passa da resolução da visão geral: numa janela menor (CI) são precisos mais cliques em "Aproximar"
+    for (let i = 0; i < 8 && !(await page.eval('BF.review.timeline.info().detailBuckets > 0')); i += 1) {
+      await page.eval(`document.querySelector('.tl-btn[title^="Aproximar"]').click(); true`);
+      await sleep(500);
+    }
+    await waitFor(page, 'BF.review.timeline.info().detailBuckets > 0', 15000, 'detalhe da onda (zoom) carregado');
     step('timeline: zoom, rolagem e detalhe da onda ao aproximar');
 
     // clicar para posicionar o player
