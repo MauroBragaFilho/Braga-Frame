@@ -52,14 +52,24 @@ Valem na aba **Cortes**, com o cursor fora de campos de texto.
 
 As letras podem ser trocadas em **Configurações › Preferências** (opções avançadas, grupo Revisão).
 
-## 5. Onde ficam seus dados
+## 5. Usar um agente de IA (opcional)
+
+Em **Configurações > Geral > Agentes de IA (MCP)** você pode deixar um agente de IA (Antigravity, Claude e outros que falam MCP) ler os seus projetos e ajudar a revisar cortes, neste computador. Vem **desligado**:
+
+1. Ligue **Conectar agentes (MCP)**.
+2. Clique em um dos botões de copiar (Antigravity, HTTP ou comando) e cole no arquivo de configuração de MCP do agente. A configuração leva um token, que é a senha: não compartilhe.
+3. Com o Braga Frame aberto, peça ao agente o que quiser ("veja os cortes do meu último projeto e aprove os melhores").
+
+O agente **lê** projetos, cortes e transcrição, e, **pedindo a sua confirmação numa janela do app**, pode abrir projetos, criar e decidir cortes, transcrever, analisar e mandar cortes aprovados para a fila de exportação. Ele **não apaga nada** e nunca vê as suas chaves. Dá para desfazer as decisões dele com Ctrl+Z na aba Cortes. Se confia no agente, há uma opção para dispensar a confirmação (você continua vendo um aviso de cada coisa que ele faz). "Gerar novo token" corta o acesso de quem usava o anterior. O ChatGPT não se conecta (só aceita servidores na internet; o do Braga Frame fica só no seu computador). Detalhes: [docs/recursos/mcp.md](recursos/mcp.md).
+
+## 6. Onde ficam seus dados
 
 - Os **projetos** (cortes, decisões, ajustes) ficam em `%APPDATA%\braga-frame`. Para abrir: aperte `Win + R`, digite `%APPDATA%\braga-frame` e Enter. **Configurações › Geral** mostra a pasta e abre ela para você.
 - Seus **vídeos** e os **cortes exportados** ficam onde sempre estiveram: o app não mexe neles.
 - **Desinstalar não apaga seus projetos.** Se quiser apagar tudo mesmo, depois de desinstalar apague a pasta `%APPDATA%\braga-frame`. Para apagar só um projeto, use a lixeira em **Projetos**.
 - O app **não envia seus vídeos** para a internet e só usa a rede quando você pede: baixar uma ferramenta, baixar um vídeo ou usar a **IA na nuvem**. A única coisa que o app faz por conta própria é ver se saiu versão nova, ao abrir (leva só o nome e a versão do app) e, achando, baixar a atualização do GitHub; dá para desligar tudo isso em Configurações › Geral › Atualizações. A IA na nuvem recebe texto (a transcrição), só depois que você aceita o aviso de privacidade da tela de Análise, que diz o que vai. A chave do provedor fica só neste computador.
 
-## 6. Quando algo não funciona
+## 7. Quando algo não funciona
 
 | O que aparece | O que fazer |
 |---|---|
@@ -69,6 +79,6 @@ As letras podem ser trocadas em **Configurações › Preferências** (opções 
 | Não baixa o vídeo do YouTube ou da Twitch | Às vezes a fonte pede "confirme que você não é um robô" ou o vídeo é privado. O app explica a causa; ele não contorna isso. |
 | A análise por IA demora ou perde um trecho | Modelos gratuitos são irregulares: o app tenta de novo e usa os modelos de reserva. A tela avisa o que aconteceu. |
 
-## 7. Pedir ajuda
+## 8. Pedir ajuda
 
 Em **Configurações › Geral › Suporte**, clique em **Copiar informações** e cole na sua mensagem. O texto traz a versão do app, o sistema, a placa de vídeo e os programas encontrados. **Não inclui seus vídeos, seus projetos nem suas chaves**, e o seu nome de usuário do Windows sai como `~`. O botão **Mostrar o registro** abre o arquivo de registro do app, caso peçam.

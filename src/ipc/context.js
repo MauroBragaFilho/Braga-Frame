@@ -166,22 +166,38 @@ function createContext(deps) {
    * trouxer `ok`); exceções viram { ok:false, code, message, details? } — a mensagem deve estar em
    * português e dizer causa e possível solução.
    */
+  const handlers = new Map(); // canal -> fn (para `ctx.call`)
+
+  /** Roda o handler de um canal com a mesma conversão de resultado e de erro do IPC. */
+  async function run(channel, fn, payload, event) {
+    try {
+      const out = await fn(payload === undefined || payload === null ? {} : payload, event);
+      if (out === undefined || out === null) return { ok: true };
+      return typeof out === 'object' && !Array.isArray(out) && out.ok === undefined ? { ok: true, ...out } : out;
+    } catch (err) {
+      log(err && err.code ? 'warn' : 'error', `${channel}: ${err && err.message}${err && err.code ? ` (${err.code})` : ''}`);
+      return failure(err);
+    }
+  }
+
   function handle(channel, fn) {
     if (typeof channel !== 'string' || !CHANNEL_RE.test(channel)) {
       throw new Error(`Canal IPC inválido: "${channel}". Use "<recurso>:<acao>" (ex.: queue:enqueue).`);
     }
     if (registered.has(channel)) throw new Error(`Canal IPC já registrado por outro handler: ${channel}`);
     registered.add(channel);
-    ipcMain.handle(channel, async (event, payload) => {
-      try {
-        const out = await fn(payload === undefined || payload === null ? {} : payload, event);
-        if (out === undefined || out === null) return { ok: true };
-        return typeof out === 'object' && !Array.isArray(out) && out.ok === undefined ? { ok: true, ...out } : out;
-      } catch (err) {
-        log(err && err.code ? 'warn' : 'error', `${channel}: ${err && err.message}${err && err.code ? ` (${err.code})` : ''}`);
-        return failure(err);
-      }
-    });
+    handlers.set(channel, fn);
+    ipcMain.handle(channel, (event, payload) => run(channel, fn, payload, event));
+  }
+
+  /**
+   * Chama um canal por dentro do processo principal (sem passar pelo renderer): o que o servidor MCP usa para reaproveitar `project:list`,
+   * `queue:list`, `analysis:transcriptGenerate`… com a mesma validação e os mesmos erros. Resolve sempre com `{ ok, … }` / `{ ok:false, code, message }`.
+   */
+  async function call(channel, payload) {
+    const fn = handlers.get(channel);
+    if (!fn) return failure(Object.assign(new Error(`Canal desconhecido: ${channel}.`), { code: 'UNKNOWN_CHANNEL' }));
+    return run(channel, fn, payload, null);
   }
 
   // Quem tem trabalho em andamento sobre um projeto (fila de exportação, análise, transcrição…) registra aqui `(project) => texto | null`: o texto diz,
@@ -207,7 +223,7 @@ function createContext(deps) {
     // o que o hospedeiro fornece (módulo embutido, src/host): ferramentas e modelos dele; sem hospedeiro, tudo vazio
     host,
     projectStore: new ProjectStore(paths.projects),
-    bus, log, handle,
+    bus, log, handle, call,
     busyChecks, projectBusy,
     channels: registered,
     env, // o ambiente consultado (padrão: process.env); os handlers o usam para as variáveis só de teste

@@ -63,7 +63,7 @@ npm run lint
 - Os e2e usam porta de depuração dinâmica e um perfil de usuário temporário, então não interferem nos seus projetos e podem rodar em paralelo. `BF_E2E_SHOTDIR=<pasta>` guarda capturas da janela; `BF_E2E_OFFLINE=1` pula a parte de rede real do e2e de Novo projeto (`sources`).
 - Variáveis de ambiente úteis: `CORTE_FFMPEG`, `CORTE_FFPROBE`, `CORTE_YTDLP`, `CORTE_WHISPER`, `CORTE_TWITCHDOWNLOADER` (caminhos), `BF_NETWORK_TESTS`, `BF_NETWORK_TOOLS_ALL`, `BF_REQUIRE_NETWORK`, `BF_PERF_TESTS` (listadas em [docs/arquitetura.md](docs/arquitetura.md), seção 5.14).
 
-Arquitetura e contratos: [docs/arquitetura.md](docs/arquitetura.md); como acrescentar um recurso: [docs/recursos/base.md](docs/recursos/base.md); um documento por recurso em [docs/recursos/](docs/recursos/).
+Agentes de IA (servidor MCP local, desligado por padrão): [docs/recursos/mcp.md](docs/recursos/mcp.md). Arquitetura e contratos: [docs/arquitetura.md](docs/arquitetura.md); como acrescentar um recurso: [docs/recursos/base.md](docs/recursos/base.md); um documento por recurso em [docs/recursos/](docs/recursos/).
 
 ## Instalador, atualização e licenças
 

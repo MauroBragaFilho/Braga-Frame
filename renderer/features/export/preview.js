@@ -218,6 +218,46 @@
       }
     }
 
+    /**
+     * Manda os cortes de `ids` para a fila SEM a tela (o que o agente de IA pede pelo MCP, src/mcp): o mesmo caminho de enqueue() (conferência de
+     * qualidade e depois queue:enqueue), mas sem trocar de aba. Resolve { ok, sent, skipped, failed: [{ cutId, reasons }], message }.
+     */
+    async function enqueueCuts(ids) {
+      const p = project();
+      if (!p) return { ok: false, message: 'Nenhum projeto aberto.' };
+      if (S.busy) return { ok: false, message: 'A tela de Exportações está ocupada com outro envio. Tente de novo em instantes.' };
+      const cuts = p.cuts.filter((c) => ids.includes(c.id));
+      if (!cuts.length) return { ok: false, message: 'Nenhum dos cortes informados existe neste projeto.' };
+      const quiet = () => { try { syncAction(); syncMessage(); } catch { /* a aba Exportações ainda não foi desenhada */ } };
+      S.busy = true;
+      quiet();
+      try {
+        if (S.draft) commitDraft();
+        await BF.project.flush();
+        const prep = await BF.api('export:prepare', prepareRequest(cuts.map((c) => c.id)));
+        if (!prep.ok) return { ok: false, message: prep.message };
+        const text = (e) => (typeof e === 'string' ? e : (e && (e.message || e.text)) || 'erro na conferência de qualidade');
+        const failed = [];
+        const bad = new Set();
+        for (const r of prep.reports) {
+          if (!r.errors.length) continue;
+          bad.add(r.jobId);
+          const job = prep.jobs.find((j) => j.id === r.jobId);
+          failed.push({ cutId: job && job.cut ? job.cut.id : null, reasons: r.errors.map(text).slice(0, 3) });
+        }
+        const jobs = prep.jobs.filter((j) => !bad.has(j.id));
+        if (!jobs.length) return { ok: false, message: 'Nenhum corte pode ser exportado: a conferência de qualidade recusou todos.', failed };
+        const res = await BF.api('queue:enqueue', { jobs });
+        if (!res.ok) return { ok: false, message: `A fila não aceitou os cortes: ${res.message} Nada foi enviado.`, failed };
+        const views = Array.isArray(res.jobs) ? res.jobs : [];
+        const skipped = views.filter((j) => j.state === 'skipped').length;
+        return { ok: true, sent: jobs.length - skipped, skipped, failed };
+      } finally {
+        S.busy = false;
+        quiet();
+      }
+    }
+
     /** Escolhe a pasta de destino do projeto aberto. Resolve true se a pasta mudou. */
     async function pickOutputDir() {
       if (!project()) return false;
@@ -285,6 +325,6 @@
       onProfileChanged();
     }
 
-    return { previewRange, frameTime, sourceSize, scheduleSource, schedulePreview, scheduleQc, outputDir, enqueue, pickOutputDir, outputSummary, saveProfileAs, deleteProfile, resetOverrides };
+    return { previewRange, frameTime, sourceSize, scheduleSource, schedulePreview, scheduleQc, outputDir, enqueue, enqueueCuts, pickOutputDir, outputSummary, saveProfileAs, deleteProfile, resetOverrides };
   };
 })();

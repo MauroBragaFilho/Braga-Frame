@@ -38,6 +38,16 @@
 
 /* suporte */
 .gen-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* Agentes de IA (MCP) */
+.gen-mcp-running { display: flex; flex-direction: column; gap: 14px; }
+.gen-mcp-running[hidden], .gen-mcp-message[hidden], .gen-mcp-warn[hidden] { display: none; }
+.gen-mcp-message { margin: 0; padding: 8px 12px; border-radius: var(--radius-sm); overflow-wrap: anywhere; }
+.gen-mcp-message[data-kind="error"] { background: var(--danger-bg); color: var(--danger-fg); }
+.gen-mcp-message[data-kind="ok"] { color: var(--status-ok, var(--muted)); }
+.gen-mcp-warn { margin: 0; color: var(--status-warn); }
+.gen-mcp-how > summary { cursor: pointer; }
+.gen-mcp-how ol { margin: 8px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; color: var(--muted); }
 .gen-actions button { display: inline-flex; align-items: center; gap: 6px; }
 .gen-actions .material-symbols-rounded { font-size: 18px; }
 .gen-report { width: 100%; box-sizing: border-box; resize: vertical; font-family: ui-monospace, Consolas, monospace; font-size: 12px; line-height: 1.5; }

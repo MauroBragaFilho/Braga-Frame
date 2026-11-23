@@ -148,7 +148,7 @@
   };
   const { chosenProfileId, baseProfile, overridesOf, ratioChanged, effectiveProfile, dropOverrides, setOverride, chooseProfile, onProfileChanged, loadProfiles, loadEncoders, recheckEncoders, encoderHint, listCuts, isChecked } = P.profile(A);
   const { presetsEffective, refsEffective, layoutCtx, projectDefaults, resolveCut, effectiveFraming, hasOwnFraming, editFraming, commitDraft, afterFramingChange, restoreFraming, setTarget } = P.framing(A);
-  const { previewRange, frameTime, sourceSize, scheduleSource, schedulePreview, scheduleQc, outputDir, enqueue, pickOutputDir, outputSummary, saveProfileAs, deleteProfile, resetOverrides } = P.preview(A);
+  const { previewRange, frameTime, sourceSize, scheduleSource, schedulePreview, scheduleQc, outputDir, enqueue, enqueueCuts, pickOutputDir, outputSummary, saveProfileAs, deleteProfile, resetOverrides } = P.preview(A);
   const { field, icon, syncAll, syncProfile, syncFraming, syncStage, syncOverlay, syncCuts, setCutLayout, bulkLayout, syncDest, syncQc, syncAction, syncMessage } = P.view(A);
   const { syncLayouts, saveLayoutsAsDefault, addRef, syncDetect, runDetect, cancelDetect, usePlayerFrame } = P.layouts(A);
 
@@ -427,7 +427,7 @@
   }
 
   // a tela Exportações (renderer/features/queue.js) usa estas quatro funções na barra de saída; o resto da aba continua só aqui
-  BF.exportOut = { summary: outputSummary, ensureProfiles: () => loadProfiles(false), chooseProfile, pickDir: pickOutputDir };
+  BF.exportOut = { summary: outputSummary, ensureProfiles: () => loadProfiles(false), chooseProfile, pickDir: pickOutputDir, enqueueCuts };
 
   BF.ui.registerTab({
     id: 'export',

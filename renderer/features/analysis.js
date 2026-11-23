@@ -711,5 +711,31 @@
     return true;
   });
 
-  BF.analysis = { engineChoice, isCovered, pendingSuggestions, dismissedSuggestions, sameSource, remainingSec, stageRemainingSec, clock, addSuggestions, dismissSuggestions, restoreSuggestions, splitKeywords, humorProfile };
+  /**
+   * Para o MCP (src/mcp, renderer/features/mcp.js): roda a análise SÓ com o algoritmo local (nada vai para fora do computador, mesmo que o usuário tenha uma IA
+   * configurada). Resolve { ok } quando começou, ou { ok:false, reason } em português.
+   */
+  async function runLocal() {
+    if (!BF.state.project) return { ok: false, reason: 'Nenhum projeto aberto.' };
+    if (state.running || state.starting) return { ok: false, reason: 'Já existe uma análise em andamento.' };
+    if (!state.ui.run) { BF.ui.selectTab('analysis'); await new Promise((resolve) => setTimeout(resolve, 0)); } // a aba ainda não foi desenhada: os controles são dela
+    if (!usableSignals().length) return { ok: false, reason: 'Este vídeo não tem sinal para analisar (sem áudio, imagem ou chat utilizáveis).' };
+    await run({ engine: 'algorithm' });
+    return state.running || state.starting ? { ok: true } : { ok: false, reason: (state.notice && state.notice.text) || 'A análise não começou.' };
+  }
+
+  /** O andamento da análise do projeto aberto e as sugestões que ainda não viraram corte (para o MCP). */
+  function mcpState() {
+    const project = BF.state.project;
+    if (!project) return null;
+    const saved = current();
+    return {
+      running: Boolean(state.running || state.starting),
+      progress: state.progress ? { p: state.progress.p, message: state.progress.message } : null,
+      lastRunAt: saved && saved.runAt ? saved.runAt : null,
+      suggestions: visible()
+    };
+  }
+
+  BF.analysis = { runLocal, mcpState, engineChoice, isCovered, pendingSuggestions, dismissedSuggestions, sameSource, remainingSec, stageRemainingSec, clock, addSuggestions, dismissSuggestions, restoreSuggestions, splitKeywords, humorProfile };
 })();

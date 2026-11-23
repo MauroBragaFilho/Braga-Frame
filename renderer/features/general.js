@@ -6,6 +6,7 @@
  *     (`.theme-locked`): as opções ficam desabilitadas e o texto diz por quê.
  *   - Pasta de projetos: onde o app guarda os projetos (a do perfil do app; não dá para trocar) e "Mostrar na pasta".
  *   - Atualizações: avisa de versão nova (liga/desliga, "Verificar agora"; só avisa, não instala; features/update.js).
+ *   - Agentes de IA (MCP): liga o servidor local que deixa um agente de IA externo ler os projetos e ajudar nos cortes (features/mcp.js).
  *   - Suporte: copia as informações do computador para mandar ao suporte (app:support) e mostra o arquivo de registro.
  *   - Sobre: nome, versão e a frase do app (app:info) e quem desenvolveu.
  * Preferências (análise, revisão, exportação) e Ferramentas são as outras abas de Configurações.
@@ -59,6 +60,7 @@
         el('div', { class: 'gen-actions' }, box.updCheck, box.updDownload, box.updInstall, box.updInstallQuit, box.updCancel, box.updOpen),
         box.updStatus, box.updSub)
       : null;
+    box.mcp = BF.mcp && !BF.embedded ? BF.mcp.card() : null; // Agentes de IA (MCP): features/mcp.js
     box.copy = el('button', { type: 'button', class: 'secondary sm', dataset: { act: 'copy-support' }, onclick: copySupport }, icon('content_copy'), 'Copiar informações');
     box.log = el('button', { type: 'button', class: 'secondary sm', dataset: { act: 'show-log' }, onclick: showLog }, icon('folder_open'), 'Mostrar o registro');
     box.report = el('textarea', { class: 'gen-report', readOnly: true, rows: 9, hidden: true, 'aria-label': 'Informações para o suporte', spellcheck: 'false' });
@@ -77,6 +79,7 @@
           el('section', { class: 'card gen-card', dataset: { section: 'appearance' } }, el('h3', {}, 'Aparência'), box.themes, box.themeNote),
           box.folder,
           box.updates,
+          box.mcp,
           box.support),
         el('aside', { class: 'card gen-card gen-about', dataset: { section: 'about' }, 'aria-label': 'Sobre' },
           el('h3', {}, 'Sobre'),
