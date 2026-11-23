@@ -25,6 +25,9 @@ const PANEL = '#tabpanel-tools';
 
 const OFFICIAL_IDS = ['deno', 'ffmpeg', 'twitchdownloader', 'whisper', 'whisper-cuda', 'ytdlp']; // entradas de src/core/tools/entries (ordem alfabética); o ffmpeg é de terceiros, as outras são oficiais
 
+// o cartão da transcrição (renderer/features/transcription.js) cuida do motor e do pacote NVIDIA: eles não têm linha na lista comum
+const LISTED_IDS = OFFICIAL_IDS.filter((id) => !['whisper', 'whisper-cuda'].includes(id));
+
 const row = (id) => `${PANEL} li.tool:not(.sys)[data-tool="${id}"]`; // linha do registro (as do sistema são sysRow)
 const sysRow = (id) => `${PANEL} li.tool.sys[data-tool="${id}"]`;
 const rowState = (page, id) => page.eval(`(document.querySelector('${row(id)}') || { dataset: {} }).dataset.state || null`);
@@ -106,14 +109,15 @@ async function main() {
         assert.ok(text.includes(tools[id]), `${id}: caminho aparece`);
       }
       const registryRows = await page.eval(`document.querySelectorAll('${PANEL} li.tool:not(.sys)').length`);
-      assert.equal(registryRows, status.tools.length, 'uma linha por entrada do registro (e nenhuma a mais)');
+      assert.equal(registryRows, status.tools.length - 2, 'uma linha por entrada do registro (e nenhuma a mais), menos o motor e o pacote NVIDIA, que o cartão da transcrição cuida');
       assert.deepEqual(status.tools.map((t) => t.id).sort(), OFFICIAL_IDS, 'o registro traz exatamente as seis ferramentas do app (o FFmpeg, as quatro oficiais e o pacote CUDA do Whisper)');
       assert.ok(status.tools.every((t) => !t.test && (t.id === 'ffmpeg' ? /^compilação de terceiros .*https:\/\//.test(t.source) : /^oficial: https:\/\//.test(t.source)) && t.sizeBytes > 0 && t.version), 'só entradas do catálogo, com origem https, versão e tamanho do download (o FFmpeg diz que é de terceiros, as demais são oficiais)');
-      for (const id of OFFICIAL_IDS) assert.ok(['missing', 'system'].includes(await rowState(page, id)), `${id}: perfil novo, nada instalado pelo app (ausente ou usando a do sistema)`);
-      assert.deepEqual(await page.eval(`[...document.querySelectorAll('${PANEL} h2')].map((n) => n.textContent)`), ['No seu computador', 'Instaladas pelo app'], 'duas seções, sem placeholder');
+      for (const id of LISTED_IDS) assert.ok(['missing', 'system'].includes(await rowState(page, id)), `${id}: perfil novo, nada instalado pelo app (ausente ou usando a do sistema)`);
+      assert.ok(['missing', 'no-model', 'ready'].includes(await page.eval(`(document.querySelector('${PANEL} [data-card="transcription"]') || { dataset: {} }).dataset.state || null`)), 'o motor e o pacote NVIDIA ficam no cartão da transcrição');
+      assert.deepEqual(await page.eval(`[...document.querySelectorAll('${PANEL} h2')].map((n) => n.textContent)`), ['No seu computador', 'Transcrição (legendas automáticas)', 'Instaladas pelo app'], 'três seções, sem placeholder');
       assert.equal(await page.eval(`document.querySelectorAll('${PANEL} li.tool:not(.sys) .tool-tag').length`), 0, 'nenhuma ferramenta marcada como "teste local"');
       assert.equal(await page.eval(`document.querySelectorAll('${PANEL} li.tool.sys button').length`), 0, 'FFmpeg e FFprobe nunca têm botão de instalar');
-      assert.deepEqual(await page.eval(`[...document.querySelectorAll('${PANEL} button')].filter((b) => !b.closest('li.tool:not(.sys)')).map((b) => b.dataset.act)`), ['recheck'], 'fora das ferramentas do registro só existe o botão Verificar de novo');
+      assert.deepEqual(await page.eval(`[...document.querySelectorAll('${PANEL} button')].filter((b) => !b.closest('li.tool:not(.sys)') && !b.closest('[data-card]')).map((b) => b.dataset.act)`), ['recheck'], 'fora das ferramentas do registro só existe o botão Verificar de novo');
       assert.doesNotMatch(await page.eval(`document.querySelector('${PANEL}').textContent`), /Em construção|Carregando|\bnull\b|undefined/);
       assert.equal(await page.eval("document.querySelector('#tab-tools .tab-badge').hidden"), true, 'sem aviso na aba quando o FFmpeg existe');
       assert.equal(await page.eval(`document.querySelector('${PANEL} .tool-help')`), null, 'sem instruções quando nada falta');
@@ -146,9 +150,9 @@ async function main() {
         assert.equal(await page.eval(`document.querySelector('${PANEL} [data-help="ffmpeg"] details').open`), false, 'a instalação à mão começa recolhida');
         assert.doesNotMatch(text, /\bnull\b|undefined/);
         assert.match(text, /CORTE_FFMPEG/);
-        assert.deepEqual(await page.eval(`[...document.querySelectorAll('${PANEL} button')].filter((b) => !b.closest('li.tool:not(.sys)')).map((b) => b.dataset.act)`), ['recheck', 'install-ffmpeg'], 'fora das ferramentas do registro: "Verificar de novo" e o botão que instala o FFmpeg');
+        assert.deepEqual(await page.eval(`[...document.querySelectorAll('${PANEL} button')].filter((b) => !b.closest('li.tool:not(.sys)') && !b.closest('[data-card]')).map((b) => b.dataset.act)`), ['recheck', 'install-ffmpeg'], 'fora das ferramentas do registro: "Verificar de novo" e o botão que instala o FFmpeg');
         assert.equal(await page.eval(`document.querySelectorAll('${PANEL} li.tool.sys button').length`), 0, 'as linhas do FFmpeg e do FFprobe não têm botão');
-        assert.deepEqual(await page.eval(`[...document.querySelectorAll('${PANEL} li.tool:not(.sys) button[data-act="install"]')].map((b) => b.dataset.tool).sort()`), OFFICIAL_IDS, 'os botões Instalar são só das ferramentas oficiais do registro');
+        assert.deepEqual(await page.eval(`[...document.querySelectorAll('${PANEL} li.tool:not(.sys) button[data-act="install"]')].map((b) => b.dataset.tool).sort()`), LISTED_IDS, 'os botões Instalar são só das ferramentas oficiais do registro');
         assert.equal(await page.eval("document.querySelector('#tab-tools .tab-badge').textContent"), '!', 'a aba avisa que falta algo');
         assert.equal(await page.eval("document.getElementById('toolsWarn').hidden"), false);
         assert.deepEqual(await page.eval("[...document.querySelectorAll('#toolsWarn button')].map((b) => b.textContent)"), ['Instalar o FFmpeg', 'Verificar de novo'], 'o aviso do topo oferece instalar');
@@ -163,77 +167,77 @@ async function main() {
 
     // ---------- 3) instalar/remover com uma entrada de TESTE servida por HTTP local ----------
     const payload = crypto.randomBytes(512 * 1024); // incompressível: o download dura o bastante para ver a barra
-    const good = makeZip([{ name: 'whisper-cli.exe', data: payload }, { name: 'LEIAME.txt', data: 'pacote de teste' }]);
+    const good = makeZip([{ name: 'yt-dlp.exe', data: payload }, { name: 'LEIAME.txt', data: 'pacote de teste' }]);
     const evil = Buffer.from(good);
     evil[evil.length - 40] ^= 0xff; // mesmo tamanho, outro conteúdo -> SHA-256 não confere
     srv = await startServer((req, res) => {
-      if (req.url === '/whisper.zip') slowSend(res, good);
+      if (req.url === '/ytdlp.zip') slowSend(res, good);
       else if (req.url === '/ruim.zip') slowSend(res, evil, { chunk: 128 * 1024, everyMs: 20 });
       else { res.writeHead(404); res.end(); }
     });
-    const whisper = { ...makeEntry({ base: srv.base, buf: good, id: 'whisper', version: 'b9999', file: 'whisper.zip', exe: 'whisper-cli.exe', key: KEY }), label: 'Whisper (transcrição)' };
-    const twitch = { ...makeEntry({ base: srv.base, buf: good, id: 'twitchdownloader', version: '9.9.9', file: 'ruim.zip', exe: 'whisper-cli.exe', key: KEY }), label: 'TwitchDownloaderCLI' };
+    const whisper = { ...makeEntry({ base: srv.base, buf: good, id: 'ytdlp', version: 'b9999', file: 'ytdlp.zip', exe: 'yt-dlp.exe', key: KEY }), label: 'yt-dlp (baixar vídeos)' };
+    const twitch = { ...makeEntry({ base: srv.base, buf: good, id: 'twitchdownloader', version: '9.9.9', file: 'ruim.zip', exe: 'yt-dlp.exe', key: KEY }), label: 'TwitchDownloaderCLI' };
     const testEnv = { NODE_ENV: 'test', BF_TEST_TOOL_ENTRIES: JSON.stringify([whisper, twitch]) };
 
     const userData = path.join(tmp, 'ud-teste');
     const toolsDir = path.join(userData, 'tools');
-    const exe = path.join(toolsDir, 'whisper', 'b9999', 'whisper-cli.exe');
+    const exe = path.join(toolsDir, 'ytdlp', 'b9999', 'yt-dlp.exe');
     let app = await h.launchApp(userData, { env: testEnv });
     let page = app.page;
     await showToolsTab(app, { video });
 
-    // as entradas de teste SUBSTITUEM as oficiais de mesmo id (whisper e twitchdownloader); deno e ytdlp seguem oficiais
-    assert.deepEqual(await page.eval(`[...document.querySelectorAll('${PANEL} li.tool:not(.sys)')].map((li) => li.dataset.tool)`).then((ids) => [...ids].sort()), OFFICIAL_IDS);
-    assert.deepEqual(await page.eval(`[...document.querySelectorAll('${PANEL} li.tool:not(.sys) .tool-tag')].map((n) => n.closest('li').dataset.tool).sort()`), ['twitchdownloader', 'whisper'], 'só as duas entradas de teste ganham o selo "teste local"');
-    for (const id of ['deno', 'ytdlp']) assert.doesNotMatch(await rowText(page, id), /teste local/, `${id} continua sendo a entrada oficial`);
-    const before = await page.eval('BF.state.tools.whisper'); // null (ou um whisper-cli do PATH desta máquina)
-    assert.ok(['missing', 'system'].includes(await rowState(page, 'whisper')));
-    const text0 = await rowText(page, 'whisper');
-    assert.match(text0, /Whisper/);
-    assert.match(text0, /transcrição/, 'a descrição do rótulo aparece sob o nome');
+    // as entradas de teste SUBSTITUEM as oficiais de mesmo id (ytdlp e twitchdownloader); deno segue oficial
+    assert.deepEqual(await page.eval(`[...document.querySelectorAll('${PANEL} li.tool:not(.sys)')].map((li) => li.dataset.tool)`).then((ids) => [...ids].sort()), LISTED_IDS);
+    assert.deepEqual(await page.eval(`[...document.querySelectorAll('${PANEL} li.tool:not(.sys) .tool-tag')].map((n) => n.closest('li').dataset.tool).sort()`), ['twitchdownloader', 'ytdlp'], 'só as duas entradas de teste ganham o selo "teste local"');
+    for (const id of ['deno']) assert.doesNotMatch(await rowText(page, id), /teste local/, `${id} continua sendo a entrada oficial`);
+    const before = await page.eval('BF.state.tools.ytdlp'); // null (ou um whisper-cli do PATH desta máquina)
+    assert.ok(['missing', 'system'].includes(await rowState(page, 'ytdlp')));
+    const text0 = await rowText(page, 'ytdlp');
+    assert.match(text0, /yt-dlp/);
+    assert.match(text0, /baixar vídeos/, 'a descrição do rótulo aparece sob o nome');
     assert.match(text0, /Site oficial · exemplo\.invalid/, 'origem resumida (o endereço completo fica em Detalhes e no title)');
-    assert.match(await page.eval(`document.querySelector('${row('whisper')} .tool-origin').title`), /^https:\/\/exemplo\.invalid\//);
+    assert.match(await page.eval(`document.querySelector('${row('ytdlp')} .tool-origin').title`), /^https:\/\/exemplo\.invalid\//);
     assert.match(text0, /teste local/, 'entrada de teste é marcada como tal (nunca passa por oficial)');
     assert.match(text0, /Origem: oficial:/);
     assert.doesNotMatch(await page.eval(`document.querySelector('${PANEL}').textContent`), /\bnull\b|undefined/);
     assert.match(text0, /download de/);
-    assert.equal(await page.eval(`document.querySelector('${row('whisper')} button[data-act="install"]').disabled`), false);
+    assert.equal(await page.eval(`document.querySelector('${row('ytdlp')} button[data-act="install"]').disabled`), false);
     await page.eval("window.__tc = 0; window.__phases = []; BF.bus.on('tools:changed', () => { window.__tc += 1; }); BF.on('tools:progress', (ev) => window.__phases.push(ev.phase)); true");
     step('entrada de teste aparece com estado, origem, tamanho do download e botão Instalar');
 
     // cancelar no meio do download: nada é alterado e não sobra pasta de trabalho
-    await page.eval(`document.querySelector('${row('whisper')} button[data-act="install"]').focus()`);
-    await click(page, 'whisper', 'install');
-    await watchRow(page, 'whisper', (s) => s.state === 'busy' && s.value >= 10);
+    await page.eval(`document.querySelector('${row('ytdlp')} button[data-act="install"]').focus()`);
+    await click(page, 'ytdlp', 'install');
+    await watchRow(page, 'ytdlp', (s) => s.state === 'busy' && s.value >= 10);
     assert.equal(await page.eval(`document.activeElement.dataset.act`), 'cancel', 'o foco acompanha o botão (teclado não se perde)');
-    await click(page, 'whisper', 'cancel');
-    await watchRow(page, 'whisper', (s) => s.state !== 'busy');
-    assert.match(await rowText(page, 'whisper'), /Instalação cancelada/);
-    assert.equal(await page.eval(`document.querySelector('${row('whisper')} .tool-error')`), null, 'cancelar não é erro');
-    await waitFor(page, `!document.querySelector('${row('whisper')} button[data-act="cancel"]')`);
+    await click(page, 'ytdlp', 'cancel');
+    await watchRow(page, 'ytdlp', (s) => s.state !== 'busy');
+    assert.match(await rowText(page, 'ytdlp'), /Instalação cancelada/);
+    assert.equal(await page.eval(`document.querySelector('${row('ytdlp')} .tool-error')`), null, 'cancelar não é erro');
+    await waitFor(page, `!document.querySelector('${row('ytdlp')} button[data-act="cancel"]')`);
     assert.deepEqual(listTree(toolsDir), [], 'cancelamento não deixou arquivos (nem .tmp, nem .part)');
-    assert.equal(await page.eval('BF.state.tools.whisper'), before);
+    assert.equal(await page.eval('BF.state.tools.ytdlp'), before);
     assert.equal(await page.eval('window.__tc'), 0, 'nada mudou: sem tools:changed');
     step('cancelar o download: linha volta ao normal, mensagem neutra, nada sobra no disco');
 
     // instalar de verdade, vendo o progresso
-    await click(page, 'whisper', 'install');
-    const samples = await watchRow(page, 'whisper', (s) => s.state === 'installed');
+    await click(page, 'ytdlp', 'install');
+    const samples = await watchRow(page, 'ytdlp', (s) => s.state === 'installed');
     const partial = samples.filter((s) => s.state === 'busy' && s.value > 0 && s.value < 100);
     assert.ok(new Set(partial.map((s) => s.value)).size >= 2, `a barra mostrou progresso parcial crescente: ${JSON.stringify(partial.map((s) => s.value))}`);
     assert.ok(samples.some((s) => /Baixando… \d+% · .* de .*\/s/.test(s.text || '')), 'texto com percentual, bytes e velocidade');
     const phases = await page.eval('[...new Set(window.__phases)]');
     for (const p of ['prepare', 'download', 'verify', 'extract', 'install', 'done']) assert.ok(phases.includes(p), `evento tools:progress da fase ${p} chegou ao renderer`);
-    assert.match(await rowText(page, 'whisper'), /Instalado · versão b9999/);
-    await waitFor(page, "/Whisper \\(transcrição\\) instalado/.test(document.getElementById('toasts').textContent)", 5000, 'aviso de instalação concluída');
+    assert.match(await rowText(page, 'ytdlp'), /Instalado · versão b9999/);
+    await waitFor(page, "/yt-dlp \\(baixar vídeos\\) instalado/.test(document.getElementById('toasts').textContent)", 5000, 'aviso de instalação concluída');
     assert.ok(fs.existsSync(exe), 'executável no lugar');
-    const manifest = JSON.parse(fs.readFileSync(path.join(toolsDir, 'whisper', 'b9999', 'manifest.json'), 'utf8'));
-    assert.deepEqual([manifest.id, manifest.version, manifest.sha256], ['whisper', 'b9999', whisper.assets[KEY].sha256]);
-    assert.ok(samePath(await page.eval('BF.state.tools.whisper'), exe), 'BF.state.tools aponta para a instalada pelo app');
+    const manifest = JSON.parse(fs.readFileSync(path.join(toolsDir, 'ytdlp', 'b9999', 'manifest.json'), 'utf8'));
+    assert.deepEqual([manifest.id, manifest.version, manifest.sha256], ['ytdlp', 'b9999', whisper.assets[KEY].sha256]);
+    assert.ok(samePath(await page.eval('BF.state.tools.ytdlp'), exe), 'BF.state.tools aponta para a instalada pelo app');
     assert.equal(await page.eval('window.__tc'), 1, 'BF.bus emitiu tools:changed uma vez');
     assert.equal(await page.eval('document.getElementById(\'toolsWarn\').hidden'), true);
     assert.deepEqual(listTree(toolsDir).filter((p) => p.startsWith('.tmp')), [], 'sem pasta de trabalho');
-    assert.equal(await page.eval(`document.querySelector('${row('whisper')} button[data-act="remove"]') !== null`), true);
+    assert.equal(await page.eval(`document.querySelector('${row('ytdlp')} button[data-act="remove"]') !== null`), true);
     step('instalar: barra de progresso real (parcial e crescente), fases, manifesto, BF.state.tools e BF.bus atualizados');
 
     // erro de integridade: mensagem compreensível, nada instalado
@@ -254,28 +258,28 @@ async function main() {
     await app.stop();
     app = await h.launchApp(userData, { env: testEnv });
     page = app.page;
-    assert.ok(samePath(await page.eval('BF.state.tools.whisper'), exe), 'ctx.tools lê a instalação do disco ao iniciar');
+    assert.ok(samePath(await page.eval('BF.state.tools.ytdlp'), exe), 'ctx.tools lê a instalação do disco ao iniciar');
     await showToolsTab(app, { video });
-    await waitFor(page, `document.querySelector('${row('whisper')}').dataset.state === 'installed'`, 15000, 'instalada após reiniciar');
+    await waitFor(page, `document.querySelector('${row('ytdlp')}').dataset.state === 'installed'`, 15000, 'instalada após reiniciar');
     await page.eval("window.__tc = 0; BF.bus.on('tools:changed', () => { window.__tc += 1; }); true");
     step('depois de reiniciar o app a ferramenta continua instalada e em uso');
 
     // remover: confirmar/cancelar o modal
-    await click(page, 'whisper', 'remove');
+    await click(page, 'ytdlp', 'remove');
     const asked = await answerModal(page, false);
-    assert.equal(asked.title, 'Remover Whisper (transcrição)?');
+    assert.equal(asked.title, 'Remover yt-dlp (baixar vídeos)?');
     assert.match(asked.message, /Se houver uma no sistema, ele volta a usá-la/);
     await sleep(200);
-    assert.equal(await rowState(page, 'whisper'), 'installed', 'cancelar a confirmação não remove');
+    assert.equal(await rowState(page, 'ytdlp'), 'installed', 'cancelar a confirmação não remove');
     assert.ok(fs.existsSync(exe));
-    await click(page, 'whisper', 'remove');
+    await click(page, 'ytdlp', 'remove');
     await answerModal(page, true);
-    await waitFor(page, `document.querySelector('${row('whisper')}').dataset.state !== 'installed'`, 20000, 'remoção concluída');
-    assert.ok(['missing', 'system'].includes(await rowState(page, 'whisper')));
-    assert.equal(await page.eval('BF.state.tools.whisper'), before, 'volta ao que havia antes (sistema ou nada)');
+    await waitFor(page, `document.querySelector('${row('ytdlp')}').dataset.state !== 'installed'`, 20000, 'remoção concluída');
+    assert.ok(['missing', 'system'].includes(await rowState(page, 'ytdlp')));
+    assert.equal(await page.eval('BF.state.tools.ytdlp'), before, 'volta ao que havia antes (sistema ou nada)');
     assert.equal(await page.eval('window.__tc'), 1, 'BF.bus emitiu tools:changed na remoção');
-    await waitFor(page, "/Whisper \\(transcrição\\) removido/.test(document.getElementById('toasts').textContent)", 5000, 'aviso de remoção');
-    assert.equal(fs.existsSync(path.join(toolsDir, 'whisper')), false);
+    await waitFor(page, "/yt-dlp \\(baixar vídeos\\) removido/.test(document.getElementById('toasts').textContent)", 5000, 'aviso de remoção');
+    assert.equal(fs.existsSync(path.join(toolsDir, 'ytdlp')), false);
     assert.deepEqual(listTree(toolsDir), [], 'nada sobrou na pasta de ferramentas');
     h.assertNoConsoleErrors(page);
     await app.stop();

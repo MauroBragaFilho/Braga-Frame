@@ -1,8 +1,10 @@
 'use strict';
 
 /**
- * Aba "Ferramentas" (dono: base). Duas partes, cada uma num cartão:
+ * Aba "Ferramentas" (dono: base). Três partes, cada uma num cartão:
  *  - FFmpeg e FFprobe, que vêm do sistema (com a versão detectada e, se faltarem, como instalar);
+ *  - a Transcrição (Whisper), que tem cartão próprio (renderer/features/transcription.js): UM botão instala o motor e o modelo, com a lista de modelos
+ *    e a aceleração pela placa NVIDIA. O motor e o pacote NVIDIA não aparecem de novo na lista de baixo; se a leitura do cartão falhar, voltam para ela;
  *  - as ferramentas oficiais que o app instala sozinho (as entradas de src/core/tools/entries): estado em selo,
  *    versão, origem resumida (o endereço completo fica em "Detalhes"), um único destaque por linha (Instalar, ou
  *    Atualizar só quando há versão nova; Remover é um ícone discreto), barra de progresso e erros explicados.
@@ -25,6 +27,11 @@
   const cancelling = new Set();
   const removing = new Set();
   const openDetails = new Set();
+
+  /** Ferramentas que o cartão da Transcrição cuida (BF.transcription); a lista comum só as mostra se esse cartão não puder ser lido. */
+  const TRANSCRIPTION_IDS = new Set(['whisper', 'whisper-cuda']);
+  const cardModeNow = () => Boolean(BF.transcription) && !BF.transcription.failed();
+  let lastCardMode = null; // o modo com que a aba foi desenhada pela última vez
 
   const TOOL_ICONS = { ytdlp: 'download', deno: 'terminal', twitchdownloader: 'forum', whisper: 'subtitles', 'whisper-cuda': 'memory', ffmpeg: 'movie', ffprobe: 'analytics' };
 
@@ -300,14 +307,18 @@
       return [intro, section('build', 'Ferramentas', null, skeleton())];
     }
     const missing = data.system.filter((s) => !s.found);
+    const cardMode = cardModeNow();
+    lastCardMode = cardMode;
+    const listed = cardMode ? data.tools.filter((t) => !TRANSCRIPTION_IDS.has(t.id)) : data.tools;
     return [
       intro,
       section('computer', 'No seu computador',
         button(rechecking ? 'Verificando…' : 'Verificar de novo', 'recheck', 'system', { disabled: rechecking, onClick: recheck }),
         el('ul', { class: 'tool-list' }, data.system.map(systemRow)),
         missing.length ? ffmpegHelp(data.platform, data.tools.find((t) => t.id === 'ffmpeg') || null) : null),
-      data.tools.length
-        ? section('inventory_2', data.host && data.host.embedded ? `Do ${hostLabel()} e instaladas pelo app` : 'Instaladas pelo app', null, el('ul', { class: 'tool-list' }, data.tools.map(toolRow)))
+      cardMode ? BF.transcription.card() : null,
+      listed.length
+        ? section('inventory_2', data.host && data.host.embedded ? `Do ${hostLabel()} e instaladas pelo app` : 'Instaladas pelo app', null, el('ul', { class: 'tool-list' }, listed.map(toolRow)))
         : null
     ];
   }
@@ -315,12 +326,16 @@
   /** Guarda qual botão está em foco para devolvê-lo depois de redesenhar (teclado não perde o lugar). */
   function captureFocus() {
     const active = document.activeElement;
-    if (!root || !active || !root.contains(active) || !active.dataset || !active.dataset.tool) return null;
+    if (!root || !active || !root.contains(active)) return null;
+    const card = BF.transcription ? BF.transcription.captureFocus() : null; // um botão do cartão da Transcrição
+    if (card) return { card };
+    if (!active.dataset || !active.dataset.tool) return null;
     return { tool: active.dataset.tool, act: active.dataset.act };
   }
 
   function restoreFocus(focus) {
     if (!focus) return;
+    if (focus.card) { BF.transcription.restoreFocus(focus.card); return; }
     const buttons = [...root.querySelectorAll('button')].filter((b) => b.dataset.tool === focus.tool && !b.disabled);
     const target = buttons.find((b) => b.dataset.act === focus.act) || buttons[0];
     if (target) target.focus();
@@ -470,9 +485,10 @@
       root = el('div', { class: 'tools' }, ...build().filter(Boolean));
       container.append(root);
     },
-    onShow() { load(); }
+    onShow() { load(); if (BF.transcription) BF.transcription.load(); }
   });
 
   BF.on('tools:progress', onProgress);
   BF.bus.on('tools:changed', load);
+  BF.bus.on('transcription:updated', () => { if (root && data && cardModeNow() !== lastCardMode) render(); }); // a leitura do cartão da Transcrição chegou (ou falhou): decide se o motor volta à lista
 })();

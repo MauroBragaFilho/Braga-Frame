@@ -83,6 +83,13 @@
       if (state.tjob) await BF.api('analysis:transcriptCancel', { jobId: state.tjob.id });
     }
 
+    /** "Instalar a transcrição": o cartão da aba Ferramentas instala o motor e o modelo que este vídeo usa e, no fim, devolve o usuário à Análise. */
+    async function installTranscription() {
+      if (!BF.transcription) return;
+      await BF.transcription.install({ modelId: (state.tengine && state.tengine.modelId) || null });
+      refreshTranscript();
+    }
+
     async function importTranscript() {
       const project = BF.state.project;
       if (!project || state.tjob) return;
@@ -225,11 +232,13 @@
       ui.tGenerate.textContent = t && t.draft && !has ? 'Continuar a transcrição' : (has ? 'Transcrever de novo' : 'Transcrever o vídeo');
       ui.tGenerate.disabled = running || state.running || !BF.state.project || !(eng && eng.ready);
       ui.tGenerate.title = eng && !eng.ready ? eng.reason : '';
+      // falta o motor ou o modelo (o FFmpeg tem o próprio aviso no topo): o botão leva ao que instala tudo de uma vez
+      ui.tInstall.hidden = running || !(eng && !eng.ready && eng.needs && (eng.needs.engine || eng.needs.model)) || !BF.transcription;
       ui.tImport.disabled = running || state.running || !BF.state.project;
       ui.tRemove.hidden = !(t && t.exists);
       ui.tRemove.disabled = running || state.running;
     }
 
-    return { refreshTranscript, generateTranscript, cancelTranscript, importTranscript, removeTranscript, useAlgorithm, buildEngine, renderEngine, renderTranscript };
+    return { refreshTranscript, generateTranscript, cancelTranscript, installTranscription, importTranscript, removeTranscript, useAlgorithm, buildEngine, renderEngine, renderTranscript };
   };
 })();

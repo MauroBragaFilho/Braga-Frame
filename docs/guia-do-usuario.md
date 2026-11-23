@@ -21,7 +21,9 @@ O FFmpeg é um programa de terceiros (a compilação "full" de Gyan Doshi, com l
 
 **Se preferir instalar por conta própria** (ou se o botão não aparecer porque o seu sistema não é um Windows de 64 bits): no Terminal do Windows digite `winget install Gyan.FFmpeg`, aperte Enter, feche o Braga Frame e abra de novo. Também dá para baixar em ffmpeg.org/download.html e pôr a pasta dele no PATH do Windows.
 
-Ainda em **Ferramentas** você pode instalar, com um clique, os programas opcionais: **yt-dlp** (baixar vídeos do YouTube e da Twitch), **Deno** (ajuda o yt-dlp), **TwitchDownloaderCLI** (chat da Twitch) e **Whisper** (legendas automáticas).
+Ainda em **Ferramentas** você pode instalar, com um clique, os programas opcionais: **yt-dlp** (baixar vídeos do YouTube e da Twitch), **Deno** (ajuda o yt-dlp) e **TwitchDownloaderCLI** (chat da Twitch).
+
+**Legendas automáticas e transcrição do vídeo:** em **Ferramentas**, o cartão **Transcrição** tem o botão **Instalar a transcrição**: ele baixa o motor (Whisper) e o modelo Pequeno, cerca de 190 MB no total, depois de uma confirmação que diz o tamanho e de onde vem (com tamanho e SHA-256 conferidos; dá para cancelar). Não precisa de vídeo aberto, e é só na primeira vez. A lista logo abaixo deixa baixar outros modelos (os maiores acertam mais, mas demoram) e apagar os que você não usa. Se você tem placa NVIDIA, o cartão oferece também a aceleração pela placa (opcional, download grande). Na aba **Análise** e na aba **Legendas**, quando falta algo, aparece o mesmo botão **Instalar a transcrição** e, ao terminar, você volta para onde estava.
 
 ## 3. O caminho principal, em cinco passos
 

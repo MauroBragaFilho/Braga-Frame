@@ -96,16 +96,17 @@ async function main() {
 
     // ---------- aba Ferramentas ----------
     await page.eval("BF.ui.selectTab('tools')");
-    await waitFor(page, `!!document.querySelector('[data-tool="whisper-cuda"]')`, 20000, 'linha do pacote CUDA');
+    await waitFor(page, `!!document.querySelector('[data-card="transcription"] [data-block="cuda"]')`, 20000, 'o bloco da aceleração NVIDIA no cartão da transcrição');
     const gpuLine = await page.eval("document.querySelector('[data-gpu=\"line\"]').textContent");
     assert.match(gpuLine, /Placa NVIDIA GeForce GTX 1650 · 4 GB — a transcrição pode usar a placa/);
-    const row = await page.eval("document.querySelector('[data-tool=\"whisper-cuda\"]').textContent");
-    assert.match(row, /Whisper para placa NVIDIA/);
-    assert.match(row, /download de 643 MB/, 'tamanho oficial do pacote (674539285 bytes)');
-    assert.match(row, /Download grande/);
-    assert.equal(await page.eval("document.querySelector('[data-tool=\"whisper-cuda\"] [data-act=\"install\"]').disabled"), false);
+    const row = await page.eval("document.querySelector('[data-card=\"transcription\"] [data-block=\"cuda\"]').textContent");
+    assert.match(row, /Aceleração pela placa NVIDIA ativa/, `o motor em uso já traz a aceleração CUDA; o bloco diz: ${row}`);
+    assert.match(row, /GeForce GTX 1650/, 'o bloco diz a placa');
+    assert.equal(await page.eval("!!document.querySelector('[data-card=\"transcription\"] button[data-act=\"install-cuda\"]')"), false, 'já está ativa: nada para baixar');
+    assert.equal(await page.eval("!!document.querySelector('[data-card=\"transcription\"] button[data-act=\"remove-cuda\"]')"), false, 'o motor não foi instalado pelo app: o app não oferece apagá-lo');
+    assert.equal(await page.eval("!!document.querySelector('#tabpanel-tools li.tool[data-tool=\"whisper-cuda\"]')"), false, 'o pacote CUDA não aparece de novo na lista comum');
     await shot(page, 'gpu-3-ferramentas');
-    step('a aba Ferramentas mostra a placa e o pacote CUDA com o aviso de download grande (nada foi baixado)');
+    step('a aba Ferramentas mostra a placa e a aceleração CUDA como ativa no cartão da transcrição (motor de fora do app: sem baixar nem remover)');
 
     h.assertNoConsoleErrors(page);
     await app.stop();

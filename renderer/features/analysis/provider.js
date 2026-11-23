@@ -21,6 +21,7 @@
     const switchRow = (...args) => A.switchRow(...args);
     const generateTranscript = (...args) => A.generateTranscript(...args);
     const cancelTranscript = (...args) => A.cancelTranscript(...args);
+    const installTranscription = (...args) => A.installTranscription(...args);
     const importTranscript = (...args) => A.importTranscript(...args);
     const removeTranscript = (...args) => A.removeTranscript(...args);
     const renderTranscript = (...args) => A.renderTranscript(...args);
@@ -369,13 +370,14 @@
       ui.tProgressText = el('span', { class: 'muted small', id: 'anTProgressText' });
       ui.tCancel = el('button', { type: 'button', id: 'anTCancel', class: 'sm', onclick: cancelTranscript }, 'Cancelar');
       ui.tProgressBox = el('div', { class: 'an-tprogress', id: 'anTProgress', hidden: true }, ui.tProgress, el('div', { class: 'an-split' }, ui.tProgressText, ui.tCancel));
+      ui.tInstall = el('button', { type: 'button', id: 'anTInstall', class: 'sm', hidden: true, onclick: installTranscription }, icon('download'), 'Instalar a transcrição');
       ui.tGenerate = el('button', { type: 'button', id: 'anTGenerate', class: 'sm', onclick: generateTranscript }, 'Transcrever o vídeo');
       ui.tImport = el('button', { type: 'button', id: 'anTImport', class: 'sm', onclick: importTranscript }, icon('upload_file'), 'Importar legenda…');
       ui.tRemove = el('button', { type: 'button', id: 'anTRemove', class: 'icon-btn', 'aria-label': 'Remover a transcrição guardada', title: 'Remover a transcrição guardada', onclick: removeTranscript }, icon('delete'));
       ui.tCard = el('div', { class: 'an-card', id: 'anTranscript' },
         el('div', { class: 'an-split' }, el('strong', {}, 'Transcrição do vídeo'), ui.tChip),
         ui.tLine, ui.tSub, ui.tProgressBox,
-        el('div', { class: 'an-card-actions' }, ui.tGenerate, ui.tImport, ui.tRemove));
+        el('div', { class: 'an-card-actions' }, ui.tInstall, ui.tGenerate, ui.tImport, ui.tRemove));
 
       // --- provedor
       ui.pChip = el('span', { class: 'bds-chip', id: 'anPChip' });

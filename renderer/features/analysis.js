@@ -578,6 +578,7 @@
     icon: (...args) => icon(...args),
     generateTranscript: (...args) => generateTranscript(...args),
     cancelTranscript: (...args) => cancelTranscript(...args),
+    installTranscription: (...args) => installTranscription(...args),
     importTranscript: (...args) => importTranscript(...args),
     removeTranscript: (...args) => removeTranscript(...args),
     renderTranscript: (...args) => renderTranscript(...args),
@@ -605,7 +606,7 @@
     restoreSuggestions: (...args) => restoreSuggestions(...args)
   };
   const { HUMOR_KEY, humorProfile, humorLists, buildHumor, renderHumor, refreshHumorExamples } = P.humor(A);
-  const { refreshTranscript, generateTranscript, cancelTranscript, importTranscript, removeTranscript, useAlgorithm, buildEngine, renderEngine, renderTranscript } = P.engine(A);
+  const { refreshTranscript, generateTranscript, cancelTranscript, installTranscription, importTranscript, removeTranscript, useAlgorithm, buildEngine, renderEngine, renderTranscript } = P.engine(A);
   const { renderResults, setListOrder, addAll, dismissAll, restoreAll } = P.results(A);
   const { scheduleResults, icon, field, switchRow, buildControls, fillControls, readControls, usableSignals, renderHints, renderRun, renderNotice } = P.controls(A);
   const { refreshAi, refreshEstimate, openModelList, renderSkill, buildAi, renderAi } = P.provider(A);
@@ -677,6 +678,7 @@
   BF.bus.on('project:changed', (ev) => { if (!ev || ev.reason !== 'analysis:settings') scheduleResults(); });
 
   BF.bus.on('tools:changed', () => { renderRun(); refreshTranscript(); });
+  BF.bus.on('transcription:changed', () => refreshTranscript()); // um modelo (ou o motor) foi instalado ou removido pelo cartão da aba Ferramentas
 
   // Preferências de análise (margens, durações, relevância mínima, palavras-chave) mudaram: a tela mostra os valores novos
   // (a execução sempre lê as preferências na hora, em prefValues). Se o usuário está digitando num ajuste, só a nota é atualizada.

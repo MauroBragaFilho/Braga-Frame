@@ -43,15 +43,22 @@ test('prontidão da transcrição: diz o motivo (sem motor, sem modelo) e fica p
     const a = await none.ctx.transcription.readiness({ modelId: 'tiny' });
     assert.equal(a.ready, false);
     assert.match(a.reason, /motor de transcrição/);
+    assert.match(a.reason, /aba Ferramentas/, 'o texto aponta o lugar que instala (as Legendas só abrem com um corte)');
+    assert.deepEqual(a.needs, { ffmpeg: false, engine: true, model: true }, 'sem o motor, falta o motor e o modelo (o ffmpeg está aí)');
     const b = await ready.ctx.transcription.readiness({ modelId: 'tiny' });
     assert.equal(b.ready, false);
     assert.match(b.reason, /modelo .* ainda não foi baixado/);
+    assert.match(b.reason, /aba Ferramentas/);
+    assert.deepEqual(b.needs, { ffmpeg: false, engine: false, model: true });
     assert.equal((await ready.fe.call('subtitles:installModel', { id: 'tiny' })).ok, true);
     const c = await ready.ctx.transcription.readiness({ modelId: 'tiny' });
     assert.equal(c.ready, true);
+    assert.deepEqual(c.needs, { ffmpeg: false, engine: false, model: false });
     assert.equal(c.device, 'CPU');
     assert.equal(c.busy, false);
-    assert.equal((await ready.ctx.transcription.readiness({ modelId: 'nao-existe' })).ready, false);
+    const unknown = await ready.ctx.transcription.readiness({ modelId: 'nao-existe' });
+    assert.equal(unknown.ready, false);
+    assert.equal(unknown.needs.model, false, 'modelo desconhecido: instalar não resolve, então a tela não oferece o botão');
     // o status do canal usa a mesma prontidão
     const st = await ready.fe.call('analysis:transcriptStatus', { projectId: 'p1', path: 'x.mp4', size: 1, duration: 10, modelId: 'tiny' });
     assert.equal(st.ok, true);

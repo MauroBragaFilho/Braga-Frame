@@ -25,7 +25,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const registry = require('../../core/tools/registry');
-const { ModelManager, DEFAULT_MODEL_ID, getModel } = require('../../core/subtitles/models');
+const { ModelManager, DEFAULT_MODEL_ID, getModel, loadTestModels } = require('../../core/subtitles/models');
 const { generateSubtitles, LANGUAGES, MAX_CUT_SECONDS } = require('../../core/subtitles/generate');
 const { detectBurnInSupport } = require('../../core/subtitles/burnIn');
 const { parseSubtitleFile } = require('../../core/subtitles/formats');
@@ -65,7 +65,10 @@ function register(ctx) {
   const catalog = ctx.toolCatalog || { entries: registry.getEntries() };
 
   const host = ctx.host || { embedded: false, name: null, tool: () => null, whisperModels: null };
-  const manager = new ModelManager({ dir: modelsDir, hostModels: host.whisperModels || null, hostName: host.name || null, ...(options.models || {}) });
+  // catálogo e servidor falsos dos modelos, só nos e2e (a variável de teste de src/core/subtitles/models.js: NODE_ENV=test, app não empacotado,
+  // servidor local); `options.models` (testes de unidade) tem a palavra final
+  const testModels = options.models ? null : loadTestModels({ env: ctx.env, isPackaged: ctx.app ? ctx.app.isPackaged : undefined });
+  const manager = new ModelManager({ dir: modelsDir, hostModels: host.whisperModels || null, hostName: host.name || null, ...(testModels || {}), ...(options.models || {}) });
   manager.cleanup(); // resíduos de um download que o app não chegou a terminar
   try { // pastas de trabalho de uma geração interrompida (o app foi fechado no meio)
     for (const name of fs.readdirSync(workRoot)) if (name.startsWith('sub-')) fs.rmSync(path.join(workRoot, name), { recursive: true, force: true });
@@ -140,6 +143,8 @@ function register(ctx) {
         unavailableReason: managedByHost ? `O motor vem do ${host.name || 'aplicativo'}; a aceleração por placa depende dele.` : (cudaEntry && !cudaAsset ? 'A aceleração NVIDIA só está disponível para Windows 64 bits.' : null),
         installed: Boolean(eng.cudaExe),
         path: eng.cudaExe,
+        // o pacote foi instalado pelo app (e então ele pode removê-lo)? Um motor CUDA do sistema (CORTE_WHISPER) ou do hospedeiro não é dele.
+        fromApp: Boolean(eng.cudaExe) && samePath(eng.cudaExe, eng.cudaFromApp),
         sizeBytes: cudaAsset ? cudaAsset.size : 0,
         version: cudaEntry ? cudaEntry.version : null,
         source: cudaEntry ? cudaEntry.source : null,
@@ -253,9 +258,9 @@ function register(ctx) {
     if (!model) throw fail('UNKNOWN_MODEL', `Modelo desconhecido: ${modelId}.`);
     if (!ctx.tools.ffmpeg) throw fail('NO_FFMPEG', 'O FFmpeg não foi encontrado. Instale-o e use "Verificar de novo" na aba Ferramentas.');
     const eng = resolveEngines();
-    if (!eng.any) throw fail('NO_ENGINE', 'O motor de transcrição (Whisper) não está instalado. Instale-o aqui na aba Legendas ou na aba Ferramentas.');
+    if (!eng.any) throw fail('NO_ENGINE', 'O motor de transcrição (Whisper) não está instalado. Instale-o na aba Ferramentas.');
     const installed = manager.installed(modelId);
-    if (!installed) throw fail('NO_MODEL', `O modelo ${model.label} ainda não foi baixado. Baixe-o antes de gerar a legenda.`);
+    if (!installed) throw fail('NO_MODEL', `O modelo ${model.label} ainda não foi baixado. Baixe-o na aba Ferramentas antes de gerar a legenda.`);
     if (running.size > 0) throw fail('BUSY', 'Já existe uma legenda sendo gerada. Espere terminar (ou cancele) e tente de novo.');
 
     const controller = new AbortController();
@@ -309,19 +314,23 @@ function register(ctx) {
   ctx.transcription = {
     prepareRun, releaseRun, describeRun,
     defaultModelId: DEFAULT_MODEL_ID,
-    /** O motor e o modelo estão prontos? (sem rodar nada) */
+    /**
+     * O motor e o modelo estão prontos? (sem rodar nada) `reason`: o primeiro motivo, em português. `needs`: tudo o que falta (o FFmpeg, o motor do
+     * Whisper e o modelo pedido), para a tela oferecer o botão que instala a transcrição mesmo quando falta mais de uma coisa.
+     */
     async readiness({ modelId = DEFAULT_MODEL_ID } = {}) {
       const model = getModel(modelId);
       const eng = resolveEngines();
       const installed = model ? manager.installed(modelId) : null;
+      const needs = { ffmpeg: !ctx.tools.ffmpeg, engine: !eng.any, model: Boolean(model) && !installed };
       let reason = '';
       if (!model) reason = `Modelo desconhecido: ${modelId}.`;
-      else if (!ctx.tools.ffmpeg) reason = 'O FFmpeg não foi encontrado. Instale-o e use "Verificar de novo" na aba Ferramentas.';
-      else if (!eng.any) reason = 'O motor de transcrição (Whisper) não está instalado. Instale-o na aba Legendas ou na aba Ferramentas.';
-      else if (!installed) reason = `O modelo ${model.label} ainda não foi baixado. Baixe-o na aba Legendas.`;
+      else if (needs.ffmpeg) reason = 'O FFmpeg não foi encontrado. Instale-o e use "Verificar de novo" na aba Ferramentas.';
+      else if (needs.engine) reason = 'O motor de transcrição (Whisper) não está instalado. Instale-o na aba Ferramentas.';
+      else if (needs.model) reason = `O modelo ${model.label} ainda não foi baixado. Baixe-o na aba Ferramentas.`;
       const hw = reason ? null : await hardwareStatus({ waitMs: 300 });
       return {
-        ready: !reason, reason, modelId, modelLabel: model ? model.label : modelId,
+        ready: !reason, reason, needs, modelId, modelLabel: model ? model.label : modelId,
         device: hw && hw.canUseGpu ? 'GPU' : 'CPU', busy: running.size > 0
       };
     }

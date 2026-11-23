@@ -279,3 +279,50 @@ test('resíduos de uma instalação interrompida são limpos ao iniciar', () => 
     assert.equal(fs.existsSync(stale), false);
   } finally { H.cleanup(dir); }
 });
+
+// ------------------------------------------------------------------ catálogo falso só para o e2e
+
+const { loadTestModels, TEST_ENV_VAR } = require('../src/core/subtitles/models');
+
+test('catálogo de teste dos modelos (só e2e): vale só com NODE_ENV=test, app não empacotado, http local e tudo fixado; o resto devolve null', () => {
+  const good = { baseUrl: 'http://127.0.0.1:4010', catalog: MODELS.map((m) => ({ ...m })) };
+  const env = (over = {}) => ({ NODE_ENV: 'test', [TEST_ENV_VAR]: JSON.stringify(good), ...over });
+  const ok = loadTestModels({ env: env(), isPackaged: false });
+  assert.deepEqual([ok.baseUrl, ok.allowLoopbackHttp, ok.catalog.map((m) => m.id)], [good.baseUrl, true, MODELS.map((m) => m.id)]);
+  assert.doesNotThrow(() => new ModelManager({ dir: H.tmpDir('bf-testmodels-'), ...ok }), 'as opções servem para o ModelManager');
+  const withBase = (baseUrl) => env({ [TEST_ENV_VAR]: JSON.stringify({ ...good, baseUrl }) });
+  const withCatalog = (catalog) => env({ [TEST_ENV_VAR]: JSON.stringify({ ...good, catalog }) });
+  const cases = [
+    ['sem a variável', { env: { NODE_ENV: 'test' }, isPackaged: false }],
+    ['variável vazia', { env: env({ [TEST_ENV_VAR]: '  ' }), isPackaged: false }],
+    ['NODE_ENV diferente de test', { env: env({ NODE_ENV: 'production' }), isPackaged: false }],
+    ['NODE_ENV ausente', { env: { [TEST_ENV_VAR]: JSON.stringify(good) }, isPackaged: false }],
+    ['app empacotado', { env: env(), isPackaged: true }],
+    ['isPackaged indefinido conta como empacotado', { env: env(), isPackaged: undefined }],
+    ['JSON inválido', { env: env({ [TEST_ENV_VAR]: '{não é json' }), isPackaged: false }],
+    ['não é um objeto', { env: env({ [TEST_ENV_VAR]: '[1]' }), isPackaged: false }],
+    ['endereço que não é local', { env: withBase('http://exemplo.invalid'), isPackaged: false }],
+    ['https (a fonte falsa é http local)', { env: withBase('https://127.0.0.1:4010'), isPackaged: false }],
+    ['endereço inválido', { env: withBase('isto não é um endereço'), isPackaged: false }],
+    ['catálogo vazio', { env: withCatalog([]), isPackaged: false }],
+    ['item sem SHA-256 fixado', { env: withCatalog([{ ...MODELS[0], sha256: 'curto' }]), isPackaged: false }],
+    ['item sem revisão fixada', { env: withCatalog([{ ...MODELS[0], revision: '' }]), isPackaged: false }]
+  ];
+  for (const [why, args] of cases) assert.equal(loadTestModels(args), null, why);
+});
+
+test('garantia: a variável de teste dos modelos só é lida em src/core/subtitles/models.js (nada no main, preload, renderer ou outros módulos)', () => {
+  const root = path.join(__dirname, '..');
+  const hits = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) { if (e.name !== 'node_modules') walk(full); } else if (e.name.endsWith('.js') || e.name.endsWith('.html')) {
+        if (fs.readFileSync(full, 'utf8').includes(TEST_ENV_VAR)) hits.push(path.relative(root, full).replace(/\\/g, '/'));
+      }
+    }
+  };
+  for (const dir of ['src', 'renderer']) walk(path.join(root, dir));
+  for (const file of ['main.js', 'preload.js']) if (fs.readFileSync(path.join(root, file), 'utf8').includes(TEST_ENV_VAR)) hits.push(file);
+  assert.deepEqual(hits, ['src/core/subtitles/models.js']);
+});

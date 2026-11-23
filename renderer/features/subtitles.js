@@ -528,6 +528,7 @@
     if (modelBusy.has(ev.id)) updateDownloadBox('model', ev.id, ev);
   });
   BF.bus.on('tools:changed', () => { if (root) loadStatus(); });
+  BF.bus.on('transcription:changed', () => { if (root) loadStatus(); }); // um modelo (ou o motor) foi instalado ou removido pelo cartão da aba Ferramentas
 
   // ---------- geração ----------
 
@@ -1096,18 +1097,39 @@
 
   // ---------- montagem ----------
 
+  /**
+   * Aviso no topo enquanto falta instalar a transcrição (o motor e/ou um modelo) e o bloco "Antes de gerar" ainda não aparece: ele só existe com um corte
+   * escolhido, e sem vídeo ou sem corte não há como chegar nele. O botão leva ao cartão da aba Ferramentas (BF.transcription), que instala tudo de uma vez.
+   */
+  function installHint() {
+    if (!status || !BF.transcription || (!status.engine.installed && !status.engine.available)) return null;
+    const needEngine = !status.engine.installed;
+    const needModel = !status.models.some((m) => m.installed);
+    if (!needEngine && !needModel) return null;
+    const dflt = status.models.find((m) => m.id === status.defaultModel) || status.models[0] || null;
+    const bytes = (needEngine ? status.engine.sizeBytes : 0) + (needModel && dflt ? dflt.sizeBytes : 0);
+    const what = needEngine && needModel ? 'do motor Whisper e de um modelo' : (needEngine ? 'do motor Whisper' : 'de um modelo');
+    return el('section', { class: 'panel subs-setup', dataset: { hint: 'install' }, 'aria-label': 'Instalar a transcrição' },
+      el('div', { class: 'subs-card-head' },
+        el('h3', { class: 'panel-title' }, 'Falta instalar a transcrição'),
+        el('span', { class: 'muted small' }, 'Só na primeira vez')),
+      el('p', { class: 'muted small' }, `A legenda automática precisa ${what} (cerca de ${fmtBytes(bytes)} para baixar). Dá para instalar agora, sem abrir um vídeo.`),
+      el('div', { class: 'subs-need-actions' },
+        el('button', { type: 'button', class: 'primary sm', dataset: { act: 'install-transcription' }, onclick: () => BF.transcription.install() }, icon('download'), 'Instalar a transcrição')));
+  }
+
   function build() {
     if (coreError) return [noteBox('error', coreError)];
     if (!S) return [el('p', { class: 'muted' }, 'Carregando…')];
-    if (!project()) return [emptyState('movie', 'Abra um vídeo', 'Depois é só escolher um corte para legendar.', { center: true })];
+    if (!project()) return [installHint(), emptyState('movie', 'Abra um vídeo', 'Depois é só escolher um corte para legendar.', { center: true })].filter(Boolean);
     const cuts = cutsList();
-    if (!cuts.length) return [emptyState('content_cut', 'Nenhum corte ainda', 'Marque um trecho no player e use “Salvar corte” para poder legendá-lo.', { center: true })];
+    if (!cuts.length) return [installHint(), emptyState('content_cut', 'Nenhum corte ainda', 'Marque um trecho no player e use “Salvar corte” para poder legendá-lo.', { center: true })].filter(Boolean);
     const cut = currentCut();
     const nodes = [cutPicker(cuts, cut)];
     if (statusError) nodes.push(noteBox('error', `Não foi possível ler a situação das legendas: ${statusError}`, { role: 'alert' }));
     if (!cut) {
-      nodes.push(emptyState('subtitles', 'Escolha um corte', 'Aqui você vê, cria e edita a legenda dele.', { center: true }));
-      return nodes;
+      nodes.push(installHint(), emptyState('subtitles', 'Escolha um corte', 'Aqui você vê, cria e edita a legenda dele.', { center: true }));
+      return nodes.filter(Boolean);
     }
     nodes.push(setupBlock(), ...mainBlock(cut), el('section', { class: 'panel subs-adv' }, styleDetails(cut), moreDetails(cut)));
     return nodes.filter(Boolean);

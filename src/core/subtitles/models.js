@@ -67,6 +67,30 @@ function validateModel(m) {
   return problems;
 }
 
+/** Variável SÓ de teste (e2e): catálogo e servidor falsos para baixar "modelos" de um servidor local. Ignorada em produção. */
+const TEST_ENV_VAR = 'BF_TEST_MODELS';
+
+/**
+ * Lê BF_TEST_MODELS = JSON `{ "baseUrl": "http://127.0.0.1:porta", "catalog": [{ id, label, file, dtw, description, revision, sizeBytes, sha256 }…] }`.
+ * Só vale com TODAS as condições (as mesmas das entradas de teste de ferramentas, src/core/tools/catalog.js): NODE_ENV === 'test', app NÃO empacotado
+ * (`isPackaged === false`; indefinido conta como empacotado), endereço http de loopback e todo item do catálogo com revisão, tamanho e SHA-256
+ * fixados. Qualquer falha devolve null (o app usa o catálogo oficial). Resultado: opções para o ModelManager.
+ * @returns {{ baseUrl:string, catalog:object[], allowLoopbackHttp:true }|null}
+ */
+function loadTestModels({ env = process.env, isPackaged } = {}) {
+  const raw = env ? env[TEST_ENV_VAR] : null;
+  if (typeof raw !== 'string' || raw.trim() === '') return null;
+  if (env.NODE_ENV !== 'test' || isPackaged !== false) return null;
+  let parsed;
+  try { parsed = JSON.parse(raw); } catch { return null; }
+  if (!parsed || typeof parsed !== 'object' || typeof parsed.baseUrl !== 'string' || !Array.isArray(parsed.catalog) || !parsed.catalog.length) return null;
+  let url;
+  try { url = new URL(parsed.baseUrl); } catch { return null; }
+  if (url.protocol !== 'http:' || !isLoopback(url.hostname)) return null;
+  if (parsed.catalog.some((m) => validateModel(m).length)) return null;
+  return { baseUrl: parsed.baseUrl, catalog: parsed.catalog, allowLoopbackHttp: true };
+}
+
 class ModelManager extends EventEmitter {
   /**
    * @param {{ dir:string, baseUrl?:string, catalog?:object[], allowLoopbackHttp?:boolean, platform?:string, arch?:string,
@@ -267,4 +291,4 @@ class ModelManager extends EventEmitter {
   }
 }
 
-module.exports = { MODELS, DEFAULT_MODEL_ID, REPO, BASE_URL, REVISION, getModel, entryIdFor, validateModel, ModelManager };
+module.exports = { MODELS, DEFAULT_MODEL_ID, REPO, BASE_URL, REVISION, TEST_ENV_VAR, getModel, entryIdFor, validateModel, loadTestModels, ModelManager };
