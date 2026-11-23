@@ -334,7 +334,7 @@
         subtitle ? el('div', { class: 'muted small prj-sub' }, subtitle) : null,
         el('div', { class: 'prj-chips' },
           el('span', { class: `bds-chip ${st.tone}`, title: st.hint }, st.label),
-          current ? el('span', { class: 'bds-chip bds-chip-accent' }, 'Aberto agora') : null,
+          current ? el('span', { class: 'bds-chip' }, 'Aberto agora') : null,
           p.fileMissing ? el('span', { class: 'bds-chip bds-chip-bad', title: p.source.path }, 'Vídeo não encontrado') : null,
           ...chips),
         el('div', { class: 'muted small' }, `Alterado ${ago(p.updatedAt)}`)),
@@ -365,7 +365,7 @@
           el('p', {}, 'Cada vídeo que você abrir vira um projeto, e ele aparece aqui para você continuar depois. Use Novo projeto para começar.'))));
       return;
     }
-    const search = el('input', { type: 'text', class: 'prj-search', placeholder: 'Buscar por título, canal ou jogo', value: S.query, 'aria-label': 'Buscar projetos', dataset: { act: 'search' } });
+    const search = el('input', { type: 'text', class: 'prj-search', placeholder: 'Buscar projetos', value: S.query, 'aria-label': 'Buscar projetos', dataset: { act: 'search' } });
     search.addEventListener('input', () => { S.query = search.value; drawList(); });
     const tabs = el('div', { class: 'bds-tabs', role: 'group', 'aria-label': 'Filtrar por estado' },
       FILTERS.map(([id, label]) => el('button', { type: 'button', class: 'bds-tab', 'aria-pressed': String(S.filter === id), dataset: { filter: id }, onclick: () => { S.filter = id; draw(); } }, label)));

@@ -347,7 +347,7 @@ async function main() {
     const dur = await page.eval("document.getElementById('video').duration");
     assert.ok(Math.abs(dur - 20) < 0.5, `duração ${dur}`);
     assert.match(await logText(page), /Projeto criado/);
-    assert.equal(await page.eval("document.getElementById('sourceName').textContent"), source);
+    assert.equal(await page.eval("document.getElementById('sourceName').textContent"), path.basename(source));
     assert.equal(await page.eval('BF.state.project.version'), 2);
     step(`fonte aberta e reproduzível no player (${dur.toFixed(1)} s)`);
 
@@ -436,7 +436,7 @@ async function main() {
     assert.equal(await page.eval("(async () => { BF.ui.selectTab('queue'); BF.player.video.currentTime = 1; BF.player.video.volume = 0; const p = BF.player.video.play(); if (p) await p; await new Promise((r) => setTimeout(r, 400)); const t = BF.player.video.currentTime; BF.player.pause(); BF.ui.selectTab('cuts'); return t > 1.1; })()"), true, 'o vídeo pode seguir tocando com o player oculto');
     // fora do editor o cabeçalho traz o caminho do vídeo aberto; no editor ele dá lugar a "Projetos › nome do projeto" (e2e do editor)
     await page.eval("BF.ui.selectTab('queue')");
-    assert.equal(await page.eval("document.getElementById('sourceName').textContent"), source, 'o nome do vídeo aberto fica no cabeçalho');
+    assert.equal(await page.eval("document.getElementById('sourceName').textContent"), path.basename(source), 'o nome do vídeo aberto fica no cabeçalho (o caminho inteiro só na dica)');
     assert.equal(await page.eval("getComputedStyle(document.getElementById('headerDivider')).display !== 'none'"), true);
     await page.eval("BF.ui.selectTab('cuts')");
     assert.equal(await page.eval("document.getElementById('crumbs').hidden"), false, 'no editor o cabeçalho mostra o projeto aberto');
@@ -700,7 +700,7 @@ async function main() {
       await page.send('Input.dispatchDragEvent', { type: 'dragOver', x: 300, y: 300, data: { items: [], files: [source], dragOperationsMask: 1 } });
       assert.equal(await page.eval("document.getElementById('app').classList.contains('drag')"), true, 'destaque ao arrastar');
       await page.send('Input.dispatchDragEvent', { type: 'drop', x: 300, y: 300, data: { items: [], files: [source], dragOperationsMask: 1 } });
-      await waitFor(page, `document.getElementById('sourceName').textContent === ${JSON.stringify(source)}`, 15000, 'vídeo aberto por arrastar e soltar');
+      await waitFor(page, `document.getElementById('sourceName').textContent === ${JSON.stringify(path.basename(source))}`, 15000, 'vídeo aberto por arrastar e soltar');
       assert.equal(await page.eval("document.getElementById('app').classList.contains('drag')"), false);
       step('arrastar e soltar um vídeo na janela o abre');
     } else {

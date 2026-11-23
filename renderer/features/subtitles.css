@@ -91,10 +91,10 @@
 .subs-form { display: flex; flex-direction: column; gap: 16px; padding-top: 14px; }
 .subs-group { display: flex; flex-direction: column; gap: 14px; }
 .subs-group + .subs-group { padding-top: 14px; border-top: 1px solid var(--line); }
-.subs-group-title { color: var(--muted); font: 700 11px/1 var(--font-body); letter-spacing: .06em; text-transform: uppercase; }
+.subs-group-title { color: var(--muted); font: 600 12px/1.2 var(--font-body); }
 .subs-range { display: flex; flex-direction: column; gap: 10px; }
 .subs-range-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.subs-range-out { color: var(--accent-text); font-size: var(--fs-label); font-weight: 700; font-variant-numeric: tabular-nums; }
+.subs-range-out { color: var(--accent-text); font-size: var(--fs-label); font-weight: 600; font-variant-numeric: tabular-nums; }
 .subs-color input[type=color] { width: 56px; height: 32px; padding: 3px; }
 .subs-hint { margin-top: 14px; }
 .subs-more-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }

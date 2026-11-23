@@ -5,7 +5,7 @@
  * empacotado; nesse modo o app não abre o navegador nem EXECUTA o instalador: só devolve o que executaria). O "instalador" baixado é um programa pequeno do
  * próprio Windows, para o PowerShell ler a assinatura DE VERDADE: a cópia é assinada (Valid), com 1 byte trocado vira um programa válido sem assinatura
  * (NotSigned), e bytes aleatórios não são um programa (assinatura inválida).
- *  - ao abrir, consulta UMA vez (só nome e versão do app) e baixa sozinho; a faixa vai de "Baixando…" a "pronta e verificada" com as 3 escolhas;
+ *  - ao abrir, consulta UMA vez (só nome e versão do app) e baixa sozinho; a faixa vai de "Baixando…" a "pronta para instalar" com as 3 escolhas;
  *  - legível nos dois temas; o cartão Geral mostra o estado, a assinatura e os botões do momento;
  *  - "Instalar quando eu fechar" agenda e dá para desfazer; "Instalar e reiniciar" pede ao instalador --updated --force-run e mostra "Instalando…";
  *  - reabrir o app com a atualização já baixada: a faixa volta na hora e NADA é baixado de novo;
@@ -87,19 +87,19 @@ async function main() {
     const stop = async (a) => { await a.stop(); apps.splice(apps.indexOf(a), 1); };
     const banner = (page) => page.eval("(() => { const b = document.getElementById('updateNote'); return { hidden: b.hidden, text: b.textContent, buttons: [...b.querySelectorAll('button')].map((x) => x.dataset.act) }; })()");
     const waitBanner = (page, re, what, ms = 20000) => waitFor(page, `(() => { const b = document.getElementById('updateNote'); return !b.hidden && ${re}.test(b.textContent); })()`, ms, what);
-    const waitReady = (page, ms = 20000) => waitBanner(page, '/pronta e verificada/', 'faixa: atualização pronta', ms);
+    const waitReady = (page, ms = 20000) => waitBanner(page, '/pronta para instalar|será instalada quando/', 'faixa: atualização pronta', ms);
     const files = (a) => (fs.existsSync(a.updates) ? fs.readdirSync(a.updates).sort() : []);
     const state = (page) => page.eval("BF.api('app:updateState')");
     const selectGeneral = async (page) => { await page.eval("BF.ui.selectTab('general')"); await waitFor(page, `!!document.querySelector('${PANEL} [data-section="updates"]')`, 10000, 'cartão Atualizações'); };
     const card = (page) => page.eval(`(() => { const s = document.querySelector('${PANEL} [data-section="updates"]'); const vis = (sel) => !s.querySelector(sel).hidden; return { text: s.querySelector('.gen-update-status').textContent, sub: s.querySelector('.gen-update-sub').hidden ? '' : s.querySelector('.gen-update-sub').textContent, kind: s.querySelector('.gen-update-status').dataset.kind, on: s.querySelector('#genUpdateSwitch').checked, auto: s.querySelector('#genUpdateAutoSwitch').checked, show: { download: vis('[data-act="download-update"]'), install: vis('[data-act="install-update"]'), quit: vis('[data-act="install-update-quit"]'), cancel: vis('[data-act="cancel-update"]'), open: vis('[data-act="open-update"]') }, checkDisabled: s.querySelector('[data-act="check-update"]').disabled }; })()`);
     const click = (page, sel) => page.eval(`document.querySelector(${j(sel)}).click()`);
 
-    // ---- 1) ao abrir: uma consulta (só nome e versão), baixa sozinho e a faixa vai de "Baixando…" a "pronta e verificada"
+    // ---- 1) ao abrir: uma consulta (só nome e versão), baixa sozinho e a faixa vai de "Baixando…" a "pronta para instalar"
     gh.slow = true;
     let a = await launch('ud1');
     let page = a.page;
     assert.equal((await banner(page)).hidden, true, 'a faixa começa escondida (a consulta é depois da abertura)');
-    await waitBanner(page, '/Baixando a versão 9\\.0\\.0 do Braga Frame… \\d+%/', 'faixa: baixando', STARTUP_WAIT);
+    await waitBanner(page, '/Baixando a versão 9\\.0\\.0… \\d+%/', 'faixa: baixando', STARTUP_WAIT);
     assert.deepEqual((await banner(page)).buttons, ['update-cancel']);
     await waitReady(page);
     gh.slow = false;
@@ -110,14 +110,14 @@ async function main() {
     assert.equal(req.headers['user-agent'], `BragaFrame/${pkg.version} (verificacao-de-versao)`);
     assert.equal(req.headers.authorization, undefined, 'sem credenciais');
     const b1 = await banner(page);
-    assert.match(b1.text, /A versão 9\.0\.0 do Braga Frame está pronta e verificada\. Instale por cima: seus projetos continuam como estão\./);
+    assert.match(b1.text, /Versão 9\.0\.0 pronta para instalar \(seus projetos continuam como estão\)\./);
     assert.deepEqual(b1.buttons, ['update-install-now', 'update-install-quit', 'update-dismiss']);
     assert.deepEqual(files(a), [nameOf('9.0.0'), 'pending.json'], 'só o instalador e o pending.json');
     assert.equal(sha(fs.readFileSync(path.join(a.updates, nameOf('9.0.0')))), sha(fx.unsigned), 'o arquivo é idêntico ao da Release');
     const s1 = await state(page);
     assert.deepEqual([s1.phase, s1.ready.version, s1.ready.sha256], ['ready', '9.0.0', sha(fx.unsigned)]);
     assert.match(s1.ready.signature.text, /Sem assinatura digital.*SHA-256/);
-    step('ao abrir: uma consulta (só nome e versão do app), baixa sozinho e a faixa vai de "Baixando…" a "pronta e verificada" com 3 escolhas; o arquivo é idêntico ao da Release');
+    step('ao abrir: uma consulta (só nome e versão do app), baixa sozinho e a faixa vai de "Baixando…" a "pronta para instalar" com 3 escolhas; o arquivo é idêntico ao da Release');
 
     // ---- 2) legível nos dois temas
     for (const theme of ['dark', 'light']) {
@@ -141,12 +141,12 @@ async function main() {
 
     // ---- 4) "Instalar quando eu fechar": agenda e dá para desfazer
     await click(page, '#updateNote [data-act="update-install-quit"]');
-    await waitBanner(page, '/Ela será instalada quando você fechar o Braga Frame/', 'faixa: agendada');
+    await waitBanner(page, '/será instalada quando você fechar o Braga Frame/', 'faixa: agendada');
     assert.deepEqual((await banner(page)).buttons, ['update-install-now', 'update-install-none']);
     assert.equal((await state(page)).installOnQuit, true);
     assert.match((await card(page)).sub, /Será instalada quando você fechar/);
     await click(page, '#updateNote [data-act="update-install-none"]');
-    await waitBanner(page, '/Instale por cima/', 'faixa: desagendada');
+    await waitBanner(page, '/pronta para instalar/', 'faixa: desagendada');
     assert.equal((await state(page)).installOnQuit, false);
     step('"Instalar quando eu fechar" agenda (a faixa e o cartão dizem) e "Não instalar ao fechar" desfaz');
 

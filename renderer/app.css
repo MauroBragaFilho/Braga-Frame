@@ -165,7 +165,7 @@ body {
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
 }
-h1, h2, h3 { font-family: var(--font-title); font-weight: 700; letter-spacing: -0.01em; }
+h1, h2, h3 { font-family: var(--font-title); font-weight: 600; letter-spacing: -0.01em; }
 .muted { color: var(--muted); }
 .small, .soft { font-size: 12px; }
 .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
@@ -269,7 +269,7 @@ button .material-symbols-rounded { font-size: 18px; flex: none; }
   min-height: 40px;
   padding: 0 24px;
   border-radius: var(--radius-pill);
-  font-weight: 700;
+  font-weight: 600;
 }
 .primary { background: var(--btn-bg); color: var(--btn-fg); border: 2px solid transparent; }
 .primary:hover:not(:disabled) { background: var(--btn-bg-hover); border-color: transparent; }
@@ -277,7 +277,7 @@ button .material-symbols-rounded { font-size: 18px; flex: none; }
 .secondary { background: transparent; color: var(--text); border: 2px solid color-mix(in srgb, var(--text) 25%, transparent); font-weight: 600; }
 .secondary:hover:not(:disabled) { background: var(--card-2); border-color: color-mix(in srgb, var(--text) 25%, transparent); }
 /* Perigo: vermelho sólido com texto branco; com .secondary vira só contorno vermelho */
-.danger { background: var(--danger-solid); color: var(--on-accent); border: 2px solid transparent; font-weight: 700; }
+.danger { background: var(--danger-solid); color: var(--on-accent); border: 2px solid transparent; font-weight: 600; }
 .danger:hover:not(:disabled) { background: var(--danger-solid-hover); border-color: transparent; }
 .secondary.danger { background: transparent; color: var(--danger-fg); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
 .secondary.danger:hover:not(:disabled) { background: var(--danger-bg); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
@@ -512,12 +512,12 @@ progress:indeterminate { background: linear-gradient(90deg, var(--card-2) 0 35%,
   height: 24px;
   color: var(--accent-text);
   font-size: 18px;
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: 1px;
   flex-shrink: 0;
 }
 .brand-text { min-width: 0; max-height: 40px; overflow: hidden; transition: opacity var(--dur-slow) var(--ease), max-height var(--dur-slow) var(--ease), width var(--dur-slow) var(--ease); }
-.brand-text strong { display: block; font-family: var(--font-title); font-size: 13px; line-height: 1.25; letter-spacing: 0.4px; text-transform: uppercase; color: var(--text); }
+.brand-text strong { display: block; font-family: var(--font-title); font-size: 15px; font-weight: 600; line-height: 1.25; color: var(--text); }
 .sidebar-toggle-btn {
   margin-left: auto;
   display: grid;
@@ -576,7 +576,7 @@ progress:indeterminate { background: linear-gradient(90deg, var(--card-2) 0 35%,
   background: var(--card-2);
   color: var(--text);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .tab-button[aria-selected="true"] .tab-badge { background: var(--accent-solid); color: var(--on-accent); } /* texto branco de 11 px sobre o vermelho puro dava 4,0:1; o sólido dá 4,6:1 */

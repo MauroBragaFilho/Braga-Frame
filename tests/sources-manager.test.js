@@ -107,12 +107,12 @@ test('A: download real com progresso, nome único e nada sobrescrito; pasta de t
 
     const first = await manager.download({ url, dir: dest });
     assert.equal(path.dirname(first.path), dest);
-    assert.equal(path.basename(first.path), 'clip [clip].mp4');
+    assert.equal(path.basename(first.path), 'clip.mp4');
     assert.equal(sha(first.path), sha(clip), 'o arquivo baixado é idêntico ao original');
     assert.equal(first.bytes, fs.statSync(clip).size);
     assert.equal(first.resumed, false);
     assert.equal(first.origin.type, 'vod');
-    assert.deepEqual(fs.readdirSync(dest), ['clip [clip].mp4'], 'nenhuma pasta .bf-vod nem .part sobra');
+    assert.deepEqual(fs.readdirSync(dest), ['clip.mp4'], 'nenhuma pasta .bf-vod nem .part sobra');
 
     // progresso real: bytes crescem, percentual nunca recua, termina em 100 e passa por "done"
     const mine = events.filter((e) => e.kind === 'download');
@@ -129,8 +129,8 @@ test('A: download real com progresso, nome único e nada sobrescrito; pasta de t
     const stat = fs.statSync(first.path);
     const second = await manager.download({ url, dir: dest });
     const third = await manager.download({ url, dir: dest });
-    assert.equal(path.basename(second.path), 'clip [clip] (2).mp4');
-    assert.equal(path.basename(third.path), 'clip [clip] (3).mp4');
+    assert.equal(path.basename(second.path), 'clip (2).mp4');
+    assert.equal(path.basename(third.path), 'clip (3).mp4');
     assert.equal(fs.statSync(first.path).mtimeMs, stat.mtimeMs);
     assert.equal(sha(first.path), sha(clip));
     assert.equal(fs.readdirSync(dest).length, 3);
@@ -348,7 +348,7 @@ test('B: download com chat do YouTube grava bf-chat-1, registra o VOD e o origin
     const dest = path.join(root, 'VODs');
 
     const res = await manager.download({ url: YT_URL, dir: dest, withChat: true });
-    assert.equal(path.basename(res.path), 'Me at the zoo [jNQXAC9IVRw].mp4');
+    assert.equal(path.basename(res.path), 'Me at the zoo.mp4');
     assert.equal(res.chatNote, null);
     assert.equal(res.chat.format, 'bf-chat-1');
     assert.equal(res.chat.platform, 'youtube');
@@ -529,7 +529,7 @@ test('B: download falso com erro no meio mantém o que baixou; mesmo vídeo nunc
     const { manager } = mkManager(root, { ytdlp: f.ytdlp });
     const dest = path.join(root, 'V');
     fs.mkdirSync(dest);
-    fs.writeFileSync(path.join(dest, 'Me at the zoo [jNQXAC9IVRw].mp4'), 'ARQUIVO DO USUÁRIO');
+    fs.writeFileSync(path.join(dest, 'Me at the zoo.mp4'), 'ARQUIVO DO USUÁRIO');
 
     f.yt({ metaFile: path.join(FIX, 'ytdlp-youtube-zoo.json'), downloadStderr: 'ERROR: [youtube] jNQXAC9IVRw: unable to download video data: HTTP Error 403: Forbidden', downloadCode: 1 });
     await assert.rejects(manager.download({ url: YT_URL, dir: dest }), (e) => e.code === 'FORBIDDEN' && e.details.retryable === true);
@@ -537,8 +537,8 @@ test('B: download falso com erro no meio mantém o que baixou; mesmo vídeo nunc
 
     f.yt({ metaFile: path.join(FIX, 'ytdlp-youtube-zoo.json') });
     const ok = await manager.download({ url: YT_URL, dir: dest });
-    assert.equal(path.basename(ok.path), 'Me at the zoo [jNQXAC9IVRw] (2).mp4');
-    assert.equal(fs.readFileSync(path.join(dest, 'Me at the zoo [jNQXAC9IVRw].mp4'), 'utf8'), 'ARQUIVO DO USUÁRIO');
+    assert.equal(path.basename(ok.path), 'Me at the zoo (2).mp4');
+    assert.equal(fs.readFileSync(path.join(dest, 'Me at the zoo.mp4'), 'utf8'), 'ARQUIVO DO USUÁRIO');
     assert.equal(ok.warnings.length, 0);
 
     // qualidade escolhida: o filtro de altura chega ao yt-dlp

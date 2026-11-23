@@ -56,8 +56,8 @@
 /* sobre */
 .gen-about { align-items: center; text-align: center; }
 .gen-about h3 { align-self: flex-start; }
-.gen-mark { display: grid; place-items: center; width: 64px; height: 64px; border-radius: var(--radius-md); background: var(--accent-light); color: var(--accent-text); font-family: var(--font-title); font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
-.gen-about-name { font-family: var(--font-title); font-size: var(--fs-section); letter-spacing: 0.02em; text-transform: uppercase; }
+.gen-mark { display: grid; place-items: center; width: 64px; height: 64px; border-radius: var(--radius-md); background: var(--accent-light); color: var(--accent-text); font-family: var(--font-title); font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
+.gen-about-name { font-family: var(--font-title); font-size: var(--fs-section); }
 .gen-about-tagline { font-size: 13px; }
 .gen-license { font-size: 12px; }
 .gen-credit { padding-top: 6px; border-top: 1px solid var(--line); align-self: stretch; }

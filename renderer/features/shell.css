@@ -19,7 +19,7 @@
   margin: 0;
   font-family: var(--font-title);
   font-size: var(--fs-title);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1.2;
   white-space: nowrap;
@@ -40,7 +40,7 @@
 .crumb-back:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--text); border: 0; }
 .crumb-back .material-symbols-rounded { font-size: 20px; }
 .crumb-sep { flex: none; color: var(--muted); font-size: 18px; }
-.crumb-name { min-width: 6ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-title); font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+.crumb-name { min-width: 6ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-title); font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
 .crumb-state { flex: none; }
 .has-crumbs .page-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .has-crumbs .header-divider, .has-crumbs .source-name { display: none; }

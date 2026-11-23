@@ -573,7 +573,7 @@ async function step3() {
   await sleep(200);
   assert.deepEqual(await order(), chrono);
   const infos = await rowsInfo();
-  assert.ok(infos.find((r) => r.id === ID.S1).chips.includes('Sugerido') && infos.find((r) => r.id === ID.M2).chips.includes('Manual'));
+  assert.ok(infos.find((r) => r.id === ID.S1).chips.includes('Sugerido') && !infos.find((r) => r.id === ID.M2).chips.includes('Manual'));
   log('revisão: ordem da live e por relevância (sugeridos primeiro), com os manuais depois');
 
   // ---- filtros ----
@@ -666,7 +666,7 @@ async function step3() {
   assert.deepEqual(adjusted.reviewedRange, [s2.start, s2.end], 'a revisão lembra o tempo de quando foi aprovado');
   const rowS2 = (await rowsInfo()).find((r) => r.id === ID.S2);
   assert.equal(rowS2.changed, 'true');
-  assert.ok(rowS2.chips.includes('Alterado') && rowS2.chips.includes('Revisado: aprovado'));
+  assert.ok(rowS2.chips.includes('Alterado') && rowS2.reviewed === 'true');
   await click('[data-focus="f-changed"]');
   await sleep(200);
   assert.deepEqual(await order(), [ID.S2], 'filtro "alterados desde a revisão"');
@@ -1782,7 +1782,7 @@ async function step9(W) {
     S.notVerified.push(`passo 9 (rede real) NÃO verificado: o download real falhou (${blocked.replace(/\s+/g, ' ').slice(0, 160)})`);
     return;
   }
-  const file = path.join(netDir, 'Me at the zoo [jNQXAC9IVRw].mp4');
+  const file = path.join(netDir, 'Me at the zoo.mp4');
   assert.ok(fs.existsSync(file), 'arquivo baixado');
   near(probeFile(file).duration, 19, 2, 'duração do vídeo baixado');
   await click(`${P} button[data-act="open-vod"]`);
@@ -1793,7 +1793,7 @@ async function step9(W) {
   assert.equal(origin.videoId, 'jNQXAC9IVRw');
   assert.equal(origin.channel, 'jawed');
   assert.equal(await ev('BF.state.project.meta.channel'), 'jawed');
-  assert.deepEqual(listDir(netDir), ['Me at the zoo [jNQXAC9IVRw].mp4'], 'só o arquivo final, sem pasta de trabalho nem .part');
+  assert.deepEqual(listDir(netDir), ['Me at the zoo.mp4'], 'só o arquivo final, sem pasta de trabalho nem .part');
   log('rede real: "Me at the zoo" baixado pela tela Novo projeto numa pasta temporária e aberto como projeto com origin vod (YouTube, jNQXAC9IVRw, canal jawed)');
 }
 

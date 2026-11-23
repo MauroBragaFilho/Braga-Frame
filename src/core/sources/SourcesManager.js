@@ -708,7 +708,7 @@ class SourcesManager extends EventEmitter {
       }
       this._emit(job, { phase: 'finishing', percent: 99.9, message: 'Guardando o arquivo…' }, { force: true });
       const meta = info.meta;
-      const base = vodFileBase({ title: meta.title, id: meta.videoId, dir: destDir, ext: path.extname(produced) });
+      const base = vodFileBase({ title: meta.title, dir: destDir, ext: path.extname(produced) });
       let finalPath;
       try {
         finalPath = await moveUnique(produced, destDir, base, path.extname(produced));

@@ -155,10 +155,10 @@ test('metadados e download real do vídeo público "Me at the zoo" com o yt-dlp 
       t.skip(`NÃO verificado: o download real falhou (${lastError.code}: ${lastError.message.slice(0, 120)})`);
       return;
     }
-    assert.equal(path.basename(result.path), 'Me at the zoo [jNQXAC9IVRw].mp4');
+    assert.equal(path.basename(result.path), 'Me at the zoo.mp4');
     const dur = Number(execFileSync(tools.ffprobe, ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1', result.path], { encoding: 'utf8', windowsHide: true }).trim());
     assert.ok(Math.abs(dur - 19) < 2, `duração ${dur}`);
-    assert.deepEqual(fs.readdirSync(dest), ['Me at the zoo [jNQXAC9IVRw].mp4'], 'sem pasta de trabalho nem .part');
+    assert.deepEqual(fs.readdirSync(dest), ['Me at the zoo.mp4'], 'sem pasta de trabalho nem .part');
     // vídeo + áudio vêm em arquivos separados: o percentual junta os dois e nunca recua
     const percents = events.filter((e) => e.percent !== null && e.phase !== 'done').map((e) => e.percent);
     for (let i = 1; i < percents.length; i++) assert.ok(percents[i] >= percents[i - 1], `percentual recuou: ${percents}`);

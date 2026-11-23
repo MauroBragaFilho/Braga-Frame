@@ -15,7 +15,6 @@
   const LOGIC = ['review/core', 'review/order', 'review/similarity', 'review/titles', 'review/batch', 'review/shortcuts', 'history/log', 'review/engine'];
   const DEFAULT_CATEGORIES = ['Jogada', 'Clutch', 'Engraçado', 'Fail', 'Hype', 'Dica'];
   const HISTORY_PAGE = 30;
-  const STATUS_TEXT = { approved: 'aprovado', rejected: 'rejeitado' };
   const SOURCE_TAG = { undo: 'desfeito', redo: 'refeito', restore: 'restauração', external: 'fora da revisão' };
   const OUTSIDE_TOLERANCE = 0.05; // s: mesmo critério da aba Preferências para "corte fora do novo intervalo"
 
@@ -380,11 +379,9 @@
 
   function chipsFor(cut, group) {
     const state = R.core.reviewState(cut);
-    const chips = [chip(state.origin === 'auto' ? 'Sugerido' : 'Manual', state.origin === 'auto' ? 'auto' : 'manual', state.origin === 'auto' ? 'Sugerido pela análise automática' : 'Marcado por você')];
-    if (state.reviewed) {
-      const when = cut.reviewedAt ? ` em ${new Date(cut.reviewedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}` : '';
-      chips.push(chip(`Revisado: ${STATUS_TEXT[cut.status]}`, `reviewed ${cut.status}`, `Revisado${when}`));
-    }
+    // a origem só vira selo quando informa algo: "Sugerido" (veio da análise); o corte marcado à mão é o caso comum e não leva selo
+    const chips = state.origin === 'auto' ? [chip('Sugerido', 'auto', 'Sugerido pela análise automática')] : [];
+    // a decisão (aprovado/rejeitado) já aparece no botão aceso e no tom do cartão: não vira selo repetido
     if (state.changed) {
       const [rs, re] = state.reviewedRange;
       chips.push(chip('Alterado', 'changed', `O início ou o fim mudou depois da revisão (era ${fmt(rs)} → ${fmt(re)}). Aprove ou rejeite de novo, ou use “Marcar como revisado”, para confirmar.`));
@@ -601,7 +598,8 @@
     el('label', { class: 'pick' }, pick),
     thumbNode(cut),
     el('div', { class: 'times' },
-      `${fmt(cut.start)} → ${fmt(cut.end)} (${secs(length)})`,
+      // a duração sem a casa decimal quando é redonda ("14 s"): o ",0" ao lado do ".0" do tempo parecia dois formatos
+      `${fmt(cut.start)} → ${fmt(cut.end)} · ${Number.isInteger(Math.round(length * 10) / 10) ? `${Math.round(length)} s` : secs(length)}`,
       R.core.isNum(cut.relevance) ? ` · relevância ${Math.round(cut.relevance * 100)}%` : ''),
     el('div', { class: 'chips' }, chipsFor(cut, group)),
     el('div', { class: 'actions' },

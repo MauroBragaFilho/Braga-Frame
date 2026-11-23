@@ -203,7 +203,7 @@ test('download pelo IPC: eventos sources:progress, ctx.toolUsage durante o traba
 
     const res = await running;
     assert.equal(res.ok, true);
-    assert.equal(path.basename(res.path), 'Me at the zoo [jNQXAC9IVRw].mp4');
+    assert.equal(path.basename(res.path), 'Me at the zoo.mp4');
     assert.equal(res.origin.type, 'vod');
     assert.equal(res.origin.videoId, 'jNQXAC9IVRw');
     assert.equal(ctx.toolUsage.inUse('ytdlp', 'ytdlp'), null, 'terminou: liberado');

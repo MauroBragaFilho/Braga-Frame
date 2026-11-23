@@ -2,7 +2,7 @@
 
 /**
  * Tela "Início" (aba `home`; tela larga, funciona sem vídeo aberto e é a aba inicial): boas-vindas, atalhos e os projetos recentes.
- *   - Boas-vindas: "Bem-vindo de volta!" (ou "Bem-vindo ao <nome do app>!" enquanto não há nenhum projeto). O app não tem perfil de usuário,
+ *   - Título que diz o que fazer aqui ("Corte a próxima live", ou "Comece por um vídeo" enquanto não há nenhum projeto), sem saudação. O app não tem perfil de usuário,
  *     então a saudação não leva nome.
  *   - Busca: enquanto se digita, mostra os projetos que casam (título, canal ou jogo: o mesmo critério da aba Projetos, de onde vem
  *     BF.projects.matchesQuery); Enter (ou "Ver todos os resultados") abre a aba Projetos já com o texto.
@@ -28,15 +28,14 @@
   const icon = (name, cls) => el('span', { class: `material-symbols-rounded${cls ? ` ${cls}` : ''}`, 'aria-hidden': 'true' }, name);
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
   const lib = () => BF.projects; // stateOf, nameOf, duration, ago, matchesQuery, typeIcon, thumbKey, search (features/projects.js)
-  const appName = () => (BF.state.app && BF.state.app.name) || 'Braga Frame';
   const byUpdated = (a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''));
-  const TAGLINE = 'Seus projetos, cortes e exportações em um só lugar.';
+  const TAGLINE = 'Abra um vídeo novo ou continue um projeto: tudo fica salvo neste computador.';
 
   /** A saudação e a frase embaixo dela, conforme o que já existe. */
   function greeting() {
-    if (S.list === null) return { title: 'Bem-vindo!', text: TAGLINE };
-    if (!S.list.length) return { title: `Bem-vindo ao ${appName()}!`, text: 'Comece trazendo um vídeo: arraste o arquivo para a janela ou use Novo projeto.' };
-    return { title: 'Bem-vindo de volta!', text: TAGLINE };
+    if (S.list === null) return { title: 'Corte a próxima live', text: TAGLINE };
+    if (!S.list.length) return { title: 'Comece por um vídeo', text: 'Arraste o arquivo da live ou da gameplay para a janela, ou use Novo projeto.' };
+    return { title: 'Corte a próxima live', text: TAGLINE };
   }
 
   /** O que a lista mostra agora: os recentes, ou os resultados da busca (de TODOS os projetos). */
@@ -154,7 +153,7 @@
         el('div', { class: 'prj-chips' },
           el('span', { class: `bds-chip ${st.tone}`, title: st.hint }, st.label),
           p.cutCount ? el('span', { class: 'bds-chip' }, plural(p.cutCount, 'corte', 'cortes')) : null,
-          current ? el('span', { class: 'bds-chip bds-chip-accent' }, 'Aberto agora') : null,
+          current ? el('span', { class: 'bds-chip' }, 'Aberto agora') : null,
           p.fileMissing ? el('span', { class: 'bds-chip bds-chip-bad', title: p.source.path }, 'Vídeo não encontrado') : null),
         el('div', { class: 'muted small' }, `Alterado ${lib().ago(p.updatedAt)}`)),
       el('div', { class: 'prj-actions' },
@@ -215,7 +214,7 @@
     box.title = el('h2', { class: 'home-title' }, greeting().title);
     box.lead = el('p', { class: 'home-lead' }, greeting().text);
     box.search = el('input', {
-      type: 'text', class: 'home-search-input', placeholder: 'Buscar por título, canal ou jogo…', 'aria-label': 'Buscar projetos', autocomplete: 'off', spellcheck: 'false',
+      type: 'text', class: 'home-search-input', placeholder: 'Buscar projetos', 'aria-label': 'Buscar projetos', autocomplete: 'off', spellcheck: 'false',
       dataset: { act: 'search' },
       oninput: (event) => { S.query = event.target.value; drawList(); },
       onkeydown: (event) => {

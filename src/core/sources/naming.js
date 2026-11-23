@@ -14,13 +14,14 @@ const INVISIBLE = new RegExp('[\u200b\u200e\u200f\u202a-\u202e\u2066-\u2069\ufef
 const MAX_PATH_BUDGET = 240; // o Windows clássico limita o caminho completo a 260 caracteres
 
 /**
- * Nome-base do arquivo de um VOD: "<título> [<id>]". Troca caracteres proibidos, evita nomes reservados do
- * Windows, tira pontos/espaços do fim e encurta o título para o caminho completo caber.
- * @param {{ title:string, id:string, dir:string, ext?:string }} o
+ * Nome-base do arquivo de um VOD: só o título da transmissão (o código do vídeo, como o id do YouTube, NÃO vai no nome: o vínculo
+ * com a origem fica guardado no projeto e no registro de downloads; dois vídeos de mesmo título viram "título (2)" pelo moveUnique,
+ * nunca um sobrescreve o outro). Troca caracteres proibidos, evita nomes reservados do Windows, tira pontos/espaços do fim e
+ * encurta o título para o caminho completo caber.
+ * @param {{ title:string, dir:string, ext?:string }} o
  */
-function vodFileBase({ title, id, dir, ext = '.mp4' }) {
-  const idPart = id ? ` [${String(id).replace(/[^A-Za-z0-9_-]/g, '')}]` : '';
-  const room = Math.max(24, MAX_PATH_BUDGET - String(dir).length - 1 - idPart.length - ext.length - 6); // 6 = " (999)"
+function vodFileBase({ title, dir, ext = '.mp4' }) {
+  const room = Math.max(24, MAX_PATH_BUDGET - String(dir).length - 1 - ext.length - 6); // 6 = " (999)"
   let t = String(title || '')
     .normalize('NFC')
     .replace(/[\p{Cc}<>:"/\\|?*]/gu, ' ')
@@ -31,7 +32,7 @@ function vodFileBase({ title, id, dir, ext = '.mp4' }) {
   t = t.replace(/[. ]+$/g, '');
   if (!t) t = 'video';
   if (RESERVED.test(t)) t = `_${t}`;
-  return `${t}${idPart}`;
+  return t;
 }
 
 const BUSY_CODES = ['EBUSY', 'EPERM', 'EACCES'];

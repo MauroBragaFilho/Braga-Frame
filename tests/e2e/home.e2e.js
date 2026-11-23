@@ -2,13 +2,13 @@
 
 /**
  * E2E da tela Início: abre o app Electron de verdade (perfil temporário) com projetos reais gravados em disco e vídeos de verdade (ffmpeg) e confere
- *  - é a aba inicial sem vídeo aberto (a primeira do menu, com o ícone certo), em tela larga, com a saudação "Bem-vindo de volta!";
+ *  - é a aba inicial sem vídeo aberto (a primeira do menu, com o ícone certo), em tela larga, com o título "Corte a próxima live";
  *  - os 3 projetos mais recentes, do mais novo ao mais antigo, com o estado, os cortes e a origem de cada um, e a MINIATURA de verdade (320 px);
  *  - o desenho: brilho vermelho no cartão de boas-vindas, atalhos à vista, nada passando da largura da janela (nem estreita), tema claro;
  *  - a busca: digitar (de verdade) mostra os resultados de TODOS os projetos; Escape limpa; Enter e "Ver todos os resultados" abrem Projetos já com o texto;
  *  - os atalhos: "Novo projeto" (pelo mouse e pelo teclado) e "Continuar de onde parou" (abre o mais recente e vai para Cortes), "Abrir" num cartão;
  *  - o vídeo que sumiu: aviso no cartão, sem miniatura e sem abrir, "Ver em Projetos" e o atalho de continuar que pula para o próximo;
- *  - primeira vez (perfil vazio): "Bem-vindo ao <nome>!", a explicação e nenhum "Ver todos"; abrir um vídeo e voltar à Início mostra o projeto novo.
+ *  - primeira vez (perfil vazio): "Comece por um vídeo", a explicação e nenhum "Ver todos"; abrir um vídeo e voltar à Início mostra o projeto novo.
  * Uso: node tests/e2e/home.e2e.js     (BF_E2E_SHOTDIR=C:\pasta guarda capturas da janela)
  */
 const assert = require('node:assert/strict');
@@ -75,10 +75,10 @@ async function main() {
     assert.equal(await ev("document.querySelector('#tabBar [role=tab]').dataset.tab"), 'home', 'e a primeira do menu');
     assert.deepEqual(await ev("(() => { const b = document.getElementById('tab-home'); const i = b.querySelector('.material-symbols-rounded'); return [i.textContent, Math.round(i.getBoundingClientRect().width), b.querySelector('.tab-label').textContent]; })()"), ['home', 22, 'Início']);
     assert.equal(await ev("document.querySelector('.player').getBoundingClientRect().width"), 0, 'tela larga: sem player');
-    assert.equal(await ev(`document.querySelector('${HOME} .home-title').textContent`), 'Bem-vindo de volta!');
-    assert.equal(await ev(`document.querySelector('${HOME} .home-lead').textContent`), 'Seus projetos, cortes e exportações em um só lugar.');
+    assert.equal(await ev(`document.querySelector('${HOME} .home-title').textContent`), 'Corte a próxima live');
+    assert.equal(await ev(`document.querySelector('${HOME} .home-lead').textContent`), 'Abra um vídeo novo ou continue um projeto: tudo fica salvo neste computador.');
     assert.doesNotMatch(await ev(`document.querySelector('${HOME}').textContent`), /Mauro(?!BragaFilho)/, 'o app não tem nome de usuário');
-    step('Início é a aba inicial (a primeira do menu, ícone home, tela larga) e diz "Bem-vindo de volta!"');
+    step('Início é a aba inicial (a primeira do menu, ícone home, tela larga) e diz "Corte a próxima live"');
 
     // ---- os recentes
     const recent = await cards();
@@ -104,7 +104,7 @@ async function main() {
         primary: q('[data-act=new]').classList.contains('primary'), pageFits: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
         searchIcon: Math.round(q('.home-search-icon').getBoundingClientRect().width), noOpenVideoShortcut: !q('[data-act=open-video]') };
     })()`);
-    assert.deepEqual(look, { glow: true, radius: '24px', newVisible: true, resumeVisible: true, searchVisible: true, inside: true, primary: true, pageFits: true, searchIcon: 22, noOpenVideoShortcut: true });
+    assert.deepEqual(look, { glow: false, radius: '24px', newVisible: true, resumeVisible: true, searchVisible: true, inside: true, primary: true, pageFits: true, searchIcon: 22, noOpenVideoShortcut: true });
     await shot(page, 'inicio-escuro');
     const narrow = await page.send('Emulation.setDeviceMetricsOverride', { width: 680, height: 820, deviceScaleFactor: 1, mobile: false });
     assert.ok(!narrow.error, `Emulation.setDeviceMetricsOverride: ${narrow.error && narrow.error.message}`);
@@ -216,8 +216,8 @@ async function main() {
     app = await h.launchApp(first, {});
     ({ page } = app);
     await waitFor(page, `!!document.querySelector('${HOME} .home-empty')`, 20000, 'a explicação sem projetos');
-    assert.equal(await ev(`document.querySelector('${HOME} .home-title').textContent`), 'Bem-vindo ao Braga Frame!');
-    assert.equal(await ev(`document.querySelector('${HOME} .home-lead').textContent`), 'Comece trazendo um vídeo: arraste o arquivo para a janela ou use Novo projeto.');
+    assert.equal(await ev(`document.querySelector('${HOME} .home-title').textContent`), 'Comece por um vídeo');
+    assert.equal(await ev(`document.querySelector('${HOME} .home-lead').textContent`), 'Arraste o arquivo da live ou da gameplay para a janela, ou use Novo projeto.');
     assert.deepEqual(await ev(`(() => [document.querySelector('${HOME} [data-act=resume]').getClientRects().length, document.querySelector('${HOME} [data-act=all]').getClientRects().length])()`), [0, 0], 'sem projetos não há "Continuar" nem "Ver todos"');
     assert.equal(await ev(`document.querySelector('${HOME} .home-empty strong').textContent`), 'Nenhum projeto ainda');
     await shot(page, 'inicio-primeira-vez');
@@ -225,9 +225,9 @@ async function main() {
     await ev(`BF.openSource(${j(vOld1)})`);
     await waitFor(page, `BF.state.project && BF.state.project.source.path === ${j(vOld1)}`, 30000, 'o vídeo aberto');
     await ev("BF.ui.selectTab('home')");
-    await waitFor(page, `document.querySelectorAll('${HOME} .prj-card').length === 1 && document.querySelector('${HOME} .home-title').textContent === 'Bem-vindo de volta!'`, 15000, 'o projeto novo na lista e a saudação de volta');
+    await waitFor(page, `document.querySelectorAll('${HOME} .prj-card').length === 1 && document.querySelector('${HOME} .home-title').textContent === 'Corte a próxima live'`, 15000, 'o projeto novo na lista e o título de volta');
     assert.deepEqual(await cards().then((c) => [c[0].title, c[0].chips]), ['Aula de música', ['Novo', 'Aberto agora']]);
-    step('primeira vez: "Bem-vindo ao Braga Frame!" com a explicação; depois de abrir um vídeo a Início lista o projeto e diz "Bem-vindo de volta!"');
+    step('primeira vez: "Comece por um vídeo" com a explicação; depois de abrir um vídeo a Início lista o projeto e diz "Corte a próxima live"');
     h.assertNoConsoleErrors(page, [/Autofill|favicon/i]);
     await app.stop(); app = null;
 

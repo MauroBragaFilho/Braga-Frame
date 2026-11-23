@@ -75,13 +75,14 @@
     let text;
     let buttons = [];
     if (state.phase === 'downloading') {
-      text = `Baixando a versão ${v} do Braga Frame… ${state.download ? Math.floor(state.download.percent) : 0}%`;
+      text = `Baixando a versão ${v}… ${state.download ? Math.floor(state.download.percent) : 0}%`;
       buttons = [btn('Cancelar', 'update-cancel', cancel)];
     } else if (state.phase === 'installing') {
       text = `Instalando a versão ${state.ready ? state.ready.version : v}… o Braga Frame vai reiniciar.`;
     } else if (state.phase === 'ready') {
-      const when = state.installOnQuit ? 'Ela será instalada quando você fechar o Braga Frame.' : 'Instale por cima: seus projetos continuam como estão.';
-      text = `A versão ${state.ready.version} do Braga Frame está pronta e verificada. ${when}`;
+      text = state.installOnQuit
+        ? `A versão ${state.ready.version} será instalada quando você fechar o Braga Frame.`
+        : `Versão ${state.ready.version} pronta para instalar (seus projetos continuam como estão).`;
       buttons = state.installOnQuit
         ? [btn('Instalar e reiniciar agora', 'update-install-now', () => install('now'), true), btn('Não instalar ao fechar', 'update-install-none', () => install('none'))]
         : [btn('Instalar e reiniciar', 'update-install-now', () => install('now'), true), btn('Instalar quando eu fechar', 'update-install-quit', () => install('quit')), btn('Agora não', 'update-dismiss', dismiss)];

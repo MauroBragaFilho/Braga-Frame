@@ -126,27 +126,27 @@ test('registra a aba "home" (Início, ordem 1, ícone home) e mostra a saudaçã
   await idle();
   assert.equal(env.q('.home-hero').attrs['aria-label'], 'Boas-vindas');
   const search = env.q('[data-act="search"]');
-  assert.equal(search.attrs.placeholder, 'Buscar por título, canal ou jogo…', 'o app não tem tags: a busca diz o que procura de verdade');
+  assert.equal(search.attrs.placeholder, 'Buscar projetos', 'curto: a busca é dos projetos');
   assert.equal(search.attrs['aria-label'], 'Buscar projetos');
   assert.deepEqual(env.all('.home-actions button').map((b) => [b.dataset.act, b.textContent]), [['new', 'addNovo projeto'], ['resume', 'play_arrowContinuar de onde parou']]);
   assert.equal(env.q('[data-act="new"]').classList.contains('primary'), true, 'uma ação principal por tela');
   assert.equal(env.q('[data-act="open-video"]'), null, '"Abrir vídeo" já está no cabeçalho de todas as abas');
 });
 
-test('saudação: "Bem-vindo!" enquanto carrega, "Bem-vindo de volta!" com projetos e "Bem-vindo ao <nome>!" sem nenhum; o app não tem nome de usuário', async () => {
+test('título do Início: diz o que fazer aqui (sem saudação nem exclamação), com e sem projetos', async () => {
   let release;
   const gate = new Promise((resolve) => { release = resolve; });
   const env = load({ api: { 'project:list': async () => { await gate; return { ok: true, projects: FIVE() }; } } });
-  assert.deepEqual(env.hero(), { title: 'Bem-vindo!', lead: 'Seus projetos, cortes e exportações em um só lugar.' });
+  assert.deepEqual(env.hero(), { title: 'Corte a próxima live', lead: 'Abra um vídeo novo ou continue um projeto: tudo fica salvo neste computador.' });
   assert.equal(env.resume().hidden, true);
   release();
   await idle();
-  assert.deepEqual(env.hero(), { title: 'Bem-vindo de volta!', lead: 'Seus projetos, cortes e exportações em um só lugar.' });
+  assert.deepEqual(env.hero(), { title: 'Corte a próxima live', lead: 'Abra um vídeo novo ou continue um projeto: tudo fica salvo neste computador.' });
   assert.doesNotMatch(env.q('.home-title').textContent + env.q('.home-lead').textContent, /Mauro/);
 
   const empty = load({ list: [], appName: 'Outro Nome' });
   await idle();
-  assert.deepEqual(empty.hero(), { title: 'Bem-vindo ao Outro Nome!', lead: 'Comece trazendo um vídeo: arraste o arquivo para a janela ou use Novo projeto.' }, 'o nome vem do app (appInfo), não de um texto fixo');
+  assert.deepEqual(empty.hero(), { title: 'Comece por um vídeo', lead: 'Arraste o arquivo da live ou da gameplay para a janela, ou use Novo projeto.' }, 'o nome vem do app (appInfo), não de um texto fixo');
 });
 
 test('"Novo projeto" leva à tela Novo projeto (a aba sources)', async () => {
@@ -427,7 +427,7 @@ test('erro ao listar os projetos: a tela diz o motivo, a saudação continua neu
   await idle();
   assert.equal(env.q('.home-note .empty-state strong').textContent, 'Não foi possível listar os projetos');
   assert.equal(env.q('.home-note .empty-state p').textContent, 'Disco indisponível.');
-  assert.equal(env.hero().title, 'Bem-vindo!');
+  assert.equal(env.hero().title, 'Corte a próxima live');
   assert.equal(env.allButton().hidden, true);
   assert.equal(env.resume().hidden, true);
   env.q('[data-act="new"]').click();
@@ -437,7 +437,7 @@ test('erro ao listar os projetos: a tela diz o motivo, a saudação continua neu
   await idle();
   assert.equal(env.q('.home-note'), null);
   assert.equal(env.titles().length, 3);
-  assert.equal(env.hero().title, 'Bem-vindo de volta!');
+  assert.equal(env.hero().title, 'Corte a próxima live');
 });
 
 test('a lista acompanha: ao voltar à tela, ao abrir um vídeo e, com a tela à vista, quando cortes mudam; escondida, não pede nada', async () => {

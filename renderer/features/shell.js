@@ -155,8 +155,9 @@
 
   BF.bus.on('project:loaded', ({ project }) => {
     $('workspace').hidden = false;
-    // <bdi> + direction:rtl no CSS: se o caminho não couber, corta o começo e deixa o nome do arquivo visível
-    $('sourceName').replaceChildren(el('bdi', {}, project.source.path));
+    // o nome do projeto (o título da transmissão ou o nome do arquivo sem a pasta): o caminho inteiro só na dica, ao passar o mouse
+    const origin = project.source.origin;
+    $('sourceName').replaceChildren(el('bdi', {}, (origin && origin.title) || nameOf(project.source.path)));
     $('sourceName').title = project.source.path;
     $('headerDivider').hidden = false;
     document.title = `${nameOf(project.source.path)} — ${BF.state.app.name}`;

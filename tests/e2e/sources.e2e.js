@@ -592,9 +592,9 @@ async function main() {
       const done = await text(page, '.src-card.ok');
       assert.match(done, /Download concluído/);
       assert.match(done, /Chat baixado: 6 mensagens/);
-      const savedPath = path.join(vods, 'Me at the zoo [jNQXAC9IVRw].mp4');
+      const savedPath = path.join(vods, 'Me at the zoo.mp4');
       assert.ok(fs.existsSync(savedPath), 'arquivo salvo com título e código no nome');
-      assert.deepEqual(fs.readdirSync(vods), ['Me at the zoo [jNQXAC9IVRw].mp4'], 'sem pasta de trabalho nem .part');
+      assert.deepEqual(fs.readdirSync(vods), ['Me at the zoo.mp4'], 'sem pasta de trabalho nem .part');
       assert.equal(await page.eval("document.querySelector('#tab-projects .tab-badge').hidden"), true, 'o selo "…" (que sobe de Novo projeto para o item Projetos) some');
       await page.eval("document.querySelector('#tabpanel-sources [data-section=\"vod\"]').scrollIntoView()"); await shot(page, 'sources-vod-concluido');
       step('YouTube (replay de chat): metadados, barra de progresso real, junção, chat e arquivo salvo com nome único');
@@ -649,10 +649,10 @@ async function main() {
       const resumed = await watchProgress(page, (s) => s.finished);
       assert.ok(resumed.some((s) => !s.gone && /Retomado|Retomando/.test(s.text)), 'a interface diz que está retomando');
       assert.match(await text(page, '.src-card.ok'), /retomado de um download anterior/);
-      const second = path.join(vods, 'Me at the zoo [jNQXAC9IVRw] (2).mp4');
+      const second = path.join(vods, 'Me at the zoo (2).mp4');
       assert.ok(fs.existsSync(second), 'segundo download com nome único');
       assert.ok(fs.existsSync(savedPath), 'o primeiro continua lá');
-      assert.deepEqual(fs.readdirSync(vods).sort(), ['Me at the zoo [jNQXAC9IVRw] (2).mp4', 'Me at the zoo [jNQXAC9IVRw].mp4']);
+      assert.deepEqual(fs.readdirSync(vods).sort(), ['Me at the zoo (2).mp4', 'Me at the zoo.mp4']);
       step('cancelar guarda o .part, "Retomar download" continua de onde parou, nome único e nada sobrescrito');
 
       // chat depois: projeto do VOD sem chat -> "Baixar chat"
@@ -889,7 +889,7 @@ async function main() {
       const tsamples = await watchProgress(page, (s) => s.finished);
       assert.ok(tsamples.some((s) => !s.gone && s.phase === 'chat' && /%|chat/i.test(s.text)));
       assert.match(await text(page, '.src-card.ok'), /Chat baixado: 5 mensagens/);
-      const twPath = path.join(vods, 'Live de teste - maratona [2345678901].mp4');
+      const twPath = path.join(vods, 'Live de teste - maratona.mp4');
       assert.ok(fs.existsSync(twPath));
 
       // o usuário abre o arquivo por "Abrir vídeo…" (sem origem): o gancho reconhece o VOD baixado aqui
@@ -986,7 +986,7 @@ async function main() {
           report.net = `download real NÃO concluído: ${blocked.replace(/\s+/g, ' ').slice(0, 200)}`;
           notVerified.push(`rede real: ${report.net}`);
         } else {
-          const file = path.join(netDir, 'Me at the zoo [jNQXAC9IVRw].mp4');
+          const file = path.join(netDir, 'Me at the zoo.mp4');
           assert.ok(fs.existsSync(file), 'arquivo baixado da rede real');
           const dur = Number(execFileSync(tools.ffprobe, ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1', file], { encoding: 'utf8', windowsHide: true }).trim());
           assert.ok(Math.abs(dur - 19) < 2, `duração real ${dur}`);
@@ -997,7 +997,7 @@ async function main() {
           assert.equal(o.videoId, 'jNQXAC9IVRw');
           assert.equal(o.channel, 'jawed');
           assert.equal(await page.eval('BF.state.project.meta.channel'), 'jawed');
-          assert.deepEqual(fs.readdirSync(netDir), ['Me at the zoo [jNQXAC9IVRw].mp4']);
+          assert.deepEqual(fs.readdirSync(netDir), ['Me at the zoo.mp4']);
           report.net = 'consulta e download reais concluídos (Me at the zoo)';
           step(`REDE REAL: ${report.net}`);
         }

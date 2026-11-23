@@ -141,7 +141,7 @@ async function main() {
     let r = await rows(page);
     const byTitle = Object.fromEntries(r.map((x) => [x.title, x]));
     assert.deepEqual([byTitle['Corte 1'].origin, byTitle['Pico de áudio'].origin], ['manual', 'auto']);
-    assert.ok(byTitle['Corte 1'].chips.includes('Manual') && byTitle['Pico de áudio'].chips.includes('Sugerido'));
+    assert.ok(!byTitle['Corte 1'].chips.includes('Manual') && byTitle['Pico de áudio'].chips.includes('Sugerido'), 'só o sugerido leva selo de origem');
     assert.deepEqual([byTitle['Corte 1'].similar, byTitle['Pico de áudio'].similar, byTitle['Lance final'].similar, byTitle['Lance final 2'].similar, byTitle['Corte 5'].similar, byTitle['Corte 6'].similar],
       ['true', 'true', 'true', 'true', 'false', 'false'], 'semelhantes: Corte 1 ~ Pico de áudio e Lance final ~ Lance final 2');
     assert.ok(byTitle['Corte 1'].chips.some((c) => c.startsWith('Semelhante')));
@@ -221,7 +221,7 @@ async function main() {
     assert.equal(new Set(decisions.map((d) => d.reviewGroup)).size, 1, 'o lote é um grupo só');
     assert.match(await text(page, '#toasts .review-toast .toast-text'), /Aprovou 3 cortes/);
     assert.deepEqual((await rows(page)).map((x) => x.reviewed), ['true', 'true', 'true', 'false', 'false', 'false']);
-    assert.ok((await rows(page))[0].chips.includes('Revisado: aprovado'));
+    assert.ok(!(await rows(page))[0].chips.some((t) => t.startsWith('Revisado')), 'a decisão fica no botão, sem selo repetido');
     // desfazer imediato pelo aviso
     await page.eval('window.__ev.length = 0; true');
     await toastUndo(page);

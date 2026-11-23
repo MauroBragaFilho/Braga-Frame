@@ -97,16 +97,16 @@ test('a faixa acompanha o estado: nova versão → baixando → pronta (3 escolh
   assert.equal(t.note.querySelector('[data-act="update-open"]').textContent, 'Ver e baixar');
 
   t.push(snap({ phase: 'downloading', download: { received: 250, total: 1000, percent: 25 } }));
-  assert.match(t.note.textContent, /Baixando a versão 0\.2\.0 do Braga Frame… 25%/);
+  assert.match(t.note.textContent, /Baixando a versão 0\.2\.0… 25%/);
   assert.deepEqual(t.buttons(), ['update-cancel']);
 
   t.push(snap({ phase: 'ready', ready: READY }));
-  assert.match(t.note.textContent, /A versão 0\.2\.0 do Braga Frame está pronta e verificada\. Instale por cima: seus projetos continuam como estão\./);
+  assert.match(t.note.textContent, /Versão 0\.2\.0 pronta para instalar \(seus projetos continuam como estão\)\./);
   assert.deepEqual(t.buttons(), ['update-install-now', 'update-install-quit', 'update-dismiss']);
   assert.deepEqual(t.note.querySelectorAll('button').map((b) => b.textContent), ['Instalar e reiniciar', 'Instalar quando eu fechar', 'Agora não']);
 
   t.push(snap({ phase: 'ready', ready: READY, installOnQuit: true }));
-  assert.match(t.note.textContent, /Ela será instalada quando você fechar o Braga Frame/);
+  assert.match(t.note.textContent, /será instalada quando você fechar o Braga Frame/);
   assert.deepEqual(t.buttons(), ['update-install-now', 'update-install-none']);
 
   t.push(snap({ phase: 'installing', ready: READY }));

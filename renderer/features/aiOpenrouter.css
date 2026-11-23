@@ -45,7 +45,7 @@
 .bfor-listbox { display: flex; flex-direction: column; gap: 6px; margin: 0 -4px; padding: 2px 4px; border-radius: var(--radius-sm); outline: none; }
 .bfor-listbox:focus-visible { outline: none; } /* o foco aparece na linha ativa (aria-activedescendant), abaixo */
 .bfor-group { display: flex; flex-direction: column; gap: 6px; }
-.bfor-group-title { padding: 10px 2px 2px; color: var(--muted); font: 700 11px/1 var(--font-body); letter-spacing: .06em; text-transform: uppercase; }
+.bfor-group-title { padding: 10px 2px 2px; color: var(--muted); font: 600 12px/1.2 var(--font-body); }
 
 .bfor-opt {
   display: flex;

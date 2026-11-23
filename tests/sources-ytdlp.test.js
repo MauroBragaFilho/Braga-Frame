@@ -368,17 +368,16 @@ test('warningsFromStderr: Deno ausente e verificação extra do YouTube viram av
 
 // ------------------------------------------------------------------ nomes e disco
 
-test('vodFileBase: seguro no Windows, com o código do vídeo e sem estourar o caminho', () => {
-  assert.equal(vodFileBase({ title: 'Live: "teste" <1>/2 | ação?', id: 'abc123', dir: 'C:\\V' }), 'Live teste 1 2 ação [abc123]');
-  assert.equal(vodFileBase({ title: '  ...  ', id: 'x', dir: 'C:\\V' }), 'video [x]');
-  assert.equal(vodFileBase({ title: 'CON', id: 'x', dir: 'C:\\V' }), '_CON [x]');
-  assert.equal(vodFileBase({ title: 'Título com ponto final...', id: 'x', dir: 'C:\\V' }), 'Título com ponto final [x]');
-  assert.equal(vodFileBase({ title: 'a\u200bb\u202ec', id: 'x', dir: 'C:\\V' }), 'abc [x]', 'marcas invisíveis saem');
-  assert.equal(vodFileBase({ title: 'ok', id: 'a/b\\c', dir: 'C:\\V' }), 'ok [abc]', 'o código só leva letras, números, "_" e "-"');
+test('vodFileBase: só o título da transmissão (sem o código do vídeo), seguro no Windows e sem estourar o caminho', () => {
+  assert.equal(vodFileBase({ title: 'Live: "teste" <1>/2 | ação?', id: 'abc123', dir: 'C:\\V' }), 'Live teste 1 2 ação', 'o id do YouTube não entra no nome');
+  assert.equal(vodFileBase({ title: '  ...  ', dir: 'C:\\V' }), 'video');
+  assert.equal(vodFileBase({ title: 'CON', dir: 'C:\\V' }), '_CON');
+  assert.equal(vodFileBase({ title: 'Título com ponto final...', dir: 'C:\\V' }), 'Título com ponto final');
+  assert.equal(vodFileBase({ title: 'a\u200bb\u202ec', dir: 'C:\\V' }), 'abc', 'marcas invisíveis saem');
   const longDir = 'C:\\Users\\alguem\\Videos\\Braga Frame\\Pasta comprida\\Outra pasta\\Mais uma';
   const base = vodFileBase({ title: 'x'.repeat(500), id: 'jNQXAC9IVRw', dir: longDir });
   assert.ok(longDir.length + 1 + base.length + ' (999).mp4'.length <= 260, `caminho de ${longDir.length + 1 + base.length} caracteres`);
-  assert.ok(base.endsWith('[jNQXAC9IVRw]'));
+  assert.equal(base.includes('jNQXAC9IVRw'), false);
   assert.equal(Array.from(vodFileBase({ title: '😀'.repeat(300), id: 'x', dir: 'C:\\V' })).filter((c) => c === '😀').length > 10, true, 'corta por caractere, sem partir um emoji ao meio');
 });
 

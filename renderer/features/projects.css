@@ -20,7 +20,7 @@
 .prj-thumb:not(:disabled):hover .prj-play { background: var(--accent-solid); }
 .prj-thumb:focus-visible { outline: var(--focus-ring); outline-offset: 2px; }
 .prj-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.prj-title { font-family: var(--font-title); font-size: 15px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prj-title { font-family: var(--font-title); font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .prj-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .prj-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .prj-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
