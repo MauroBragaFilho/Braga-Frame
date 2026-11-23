@@ -65,7 +65,12 @@ test('prontidão da transcrição: diz o motivo (sem motor, sem modelo) e fica p
     assert.equal(st.engine.ready, true);
     assert.equal(st.engine.modelId, 'tiny');
     const dflt = await ready.fe.call('analysis:transcriptStatus', { projectId: 'p1', path: 'x.mp4', size: 1, duration: 10 });
-    assert.equal(dflt.engine.ready, false, 'o modelo padrão (Large v3 Turbo) não foi baixado aqui');
+    assert.equal(dflt.engine.ready, true, 'sem escolha, usa o modelo que já está instalado (não obriga a baixar o Pequeno)');
+    assert.equal(dflt.engine.modelId, 'tiny');
+    const nothing = await none.ctx.transcription.readiness({});
+    assert.equal(nothing.modelId, 'small', 'sem nenhum modelo instalado, o padrão continua sendo o Pequeno (o recomendado)');
+    assert.equal(none.ctx.transcription.defaultModelId, 'small');
+    assert.equal(ready.ctx.transcription.defaultModelId, 'tiny');
   } finally { await hub.close(); none.done(); ready.done(); }
 });
 

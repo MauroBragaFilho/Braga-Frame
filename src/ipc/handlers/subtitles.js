@@ -199,7 +199,7 @@ function register(ctx) {
         ...m, recommended: m.id === DEFAULT_MODEL_ID,
         gpuFit: hw.gpu.available ? engineInfo.gpuMemoryAdvice(getModel(m.id), hw.gpu) : { level: 'unknown', message: '' }
       })),
-      defaultModel: DEFAULT_MODEL_ID,
+      defaultModel: bestModelId(),
       modelsManagedByHost: Boolean(host.whisperModels),
       hostName: host.name || null,
       languages: LANGUAGES,
@@ -330,15 +330,23 @@ function register(ctx) {
     };
   }
 
+  // Sem escolha explícita, usa o Pequeno se ele estiver baixado; senão o melhor modelo que o usuário já tem (não obriga a baixar o Pequeno).
+  const MODEL_PREFERENCE = [DEFAULT_MODEL_ID, 'large-v3-turbo', 'medium', 'base', 'tiny'];
+  function bestModelId() {
+    return MODEL_PREFERENCE.find((id) => getModel(id) && manager.installed(id)) || DEFAULT_MODEL_ID;
+  }
+
   // Serviço para quem precisa do motor de transcrição sem ser a aba Legendas (a transcrição do vídeo inteiro, em handlers/analysisAi.js).
   ctx.transcription = {
     prepareRun, releaseRun, describeRun,
-    defaultModelId: DEFAULT_MODEL_ID,
+    /** O modelo de quando ninguém escolheu: o Pequeno (recomendado) se estiver instalado, senão o melhor que já está. */
+    get defaultModelId() { return bestModelId(); },
     /**
      * O motor e o modelo estão prontos? (sem rodar nada) `reason`: o primeiro motivo, em português. `needs`: tudo o que falta (o FFmpeg, o motor do
      * Whisper e o modelo pedido), para a tela oferecer o botão que instala a transcrição mesmo quando falta mais de uma coisa.
      */
-    async readiness({ modelId = DEFAULT_MODEL_ID } = {}) {
+    async readiness({ modelId: asked } = {}) {
+      const modelId = asked || bestModelId();
       const model = getModel(modelId);
       const eng = resolveEngines();
       const installed = model ? manager.installed(modelId) : null;
@@ -360,7 +368,7 @@ function register(ctx) {
     const { cutId, input } = req;
     const start = Number(req.start);
     const end = Number(req.end);
-    const modelId = typeof req.modelId === 'string' && req.modelId ? req.modelId : DEFAULT_MODEL_ID;
+    const modelId = typeof req.modelId === 'string' && req.modelId ? req.modelId : bestModelId();
     if (typeof cutId !== 'string' || !cutId) throw fail('INVALID_ARGS', 'Informe qual corte legendar.');
     if (typeof input !== 'string' || !input) throw fail('INVALID_ARGS', 'Informe o vídeo de origem.');
     const run = await prepareRun({
