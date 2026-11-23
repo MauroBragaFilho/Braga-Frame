@@ -33,6 +33,7 @@
   let status = null;             // resposta de subtitles:status
   let statusError = null;
   let statusSeq = 0;
+  let tInfo = null;              // a transcrição do vídeo inteiro do projeto aberto: { exists, stale, count } (subtitles:transcript)
   let selectedId = null;         // corte escolhido (cut:selected ou o seletor da aba)
   let gen = null;                // geração em andamento: { cutId, projectId, percent, message, range }
   let engineBusy = false;
@@ -528,7 +529,8 @@
     if (modelBusy.has(ev.id)) updateDownloadBox('model', ev.id, ev);
   });
   BF.bus.on('tools:changed', () => { if (root) loadStatus(); });
-  BF.bus.on('transcription:changed', () => { if (root) loadStatus(); }); // um modelo (ou o motor) foi instalado ou removido pelo cartão da aba Ferramentas
+  BF.bus.on('transcription:changed', () => { if (root) { loadStatus(); loadTranscript(); } });
+  BF.on('analysis:transcriptDone', () => { if (root) loadTranscript(); }); // um modelo (ou o motor) foi instalado ou removido pelo cartão da aba Ferramentas
 
   // ---------- geração ----------
 
@@ -560,7 +562,7 @@
     const models = (status && status.models) || [];
     const hasCues = cuesOf(cut).length > 0;
     // destaque primário só quando faz sentido: gerar a primeira vez e dá para gerar. Com falas (gerar de novo) ou sem o que falta, fica secundário.
-    const primary = can.ok && !hasCues;
+    const primary = can.ok && !hasCues && !transcriptReady();
     return el('div', { class: 'subs-gen', dataset: { state: 'idle' } },
       el('div', { class: 'subs-gen-opts' },
         selectField('Idioma', language, langs.map((l) => ({ value: l.code, label: l.label })), (v) => { saveExt({ language: v }); render(); }, 'language', { stack: true }),
@@ -568,6 +570,7 @@
       el('button', {
         type: 'button', class: primary ? 'primary' : 'secondary', dataset: { act: 'generate' }, disabled: !can.ok, title: can.ok ? '' : can.why, onclick: () => generate(cut)
       }, icon('auto_awesome'), hasCues ? 'Gerar de novo' : 'Gerar legenda automática'),
+      transcriptReady() ? el('button', { type: 'button', class: hasCues ? 'secondary' : 'primary', dataset: { act: 'use-transcript' }, title: 'Usa as falas da transcrição do vídeo inteiro (aba Análise): instantâneo, sem rodar o Whisper', onclick: () => useTranscript(cut) }, icon('subtitles'), 'Usar a transcrição do vídeo') : null,
       !can.ok && status ? el('p', { class: 'muted small subs-gen-why' }, can.why) : null,
       hint ? el('p', { class: `small subs-gpu${hint.kind === 'ok' ? '' : ' muted'}`, dataset: { gpu: 'hint' } }, icon('memory'), hint.text) : null,
       status && status.engine.installed ? engineSection(engine, modelId) : null);
@@ -999,6 +1002,77 @@
       el('p', { class: 'muted small subs-hint' }, 'A prévia aparece sobre o player. O tamanho vale para um quadro de 1080 px de lado menor e acompanha a resolução da exportação.'));
   }
 
+  // ---------- usar a transcrição do vídeo (sem rodar o Whisper de novo) ----------
+
+  async function loadTranscript() {
+    const p = project();
+    if (!p) { tInfo = null; return; }
+    const res = await BF.api('subtitles:transcript', { projectId: p.id, path: p.source.path, size: p.source.size || 0, duration: p.source.duration || 0 });
+    if (project() !== p) return;
+    tInfo = res.ok ? res : null;
+    render();
+  }
+
+  const transcriptReady = () => Boolean(tInfo && tInfo.exists && !tInfo.stale);
+
+  /** As falas da transcrição do vídeo que caem em `cuts`: { cuesFor(cut) -> { cues, clipped } } (tempos do vídeo inteiro -> relativos ao corte). */
+  async function transcriptCues() {
+    const p = project();
+    const res = await BF.api('subtitles:transcript', { projectId: p.id, path: p.source.path, size: p.source.size || 0, duration: p.source.duration || 0, withCues: true });
+    if (!res.ok || !res.exists || res.stale) { errors.set('import', res.message || 'A transcrição do vídeo não está disponível: gere ou importe uma na aba Análise.'); render(); return null; }
+    return res.cues || [];
+  }
+
+  function applyTranscript(cut, imported) {
+    mutate(cut, (subs) => {
+      subs.cues = imported.cues;
+      subs.basedOn = S.rangeOf(cut);
+      subs.enabled = true;
+      delete subs.generated;
+    }, { reason: 'subtitles:transcript', rerender: false });
+    notes.delete(cut.id);
+    const clipped = imported.clipped ? `; ${plural(imported.clipped, 'cortada na borda do corte', 'cortadas na borda do corte')} e marcada(s) para revisão` : '';
+    addNote(cut.id, { kind: 'info', key: 'import', text: `${plural(imported.cues.length, 'fala aproveitada', 'falas aproveitadas')} da transcrição do vídeo${clipped}.` });
+  }
+
+  async function useTranscript(cut) {
+    errors.delete('import');
+    const cues = await transcriptCues();
+    if (!cues) return;
+    const imported = S.importCuesForCut(cues, cut);
+    if (!imported.cues.length) {
+      errors.set('import', `Nenhuma fala da transcrição cai dentro deste corte (${fmt(cut.start)} → ${fmt(cut.end)}).`);
+      render();
+      return;
+    }
+    if (!(await confirmReplace(cut, 'Trocar a legenda deste corte pela transcrição do vídeo?'))) return;
+    applyTranscript(cut, imported);
+    render();
+  }
+
+  /** Em lote: os cortes APROVADOS (ou, sem nenhum aprovado, todos) sem legenda ganham a da transcrição; os que já têm falas não são tocados. */
+  async function useTranscriptAll() {
+    errors.delete('import');
+    const all = project().cuts;
+    const approved = all.filter((c) => c.status === 'approved');
+    const pool = approved.length ? approved : all;
+    const todo = pool.filter((c) => cuesOf(c).length === 0);
+    if (!todo.length) { BF.ui.toast('Os cortes já têm legenda: nada a fazer.'); return; }
+    const cues = await transcriptCues();
+    if (!cues) return;
+    const plans = todo.map((c) => ({ cut: c, imported: S.importCuesForCut(cues, c) })).filter((x) => x.imported.cues.length);
+    if (!plans.length) { BF.ui.toast('Nenhuma fala da transcrição cai dentro desses cortes.'); return; }
+    const sure = await BF.ui.confirm({
+      title: 'Legendar com a transcrição do vídeo?',
+      message: `${plural(plans.length, 'corte', 'cortes')} ${approved.length ? 'aprovado(s) ' : ''}sem legenda ${plans.length === 1 ? 'recebe' : 'recebem'} as falas da transcrição do vídeo, sem rodar o Whisper. Quem já tem legenda não muda. Dá para desfazer um corte por vez.`,
+      okLabel: 'Legendar'
+    });
+    if (!sure) return;
+    for (const { cut, imported } of plans) applyTranscript(cut, imported);
+    render();
+    BF.ui.toast(`${plural(plans.length, 'corte legendado', 'cortes legendados')} com a transcrição do vídeo.`, 'ok');
+  }
+
   async function importFile(cut) {
     errors.delete('import');
     const res = await BF.api('subtitles:importFile', { defaultDir: BF.util.dirOf(project().source.path) });
@@ -1061,6 +1135,7 @@
           saveExt({ sidecarFormat: v });
         }, 'sidecar'),
         el('div', { class: 'subs-more-actions' },
+          transcriptReady() ? el('button', { type: 'button', class: 'sm', dataset: { act: 'transcript-all' }, onclick: useTranscriptAll }, icon('subtitles'), 'Legendar os cortes com a transcrição do vídeo') : null,
           el('button', { type: 'button', class: 'sm', dataset: { act: 'import' }, onclick: () => importFile(cut) }, icon('upload_file'), 'Usar uma legenda existente (.srt ou .ass)'),
           el('button', { type: 'button', class: 'sm', dataset: { act: 'style-all' }, onclick: () => applyStyleToAll(cut) }, icon('content_copy'), 'Usar esta aparência em todos os cortes'),
           el('button', { type: 'button', class: 'sm', dataset: { act: 'style-default' }, onclick: () => saveStyleAsDefault(cut) }, icon('bookmark'), 'Usar esta aparência nos próximos vídeos')),
@@ -1329,11 +1404,13 @@
     onShow() {
       reconcileAll();
       loadStatus();
+      loadTranscript();
       tick();
     }
   });
 
   BF.bus.on('project:loaded', () => {
+    tInfo = null;
     selectedId = null;
     if (gen) BF.api('subtitles:cancel', { cutId: gen.cutId }); // o resultado não teria onde ser aplicado: libera o computador
     gen = null;

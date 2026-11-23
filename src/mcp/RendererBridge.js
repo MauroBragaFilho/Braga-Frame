@@ -47,7 +47,6 @@ class RendererBridge {
         fn(value);
       };
       entry.timer = setTimeout(() => finish(reject, new BridgeError('TIMEOUT', 'O Braga Frame não respondeu a tempo (a janela está ocupada ou travada).')), timeoutMs);
-      if (typeof entry.timer.unref === 'function') entry.timer.unref();
       if (signal) {
         const onAbort = () => finish(reject, new BridgeError('CANCELLED', 'Cancelado.'));
         signal.addEventListener('abort', onAbort, { once: true });

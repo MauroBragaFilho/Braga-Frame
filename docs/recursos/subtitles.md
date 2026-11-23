@@ -199,6 +199,10 @@ Quem consolida o contrato deve incorporar:
 9. **`shared.rebaseSubtitles` (contrato 5.7, "Intervalo do corte"):** a fala parcialmente fora do corte **não é mais recortada** no que fica guardado (só marcada `needsReview`; o recorte é feito por quem mostra ou exporta). Onde `arquitetura.md` 5.7 diz "deslocadas e recortadas", leia "deslocadas e marcadas; o recorte vale só na exibição e na exportação".
 10. **Linhas em branco:** `cuesToSrt` remove as linhas vazias do texto (o `.ass` e o vídeo as mantêm). `subtitles:importFile` aceita UTF-16 com BOM e recusa arquivo com mais de 20 000 falas (`TOO_BIG`).
 
+## Legenda do corte a partir da transcrição do vídeo
+
+A transcrição do vídeo inteiro (aba Análise: gerada pelo Whisper ou importada de um .srt/.vtt) fica guardada por projeto. Com ela válida para o arquivo (mesmo caminho, tamanho e duração), a aba Legendas mostra **Usar a transcrição do vídeo** no corte (instantâneo, **sem rodar o Whisper**) e, em Mais opções, **Legendar os cortes com a transcrição do vídeo** (em lote: os cortes aprovados sem legenda; sem nenhum aprovado, todos; quem já tem falas não muda). As falas que caem no corte ficam relativas a ele (`shared.importCuesForCut`, a mesma conta de "usar uma legenda existente"); as das bordas são recortadas e marcadas para revisão. O canal é `subtitles:transcript { projectId, path, size, duration, withCues? }` -> `{ exists, stale?, count?, cues? }` (de outro arquivo: `stale`, sem falas). A transcrição do vídeo só tem o tempo por fala, não por palavra; o Whisper de corte continua valendo para vídeos sem transcrição ou para refazer um corte. Testes: `tests/subtitles-ipc.test.js` e `tests/e2e/subtitles-transcript.e2e.js`.
+
 ## Instalação da transcrição (cartão da aba Ferramentas)
 
 Quem começa sem nada não tinha onde instalar: o motor ficava na aba Ferramentas, o modelo só na aba Legendas, e ela exige um vídeo com um corte escolhido. Agora o cartão **Transcrição (legendas automáticas)** da aba Ferramentas (`renderer/features/transcription.js`, `BF.transcription`) instala tudo, sem projeto aberto, no desenho do módulo de transcrição do BDS:

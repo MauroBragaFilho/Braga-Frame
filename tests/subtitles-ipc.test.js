@@ -55,7 +55,7 @@ test('o handler carrega pelo carregador da base e registra todos os canais', () 
     const out = loadHandlers(ctx);
     assert.deepEqual(out.failed, [], JSON.stringify(out.failed));
     assert.ok(out.loaded.includes('subtitles.js'));
-    for (const c of ['status', 'installModel', 'cancelModel', 'removeModel', 'generate', 'cancel', 'importFile', 'hardware']) assert.ok(ctx.channels.has(`subtitles:${c}`), c);
+    for (const c of ['status', 'installModel', 'cancelModel', 'removeModel', 'generate', 'cancel', 'importFile', 'hardware', 'transcript']) assert.ok(ctx.channels.has(`subtitles:${c}`), c);
   } finally { H.cleanup(userData); }
 });
 
@@ -322,4 +322,32 @@ test('subtitles:generate NÃO repassa "silence" do renderer ao ffmpeg (era inje�
     }
     assert.deepEqual(fs.readdirSync(dir).filter((n) => !/^(mudo\.mp4|ARQUIVO_DO_USUARIO\.txt)$/.test(n)), [], 'nenhum arquivo novo apareceu');
   } finally { process.chdir(cwd); await hub.close(); H.cleanup(dir); t.done(); }
+});
+
+// ------------------------------------------------------------------ legenda do corte a partir da transcrição do vídeo
+
+test('subtitles:transcript: sem transcrição, de outro arquivo e válida (com e sem as falas); e as falas viram falas do corte sem rodar o Whisper', async () => {
+  const userData = H.tmpDir('bf-subs-tr-');
+  try {
+    const fe = H.fakeElectron(userData, { resolveTools: () => ({ ffmpeg: H.tools.ffmpeg, ffprobe: H.tools.ffprobe }) });
+    const ctx = createContext(fe.deps);
+    assert.deepEqual(loadHandlers(ctx).failed, []);
+    const source = { path: 'C:\\lives\\a.mp4', size: 1000, duration: 600 };
+    const ask = (extra = {}) => fe.call('subtitles:transcript', { projectId: 'p1', ...source, ...extra });
+    assert.deepEqual(await fe.call('subtitles:transcript', {}), { ok: true, exists: false }, 'sem projeto');
+    assert.deepEqual(await ask(), { ok: true, exists: false }, 'sem transcrição');
+    const { buildDocument } = require('../src/core/analysis/transcript/format');
+    const cues = [{ start: 8, end: 12, text: 'antes e dentro' }, { start: 20, end: 24, text: 'dentro' }, { start: 28, end: 35, text: 'dentro e depois' }, { start: 50, end: 52, text: 'fora' }];
+    ctx.analysis.ai.store.save('p1', buildDocument({ projectId: 'p1', origin: 'imported', source, cues, dropped: { invalid: 0, beyond: 0, repeats: 0 } }));
+    const info = await ask();
+    assert.deepEqual([info.exists, info.stale, info.count, info.cues], [true, false, 4, undefined], 'sem withCues não manda as falas');
+    const got = await ask({ withCues: true });
+    assert.deepEqual(got.cues.map((c) => [c.start, c.end, c.text]), cues.map((c) => [c.start, c.end, c.text]));
+    assert.deepEqual(await ask({ path: 'C:\\lives\\outro.mp4', withCues: true }), { ok: true, exists: true, stale: true }, 'outro arquivo: nunca devolve falas');
+    // o corte 10–30 s: relativas ao corte, as das bordas recortadas e marcadas para revisão
+    const S = require('../src/core/subtitles/shared');
+    const out = S.importCuesForCut(got.cues, { start: 10, end: 30 });
+    assert.deepEqual(out.cues.map((c) => [c.start, c.end, c.text, Boolean(c.needsReview)]), [[0, 2, 'antes e dentro', true], [10, 14, 'dentro', false], [18, 20, 'dentro e depois', true]]);
+    assert.equal(out.clipped, 2);
+  } finally { H.cleanup(userData); }
 });

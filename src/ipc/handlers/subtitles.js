@@ -210,6 +210,26 @@ function register(ctx) {
     };
   }
 
+  /**
+   * A transcrição do VÍDEO INTEIRO do projeto (a da aba Análise: gerada pelo Whisper ou importada), para as legendas dos cortes a aproveitarem em vez de
+   * rodar o Whisper de novo em cada corte. { exists, stale?, count?, cues? }; `cues` (tempos do vídeo inteiro) só com `withCues`. Uma transcrição de outro
+   * arquivo de vídeo (`stale`) nunca devolve falas.
+   */
+  ctx.handle('subtitles:transcript', (payload) => {
+    const ai = ctx.analysis && ctx.analysis.ai;
+    if (!ai || !payload || typeof payload.projectId !== 'string' || !payload.projectId) return { exists: false };
+    const source = { path: String(payload.path || ''), size: Number(payload.size) || 0, duration: Number(payload.duration) || 0 };
+    const sum = ai.transcriptManager.summary(payload.projectId, source);
+    if (!sum || !sum.exists) return { exists: false };
+    if (sum.stale) return { exists: true, stale: true };
+    const out = { exists: true, stale: false, count: sum.cues || 0 };
+    if (payload.withCues === true) {
+      const doc = ai.store.get(payload.projectId);
+      out.cues = doc && Array.isArray(doc.cues) ? doc.cues.map((c) => ({ start: c.start, end: c.end, text: c.text })) : [];
+    }
+    return out;
+  });
+
   ctx.handle('subtitles:hardware', ({ refresh } = {}) => hardwareStatus({ refresh: refresh === true }));
 
   ctx.handle('subtitles:status', () => buildStatus());
