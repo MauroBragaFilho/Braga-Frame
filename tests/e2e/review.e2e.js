@@ -634,9 +634,11 @@ async function main() {
     await sleep(200);
     assert.ok(await page.eval('BF.review.timeline.info().view.span') < spanBeforeCtrl, 'Ctrl + roda para cima aproxima');
     await page.eval(`BF.review.select(${j(lanceId)}); true`);
-    // o detalhe só carrega quando o zoom passa da resolução da visão geral: numa janela menor (CI) são precisos mais cliques em "Aproximar"
-    for (let i = 0; i < 8 && !(await page.eval('BF.review.timeline.info().detailBuckets > 0')); i += 1) {
-      await page.eval(`document.querySelector('.tl-btn[title^="Aproximar"]').click(); true`);
+    // "Aproximar o corte" só ajusta a janela ao corte; o detalhe carrega quando o zoom passa da resolução da visão geral, e numa janela
+    // menor (CI) isso pede mais cliques em "Mais zoom"
+    await page.eval(`document.querySelector('.tl-btn[title^="Aproximar"]').click(); true`);
+    for (let i = 0; i < 10 && !(await page.eval('BF.review.timeline.info().detailBuckets > 0')); i += 1) {
+      await page.eval(`document.querySelector('.tl-btn[title^="Mais zoom"]').click(); true`);
       await sleep(500);
     }
     await waitFor(page, 'BF.review.timeline.info().detailBuckets > 0', 15000, 'detalhe da onda (zoom) carregado');
