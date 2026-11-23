@@ -1,6 +1,6 @@
 {
   "name": "braga-frame",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Analisa gameplays e lives, ajuda a revisar cortes e exporta em vertical com controle de qualidade.",
   "main": "main.js",
   "private": true,

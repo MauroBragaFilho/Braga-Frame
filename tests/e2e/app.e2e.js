@@ -412,6 +412,7 @@ async function main() {
       const side = document.querySelector('.side').getBoundingClientRect();
       return { kind: app.dataset.viewKind, active: app.dataset.activeTab, title: document.getElementById('pageTitle').textContent,
         videoWidth: Math.round(video.width), videoLeft: Math.round(video.left), panelLeft: Math.round(panel.left), sideWidth: Math.round(side.width),
+        appWidth: Math.round(app.getBoundingClientRect().width),
         hasVideo: !!document.getElementById('video').getAttribute('src') };
     })()`);
     // o cabeçalho leva o nome do item do menu: Cortes para as telas do editor, Configurações para as de dentro dela; as telas sem abas internas, o próprio nome
@@ -429,7 +430,8 @@ async function main() {
       assert.equal(l.kind, 'wide', `${id} é tela larga`);
       assert.equal(l.title, titles[id]);
       assert.equal(l.videoWidth, 0, `${id}: player oculto`);
-      assert.ok(l.sideWidth > 800, `${id}: painel em largura total (${l.sideWidth}px)`);
+      // relativo à janela: o runner do CI abre uma janela menor que a da máquina de desenvolvimento
+      assert.ok(l.sideWidth > 600 && l.sideWidth >= l.appWidth * 0.6, `${id}: painel em largura total (${l.sideWidth}px de ${l.appWidth}px)`);
       assert.equal(l.hasVideo, true, `${id}: o vídeo continua carregado (só fica oculto)`);
     }
     assert.equal(await page.eval("document.getElementById('video').duration > 19"), true, 'o elemento de vídeo seguiu intacto nas telas largas');

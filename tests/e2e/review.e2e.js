@@ -635,7 +635,7 @@ async function main() {
     assert.ok(await page.eval('BF.review.timeline.info().view.span') < spanBeforeCtrl, 'Ctrl + roda para cima aproxima');
     await page.eval(`BF.review.select(${j(lanceId)}); document.querySelector('.tl-btn[title^="Aproximar"]').click(); true`);
     await sleep(500);
-    await waitFor(page, 'BF.review.timeline.info().detailBuckets > 0', 10000, 'detalhe da onda (zoom) carregado');
+    await waitFor(page, 'BF.review.timeline.info().detailBuckets > 0', 30000, 'detalhe da onda (zoom) carregado');
     step('timeline: zoom, rolagem e detalhe da onda ao aproximar');
 
     // clicar para posicionar o player

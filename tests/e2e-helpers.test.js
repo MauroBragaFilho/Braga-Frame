@@ -58,7 +58,13 @@ test(`removeDir espera por mais tempo que as 10 tentativas de 300 ms antigas qua
   const proc = holder(dir, HOLD_SECONDS, false); // não cita a pasta: só dá para esperar
   try {
     await new Promise((resolve) => setTimeout(resolve, 400));
-    assert.throws(() => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }), /EPERM|EBUSY|ENOTEMPTY/, 'a limpeza antiga desistia aqui');
+    // as 10 tentativas de 300 ms feitas à mão: o recuo do próprio rmSync cresce a cada tentativa e no Node 24 já passa dos 6 s
+    let lastErr = null;
+    for (let i = 0; i < 10; i++) {
+      try { fs.rmSync(dir, { recursive: true, force: true }); lastErr = null; break; }
+      catch (e) { lastErr = e; Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 300); }
+    }
+    assert.ok(lastErr && /EPERM|EBUSY|ENOTEMPTY/.test(lastErr.code || lastErr.message), 'a limpeza antiga (10 tentativas de 300 ms) desistia aqui');
     assert.equal(h.removeDir(dir), true);
     assert.equal(fs.existsSync(dir), false);
   } finally { killQuietly(proc); fs.rmSync(dir, { recursive: true, force: true }); }
