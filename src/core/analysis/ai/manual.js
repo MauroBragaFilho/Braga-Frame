@@ -137,11 +137,43 @@ function relevanceOf(v) {
 }
 
 /**
+ * Limpa o que a cópia de uma resposta renderizada (chat, Markdown) deixa no JSON: entidades HTML (&#x20;, &nbsp;, &quot;), barra invertida
+ * no fim da linha, espaço sem quebra e aspas com barra dupla (duas barras e aspas viram uma barra e aspas). JSON limpo não muda.
+ */
+function cleanPasted(text) {
+  const entity = (m, code) => { try { return String.fromCodePoint(code); } catch { return m; } };
+  const BS = String.fromCharCode(92);
+  return String(text == null ? '' : text)
+    .replace(/&#x([0-9a-f]+);/gi, (m, h) => entity(m, parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (m, d) => entity(m, Number(d)))
+    .replace(/&nbsp;/gi, ' ').replace(/&quot;/gi, '"').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&amp;/gi, '&')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\\[ \t]*\r?\n/g, '\n')
+    .split(BS + BS + '"').join(BS + '"');
+}
+
+/** JSON da resposta colada: tenta o texto como veio e, se não ler por inteiro, o texto limpo (cleanPasted). */
+function extractPasted(text) {
+  let first = null;
+  try { first = extractJson(text); } catch (err) { first = { error: err }; }
+  if (first.value && !first.salvaged) return first;
+  const cleaned = cleanPasted(text);
+  if (cleaned !== String(text)) {
+    try {
+      const second = extractJson(cleaned);
+      if (!second.salvaged || !first.value) return second;
+    } catch { /* vale o primeiro resultado */ }
+  }
+  if (first.error) throw first.error;
+  return first;
+}
+
+/**
  * Lê a resposta colada: JSON puro, com ```json, com texto em volta ou cortado no meio. Devolve
  * { suggestions, dropped:[{ reason, detail, start, end, title }], received, salvaged }. Lança AiError BAD_JSON se não achar nenhum corte.
  */
 function parseManualResponse(text, { words, cues, duration, fps, prefs, existing = [] }) {
-  const { value, salvaged } = extractJson(text);
+  const { value, salvaged } = extractPasted(text);
   const items = Array.isArray(value) ? value : (value && (value.cuts || value.clips || value.candidates || value.momentos)) || null;
   if (!Array.isArray(items)) throw new AiError('BAD_JSON', 'A resposta não traz a lista "cuts" pedida. Cole o JSON inteiro que a IA devolveu.');
   const byId = new Map(words.map((w) => [w.id, w]));
@@ -195,4 +227,4 @@ function formatTranscript(doc) {
   return cues.map((c) => `[${clock(c.start)}] ${c.text}`).join('\n');
 }
 
-module.exports = { buildWordList, splitParts, formatPartLines, buildManualPrompt, parseManualResponse, formatTranscript, MANUAL_SCHEMA, DEFAULT_WORDS_PER_PART };
+module.exports = { cleanPasted, buildWordList, splitParts, formatPartLines, buildManualPrompt, parseManualResponse, formatTranscript, MANUAL_SCHEMA, DEFAULT_WORDS_PER_PART };

@@ -141,3 +141,29 @@ test('parseManualResponse: texto sem JSON lança BAD_JSON e corte existente é r
 test('formatTranscript: uma fala por linha com o tempo', () => {
   assert.equal(formatTranscript({ cues: [{ start: 3, end: 5, text: 'oi' }, { start: 75.5, end: 80, text: 'tchau' }] }), '[0:03] oi\n[1:16] tchau');
 });
+
+test('resposta copiada de um chat renderizado (barra no fim da linha, &#x20; e aspas com barra dupla) é lida', () => {
+  const { cleanPasted } = require('../src/core/analysis/ai/manual');
+  const ctx = ctxOf();
+  const obj = { cuts: [
+    { start_id: 9, end_id: 28, title: 'Descobriu a arma e se arrependeu', category: 'Engraçado', relevance: 0.91, reasons: ['O desfecho é a rejeição: "Lança-granadas, não gostei."', 'segundo motivo'], keywords: ['arma', 'FPS'], layout: 'jogo' },
+    { start_id: 41, end_id: 70, title: 'Zoeira', category: 'Chat/zoeira', relevance: 0.88, reasons: ['piada'], keywords: ['zoeira'], layout: 'conversa' }
+  ] };
+  const BS = String.fromCharCode(92);
+  const dirty = JSON.stringify(obj, null, 2).split('\n')
+    .map((l) => l.replace(/^ +/, (m) => '&#x20;'.repeat(m.length)).split(BS + '"').join(BS + BS + '"') + BS)
+    .join('\n');
+  assert.ok(dirty.includes('&#x20;') && dirty.includes(BS + '\n') && dirty.includes(BS + BS + '"'), 'o texto de teste reproduz a sujeira');
+  assert.throws(() => JSON.parse(dirty));
+  const out = parseManualResponse(dirty, ctx);
+  assert.equal(out.received, 2);
+  assert.equal(out.suggestions.length, 2, JSON.stringify(out.dropped));
+  assert.ok(out.suggestions[0].reasons[0].includes('"Lança-granadas, não gostei."'));
+  assert.equal(out.suggestions[0].layout, 'jogo');
+  // JSON limpo não muda
+  const clean = JSON.stringify(obj);
+  assert.equal(cleanPasted(clean), clean);
+  assert.equal(parseManualResponse(clean, ctx).suggestions.length, 2);
+  // aspas escapadas normais continuam valendo
+  assert.equal(parseManualResponse(JSON.stringify({ cuts: [{ start_id: 9, end_id: 28, title: 'Ele disse "oi"' }] }), ctx).suggestions[0].title, 'Ele disse "oi"');
+});
