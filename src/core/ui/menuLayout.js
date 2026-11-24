@@ -5,7 +5,7 @@
  *
  *   Início · Projetos · Cortes · Exportações · Configurações
  *
- *   - Cortes abriga Cortes, Análise, Legendas, Áudio e Exportar: tudo o que trabalha sobre o vídeo aberto, ao lado do player, vira aba interna.
+ *   - Cortes abriga Análise, Cortes, Legendas, Áudio e Exportar (primeiro se analisa, depois se corta): tudo o que trabalha sobre o vídeo aberto, ao lado do player, vira aba interna.
  *   - Configurações abriga Geral, Preferências e Ferramentas.
  *   - Projetos tem uma tela sem aba própria, Novo projeto (`hidden`): ela abre por botões (Início, Projetos) e acende o item Projetos.
  *   - Uma tela que este layout não conhece (um recurso novo) ganha um item próprio, na posição do seu `order`: registrar uma aba continua
@@ -21,7 +21,7 @@
   const LAYOUT = Object.freeze([
     { id: 'home', title: 'Início', icon: 'home', order: 1, tabs: ['home'], hidden: [] },
     { id: 'projects', title: 'Projetos', icon: 'folder_special', order: 5, tabs: ['projects'], hidden: ['sources'] },
-    { id: 'editor', title: 'Cortes', icon: 'content_cut', order: 10, tabs: ['cuts', 'analysis', 'subtitles', 'audio', 'export'], hidden: [] },
+    { id: 'editor', title: 'Cortes', icon: 'content_cut', order: 10, tabs: ['analysis', 'cuts', 'subtitles', 'audio', 'export'], hidden: [] },
     { id: 'queue', title: 'Exportações', icon: 'queue', order: 30, tabs: ['queue'], hidden: [] },
     { id: 'settings', title: 'Configurações', icon: 'settings', order: 80, tabs: ['general', 'prefs', 'tools'], hidden: [] }
   ].map((item) => Object.freeze(item)));

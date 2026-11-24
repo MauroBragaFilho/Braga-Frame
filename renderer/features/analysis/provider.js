@@ -374,10 +374,11 @@
       ui.tGenerate = el('button', { type: 'button', id: 'anTGenerate', class: 'sm', onclick: generateTranscript }, 'Transcrever o vídeo');
       ui.tImport = el('button', { type: 'button', id: 'anTImport', class: 'sm', onclick: importTranscript }, icon('upload_file'), 'Importar legenda…');
       ui.tRemove = el('button', { type: 'button', id: 'anTRemove', class: 'icon-btn', 'aria-label': 'Remover a transcrição guardada', title: 'Remover a transcrição guardada', onclick: removeTranscript }, icon('delete'));
+      ui.tCopy = el('button', { type: 'button', id: 'anTCopy', class: 'sm', onclick: () => A.copyTranscript() }, icon('content_copy'), 'Copiar transcrição');
       ui.tCard = el('div', { class: 'an-card', id: 'anTranscript' },
         el('div', { class: 'an-split' }, el('strong', {}, 'Transcrição do vídeo'), ui.tChip),
         ui.tLine, ui.tSub, ui.tProgressBox,
-        el('div', { class: 'an-card-actions' }, ui.tInstall, ui.tGenerate, ui.tImport, ui.tRemove));
+        el('div', { class: 'an-card-actions' }, ui.tInstall, ui.tGenerate, ui.tImport, ui.tCopy, ui.tRemove));
 
       // --- provedor
       ui.pChip = el('span', { class: 'bds-chip', id: 'anPChip' });

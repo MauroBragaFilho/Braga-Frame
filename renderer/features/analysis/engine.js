@@ -246,6 +246,9 @@
       ui.tInstall.hidden = true; // o botão de instalar separado deu lugar ao "Instalar e transcrever"
       ui.tGenerate.classList.toggle('primary', false); // o destaque primário da tela é "Analisar"; este botão fica secundário
       ui.tImport.disabled = running || state.running || !BF.state.project;
+      ui.tCopy.hidden = !has;
+      ui.tCopy.disabled = running || state.running;
+      A.renderManual();
       ui.tRemove.hidden = !(t && t.exists);
       ui.tRemove.disabled = running || state.running;
     }

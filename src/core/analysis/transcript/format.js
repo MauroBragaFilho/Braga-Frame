@@ -11,12 +11,14 @@
  *     createdAt, updatedAt, coveredSec,                      // coveredSec = fim da última fala
  *     stats: { cues, speechSec, laughs, dropped: { invalid, beyond, repeats } },
  *     cues: [{ start, end, text, laugh? }],                  // segundos desde o início do vídeo, em ordem
+ *     fps?: number,                                          // quadros por segundo do vídeo, quando conhecido: as palavras ficam na grade de quadros
  *     words?: [[start, end, text], …] }                      // opcional (só transcrição gerada): palavras com tempo, para o ajuste fino (words.js)
  *
  * Funções puras (sem disco) para validar e normalizar as falas, venham do Whisper ou de um .srt/.vtt.
  */
 
 const { normalizeWords, packWords } = require('../words');
+const { snapWordsToFrames, exactFps } = require('../wordGrid');
 
 const FORMAT = 'bf-transcript-1';
 const VERSION = 1;
@@ -93,7 +95,7 @@ function statsOf(cues, dropped) {
   return { cues: cues.length, speechSec: round3(speechSec), laughs, dropped: dropped || { invalid: 0, beyond: 0, repeats: 0 } };
 }
 
-function buildDocument({ projectId, origin, source, cues, dropped, engine, importedFrom, createdAt, words }) {
+function buildDocument({ projectId, origin, source, cues, dropped, engine, importedFrom, createdAt, words, fps }) {
   const now = new Date().toISOString();
   const last = cues.length ? cues[cues.length - 1].end : 0;
   const doc = {
@@ -109,8 +111,12 @@ function buildDocument({ projectId, origin, source, cues, dropped, engine, impor
     cues
   };
   if (engine) doc.engine = engine;
-  const packed = Array.isArray(words) && words.length ? packWords(normalizeWords(words)) : [];
+  // com o fps do vídeo, cada palavra vai para a grade de quadros (wordGrid.js): início e fim em quadros exatos, sem sobreposição
+  const frameRate = exactFps(fps);
+  const aligned = Array.isArray(words) && words.length ? (frameRate ? snapWordsToFrames(words, frameRate) : normalizeWords(words)) : [];
+  const packed = aligned.length ? packWords(aligned) : [];
   if (packed.length) doc.words = packed;
+  if (frameRate) doc.fps = Math.round(frameRate * 1000) / 1000;
   if (importedFrom) doc.importedFrom = String(importedFrom).slice(0, 200);
   return doc;
 }
@@ -124,7 +130,7 @@ function readDocument(data) {
     projectId: String(data.projectId || ''), origin: data.origin === 'imported' ? 'imported' : 'generated',
     source: data.source || {}, cues, dropped: data.stats && data.stats.dropped ? data.stats.dropped : dropped,
     engine: data.engine && typeof data.engine === 'object' ? data.engine : null, importedFrom: data.importedFrom, createdAt: data.createdAt,
-    words: data.words
+    words: data.words, fps: data.fps
   });
   if (typeof data.updatedAt === 'string') doc.updatedAt = data.updatedAt;
   return doc;

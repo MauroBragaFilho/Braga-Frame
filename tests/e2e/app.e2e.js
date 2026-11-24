@@ -105,9 +105,9 @@ async function main() {
     assert.deepEqual(await page.eval("[...document.querySelectorAll('#tabBar [role=tab]')].map((b) => b.querySelector('.tab-label').textContent)"),
       ['Início', 'Projetos', 'Cortes', 'Exportações', 'Configurações']);
     assert.deepEqual(await page.eval("[...document.querySelectorAll('#subTabs .subtab')].map((b) => b.dataset.tab)"),
-      ['cuts', 'analysis', 'subtitles', 'audio', 'export', 'general', 'prefs', 'tools'], 'as telas de Cortes e de Configurações são abas internas, na ordem do desenho');
+      ['analysis', 'cuts', 'subtitles', 'audio', 'export', 'general', 'prefs', 'tools'], 'as telas de Cortes e de Configurações são abas internas, na ordem do desenho');
     assert.deepEqual(await page.eval("[...document.querySelectorAll('#subTabs .subtab-label')].map((n) => n.textContent)"),
-      ['Cortes', 'Análise', 'Legendas', 'Áudio', 'Exportar', 'Geral', 'Preferências', 'Ferramentas']);
+      ['Análise', 'Cortes', 'Legendas', 'Áudio', 'Exportar', 'Geral', 'Preferências', 'Ferramentas']);
     assert.equal(await page.eval("document.querySelector('#timelineSlot').previousElementSibling.id"), 'rangeInfo', '#timelineSlot fica abaixo do player');
     step('contrato do renderer: window.bf sem window.corte, BF.*, menu de 5 itens e abas internas na ordem de 1.4, #timelineSlot');
 
@@ -366,21 +366,21 @@ async function main() {
     assert.equal(await page.eval('document.activeElement.id'), 'tab-home', 'a navegação dá a volta');
     // abas internas de Cortes: clique, ←/→ (dão a volta), Home e End
     await page.eval("document.getElementById('tab-editor').click()");
-    assert.equal(await page.eval("document.getElementById('app').dataset.activeTab"), 'cuts', 'o item Cortes abre pela primeira aba');
+    assert.equal(await page.eval("document.getElementById('app').dataset.activeTab"), 'cuts', 'o item Cortes abre na aba em que o projeto foi aberto (Cortes)');
     await page.eval("document.getElementById('tab-export').click()");
     assert.equal(await page.eval("document.getElementById('tabpanel-export').hidden"), false);
     await page.eval("document.getElementById('tab-export').focus()");
     await page.press('ArrowRight');
-    assert.equal(await page.eval('document.activeElement.id'), 'tab-cuts', '→ na última aba dá a volta');
-    assert.equal(await page.eval("document.getElementById('tabpanel-cuts').hidden"), false);
+    assert.equal(await page.eval('document.activeElement.id'), 'tab-analysis', '→ na última aba dá a volta');
+    assert.equal(await page.eval("document.getElementById('tabpanel-analysis').hidden"), false);
     await page.press('ArrowRight');
     await page.press('ArrowRight');
-    assert.equal(await page.eval('document.activeElement.id'), 'tab-subtitles', 'Cortes → Análise → Legendas');
+    assert.equal(await page.eval('document.activeElement.id'), 'tab-subtitles', 'Análise → Cortes → Legendas');
     assert.equal(await page.eval("document.getElementById('tabpanel-subtitles').hidden"), false);
     await page.press('End');
     assert.equal(await page.eval('document.activeElement.id'), 'tab-export');
     await page.press('Home');
-    assert.equal(await page.eval('document.activeElement.id'), 'tab-cuts');
+    assert.equal(await page.eval('document.activeElement.id'), 'tab-analysis');
     await page.eval("BF.ui.selectTab('cuts')");
     step('menu e abas internas: selecionar por clique e por teclado (setas/Home/End)');
 

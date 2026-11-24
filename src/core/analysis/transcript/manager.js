@@ -54,7 +54,7 @@ class TranscriptManager extends EventEmitter {
 
   remove(projectId) { return this.deps.store.remove(projectId); }
 
-  start({ projectId, path: file, size, duration, modelId, language = 'pt', engine = 'auto', chunkSec = DEFAULT_CHUNK_SEC } = {}) {
+  start({ projectId, path: file, size, duration, fps, modelId, language = 'pt', engine = 'auto', chunkSec = DEFAULT_CHUNK_SEC } = {}) {
     if (typeof projectId !== 'string' || !projectId) throw new AnalysisError('INVALID_ARGS', 'Informe o projeto.');
     if (typeof file !== 'string' || !file) throw new AnalysisError('INVALID_ARGS', 'Informe o caminho do vídeo.');
     if (!(Number(duration) > 0)) throw new AnalysisError('INVALID_ARGS', 'Não sei a duração do vídeo. Abra o vídeo de novo.');
@@ -66,14 +66,14 @@ class TranscriptManager extends EventEmitter {
       abort: new AbortController(), lastEmit: 0
     };
     this.job = job; // reserva já: duas chamadas seguidas não passam
-    this._run(job, { file, size: Number(size) || 0, duration: Number(duration), modelId, language, engine, chunkSec }).catch((err) => {
+    this._run(job, { file, size: Number(size) || 0, duration: Number(duration), fps: Number(fps) || 0, modelId, language, engine, chunkSec }).catch((err) => {
       this.job = null;
       this.emit('failed', { jobId: job.id, projectId, code: 'ERROR', message: err && err.message ? err.message : 'Erro inesperado na transcrição.' });
     });
     return { jobId: job.id };
   }
 
-  async _run(job, { file, size, duration, modelId, language, engine, chunkSec }) {
+  async _run(job, { file, size, duration, fps, modelId, language, engine, chunkSec }) {
     const { store } = this.deps;
     const source = { path: file, size, duration };
     let run = null;
@@ -114,7 +114,7 @@ class TranscriptManager extends EventEmitter {
       });
       const described = this.deps.engine.describeRun(run, { device: result.device, deviceName: result.deviceName, fellBack: result.fellBack, noSpeech: !result.cues.length });
       const doc = buildDocument({
-        projectId: job.projectId, origin: 'generated', source, cues: result.cues, dropped: result.dropped, words: result.words,
+        projectId: job.projectId, origin: 'generated', source, cues: result.cues, dropped: result.dropped, words: result.words, fps,
         engine: { modelId: run.modelId, modelLabel: run.model.label, language, device: result.device, deviceLabel: described.deviceLabel, fellBack: result.fellBack }
       });
       if (!result.cues.length) {

@@ -25,17 +25,17 @@ test('as 12 telas do app viram 5 itens de menu, na ordem do desenho: Início, Pr
   assert.deepEqual(summary(items), [
     ['home', 'single', ['home'], []],
     ['projects', 'single', ['projects'], ['sources']],
-    ['editor', 'group', ['cuts', 'analysis', 'subtitles', 'audio', 'export'], []],
+    ['editor', 'group', ['analysis', 'cuts', 'subtitles', 'audio', 'export'], []],
     ['queue', 'single', ['queue'], []],
     ['settings', 'group', ['general', 'prefs', 'tools'], []]
   ]);
-  assert.deepEqual(items.map((i) => i.defaultTab), ['home', 'projects', 'cuts', 'queue', 'general']);
+  assert.deepEqual(items.map((i) => i.defaultTab), ['home', 'projects', 'analysis', 'queue', 'general']);
 });
 
-test('as abas internas de Cortes seguem o fluxo de trabalho (Cortes, Análise, Legendas, Áudio, Exportar), e não a ordem antiga do menu', () => {
+test('as abas internas de Cortes seguem o fluxo de trabalho (Análise, Cortes, Legendas, Áudio, Exportar): primeiro se analisa, depois se corta', () => {
   const editor = plan(REAL).find((i) => i.id === 'editor');
-  assert.deepEqual(editor.tabs, ['cuts', 'analysis', 'subtitles', 'audio', 'export']);
-  assert.equal(editor.defaultTab, 'cuts', 'abrir um projeto leva à aba Cortes, como antes');
+  assert.deepEqual(editor.tabs, ['analysis', 'cuts', 'subtitles', 'audio', 'export']);
+  assert.equal(editor.defaultTab, 'analysis', 'o item Cortes abre pela Análise, o primeiro passo de quem usa pela primeira vez');
 });
 
 test('Novo projeto não tem item nem aba interna: pertence a Projetos (que acende quando ela está aberta)', () => {
@@ -92,7 +92,7 @@ test('uma tela que o layout não conhece (um recurso novo) ganha um item própri
 test('a ordem dos itens vem do layout e não da ordem em que as telas foram registradas', () => {
   const shuffled = [...REAL].reverse();
   assert.deepEqual(plan(shuffled).map((i) => i.id), ['home', 'projects', 'editor', 'queue', 'settings']);
-  assert.deepEqual(plan(shuffled).find((i) => i.id === 'editor').tabs, ['cuts', 'analysis', 'subtitles', 'audio', 'export']);
+  assert.deepEqual(plan(shuffled).find((i) => i.id === 'editor').tabs, ['analysis', 'cuts', 'subtitles', 'audio', 'export']);
 });
 
 test('o layout é imutável (nenhum recurso o altera por engano)', () => {

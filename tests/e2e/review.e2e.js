@@ -90,7 +90,7 @@ async function main() {
     assert.deepEqual(await page.eval("[...document.querySelectorAll('#tabBar [role=tab]')].map((b) => b.dataset.tab)"),
       ['home', 'projects', 'editor', 'queue', 'settings'], 'itens do menu na ordem do contrato');
     assert.deepEqual(await page.eval("[...document.querySelectorAll('#subTabs .subtab')].map((b) => b.dataset.tab)"),
-      ['cuts', 'analysis', 'subtitles', 'audio', 'export', 'general', 'prefs', 'tools'], 'e as abas internas de Cortes e de Configurações');
+      ['analysis', 'cuts', 'subtitles', 'audio', 'export', 'general', 'prefs', 'tools'], 'e as abas internas de Cortes e de Configurações');
     await waitFor(page, 'window.BF.review && window.BF.review.engine && window.BFReview && !!window.BFReview.engine', 15000, 'lógica da revisão carregada');
     assert.equal(await page.eval("document.getElementById('tab-cuts').disabled"), true, 'sem projeto a aba Cortes fica desabilitada (comportamento da base)');
     assert.equal(await page.eval("document.getElementById('tabpanel-cuts').querySelector('#cuts') !== null"), true);

@@ -24,7 +24,7 @@ const step = (m) => console.log(`✔ ${m}`);
 const j = JSON.stringify;
 
 const ITEMS = [['home', 'Início'], ['projects', 'Projetos'], ['editor', 'Cortes'], ['queue', 'Exportações'], ['settings', 'Configurações']];
-const EDITOR_TABS = [['cuts', 'Cortes'], ['analysis', 'Análise'], ['subtitles', 'Legendas'], ['audio', 'Áudio'], ['export', 'Exportar']];
+const EDITOR_TABS = [['analysis', 'Análise'], ['cuts', 'Cortes'], ['subtitles', 'Legendas'], ['audio', 'Áudio'], ['export', 'Exportar']];
 const LOCKED = 'Abra um vídeo para usar esta aba';
 
 async function main() {
@@ -55,7 +55,7 @@ async function main() {
     assert.equal(await ev("document.getElementById('tab-editor').title"), LOCKED);
     assert.deepEqual(await where(), { tab: 'home', menu: 'home', view: 'wide', title: 'Início' });
     assert.deepEqual(await strips(), [], 'sem item com abas internas aberto, nenhuma barra à vista');
-    assert.deepEqual(await ev("['cuts', 'analysis', 'subtitles', 'audio', 'export', 'general', 'prefs', 'tools'].map((id) => { const b = document.getElementById('tab-' + id); return [b.disabled, b.title]; })"),
+    assert.deepEqual(await ev("['analysis', 'cuts', 'subtitles', 'audio', 'export', 'general', 'prefs', 'tools'].map((id) => { const b = document.getElementById('tab-' + id); return [b.disabled, b.title]; })"),
       [[true, LOCKED], [true, LOCKED], [true, LOCKED], [true, LOCKED], [true, LOCKED], [false, ''], [false, ''], [false, '']], 'as abas internas existem; as que exigem projeto ficam desabilitadas com a dica');
     assert.equal(await ev("BF.ui.selectTab('cuts')"), false, 'tela que exige projeto não abre sem projeto');
     assert.equal(await ev("BF.ui.selectTab('nao-existe')"), false);
@@ -128,15 +128,15 @@ async function main() {
     items = await menu();
     assert.deepEqual(items.map((m) => [m.tab, m.disabled]), [['home', false], ['projects', false], ['editor', false], ['queue', false], ['settings', false]], 'com projeto o item Cortes libera');
     assert.equal(await ev("document.getElementById('tab-editor').title"), '');
-    assert.deepEqual(await ev("['cuts', 'analysis', 'subtitles', 'audio', 'export'].map((id) => document.getElementById('tab-' + id).disabled)"), [false, false, false, false, false]);
+    assert.deepEqual(await ev("['analysis', 'cuts', 'subtitles', 'audio', 'export'].map((id) => document.getElementById('tab-' + id).disabled)"), [false, false, false, false, false]);
     await click('tab-editor');
-    assert.deepEqual(await where(), { tab: 'cuts', menu: 'editor', view: 'work', title: 'Cortes' }, 'o item abre a aba Cortes; o cabeçalho leva o nome do item');
+    assert.deepEqual(await where(), { tab: 'cuts', menu: 'editor', view: 'work', title: 'Cortes' }, 'abrir um vídeo leva à aba Cortes; o cabeçalho leva o nome do item');
     bars = await strips();
     assert.equal(bars.length, 1);
     assert.equal(bars[0].group, 'editor');
-    assert.deepEqual(bars[0].tabs.map((t) => [t.tab, t.label]), EDITOR_TABS, 'Cortes, Análise, Legendas, Áudio e Exportar, nessa ordem');
+    assert.deepEqual(bars[0].tabs.map((t) => [t.tab, t.label]), EDITOR_TABS, 'Análise, Cortes, Legendas, Áudio e Exportar, nessa ordem');
     assert.equal(bars[0].rows, 1, 'as cinco abas cabem numa linha só');
-    assert.deepEqual(bars[0].tabs.map((t) => t.selected), [true, false, false, false, false]);
+    assert.deepEqual(bars[0].tabs.map((t) => t.selected), [false, true, false, false, false]);
     assert.ok(await ev("document.querySelector('.player').getBoundingClientRect().width > 250"), 'tela de trabalho: o player aparece ao lado');
     assert.deepEqual(await visiblePanels(), ['cuts']);
     await shot('menu-cortes');
@@ -181,7 +181,7 @@ async function main() {
     await click('tab-editor');
     assert.equal((await where()).tab, 'subtitles', 'o item Cortes volta à última aba usada (Legendas)');
     await ev("document.getElementById('tab-subtitles').focus()");
-    assert.deepEqual(await keyTrail(['ArrowRight', 'ArrowRight', 'ArrowRight', 'ArrowLeft', 'Home', 'End']), ['tab-audio', 'tab-export', 'tab-cuts', 'tab-export', 'tab-cuts', 'tab-export']);
+    assert.deepEqual(await keyTrail(['ArrowRight', 'ArrowRight', 'ArrowRight', 'ArrowLeft', 'Home', 'End']), ['tab-audio', 'tab-export', 'tab-analysis', 'tab-export', 'tab-analysis', 'tab-export']);
     assert.equal((await where()).tab, 'export');
     await ev("document.getElementById('tab-projects').click(); document.getElementById('tab-projects').focus()");
     assert.deepEqual(await keyTrail(['ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowDown']), ['tab-editor', 'tab-queue', 'tab-settings', 'tab-home', 'tab-projects'], 'com projeto o item Cortes entra na volta');

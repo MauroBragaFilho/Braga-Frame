@@ -18,6 +18,9 @@
  *   analysis:transcriptGenerate { projectId, path, size, duration, modelId?, language?, engine? } -> { jobId }
  *   analysis:transcriptCancel { jobId? }  -> { cancelled }
  *   analysis:transcriptRemove { projectId } -> { removed }
+ *   analysis:transcriptText { projectId, path, size, duration } -> { text, cues }   (a transcrição inteira, uma fala por linha com o tempo: botão "Copiar transcrição")
+ *   analysis:manualPrompt { projectId, path, size, duration, params?, meta?, wordsPerPart? } -> { fps, approx, words, parts:[{ index, text, tokens, from, to, firstId, lastId }] }   (modo manual, manual.js)
+ *   analysis:manualParse { projectId, path, size, duration, text, params?, existingCuts? } -> { suggestions, dropped, received, salvaged, fps, approx }   (lê a resposta colada)
  * Eventos: analysis:transcriptProgress { jobId, p, doneUntil, message }, analysis:transcriptDone { jobId, projectId, status, speed?, deviceNote? },
  *   analysis:transcriptFailed { jobId, projectId, code, message, resumable?, doneUntil? }.
  */
@@ -34,6 +37,11 @@ const { AnalysisError } = require('../errors');
 const { AnalysisCache, sourceKey } = require('../cache');
 const { analyzeSource } = require('../analyze');
 const { extractAudio } = require('../audioSignal');
+const { probeMedia } = require('../../ffmpeg/probe');
+const { normalizeParams } = require('../params');
+const { AiError } = require('../../ai/errors');
+const { buildWordList, splitParts, buildManualPrompt, parseManualResponse, formatTranscript, DEFAULT_WORDS_PER_PART } = require('./manual');
+const { REASONS } = require('./verify');
 
 function electronSafeStorage() {
   try {
@@ -178,15 +186,68 @@ function registerAiChannels(ctx) {
     return { canceled: false, status: out.status, warnings: out.warnings };
   });
 
-  ctx.handle('analysis:transcriptGenerate', (payload) => {
+  /** Quadros por segundo do vídeo (ffprobe); 0 se não der para saber (as palavras ficam só com o tempo do Whisper). */
+  async function fpsOf(file) {
+    try {
+      if (!ctx.tools || !ctx.tools.ffprobe || !fs.existsSync(file)) return 0;
+      const info = await (opts.probe || probeMedia)(ctx.tools.ffprobe, file);
+      return Number(info && info.fps) || 0;
+    } catch { return 0; }
+  }
+
+  ctx.handle('analysis:transcriptGenerate', async (payload) => {
     const p = payload || {};
     return transcriptManager.start({
-      projectId: p.projectId, path: p.path, size: p.size, duration: p.duration,
+      projectId: p.projectId, path: p.path, size: p.size, duration: p.duration, fps: await fpsOf(String(p.path || '')),
       modelId: typeof p.modelId === 'string' && p.modelId ? p.modelId : undefined,
       language: typeof p.language === 'string' && p.language ? p.language : 'pt',
       engine: p.engine
     });
   });
+  // TEXTO DE TODA A TRANSCRIÇÃO (botão "Copiar transcrição"): uma fala por linha, com o tempo
+  ctx.handle('analysis:transcriptText', (payload) => {
+    const p = payload || {};
+    if (typeof p.projectId !== 'string' || !p.projectId) throw new AnalysisError('INVALID_ARGS', 'Informe o projeto.');
+    const doc = aiManager._transcriptFor(p.projectId, sourceOf(p));
+    return { text: formatTranscript(doc), cues: doc.cues.length };
+  });
+
+  // MODO MANUAL (sem chave): o pedido para colar no chat da IA e a leitura da resposta colada (manual.js)
+  const manualContext = async (p) => {
+    if (typeof p.projectId !== 'string' || !p.projectId) throw new AnalysisError('INVALID_ARGS', 'Informe o projeto.');
+    const source = sourceOf(p);
+    const doc = aiManager._transcriptFor(p.projectId, source);
+    const params = normalizeParams(p.params);
+    const fps = Number(doc.fps) || await fpsOf(source.path);
+    const { words, approx } = buildWordList(doc, fps);
+    if (!words.length) throw new AiError('NO_TRANSCRIPT', 'A transcrição não tem nenhuma palavra para enviar.');
+    const prefs = { minDurationSec: params.minDurationSec, maxDurationSec: params.maxDurationSec, padBeforeSec: params.padBeforeSec, padAfterSec: params.padAfterSec, minRelevance: params.minRelevance, profile: params.profile };
+    return { doc, source, params, fps, words, approx, prefs };
+  };
+  ctx.handle('analysis:manualPrompt', async (payload) => {
+    const p = payload || {};
+    const m = await manualContext(p);
+    const parts = splitParts(m.words, Number(p.wordsPerPart) || DEFAULT_WORDS_PER_PART);
+    const meta = p.meta && typeof p.meta === 'object' ? p.meta : {};
+    const maxCuts = Math.min(15, Math.max(4, Math.round((m.params.perHour || 6) * ((parts[0].words.at(-1).end - parts[0].words[0].start) / 3600)) + 2));
+    const skillBody = aiManager._skill().body;
+    return {
+      fps: m.fps, approx: m.approx, words: m.words.length,
+      parts: parts.map((part) => ({ index: part.index, ...buildManualPrompt({ part, parts: parts.length, meta, duration: m.source.duration, prefs: m.prefs, skill: skillBody, maxCuts }) }))
+    };
+  });
+  ctx.handle('analysis:manualParse', async (payload) => {
+    const p = payload || {};
+    if (typeof p.text !== 'string' || !p.text.trim()) throw new AnalysisError('INVALID_ARGS', 'Cole a resposta da IA.');
+    if (p.text.length > 400000) throw new AnalysisError('INVALID_ARGS', 'A resposta colada é grande demais para ser a lista de cortes.');
+    const m = await manualContext(p);
+    const existing = Array.isArray(p.existingCuts)
+      ? p.existingCuts.filter((c) => c && Number.isFinite(c.start) && Number.isFinite(c.end)).slice(0, 2000).map((c) => ({ start: Number(c.start), end: Number(c.end) }))
+      : [];
+    const out = parseManualResponse(p.text, { words: m.words, cues: m.doc.cues, duration: m.source.duration, fps: m.fps, prefs: m.prefs, existing });
+    return { ...out, fps: m.fps, approx: m.approx, reasons: REASONS };
+  });
+
   ctx.handle('analysis:transcriptCancel', (payload) => ({ cancelled: transcriptManager.cancel(payload && payload.jobId) }));
   ctx.handle('analysis:transcriptRemove', (payload) => {
     if (!payload || typeof payload.projectId !== 'string') throw new AnalysisError('INVALID_ARGS', 'Informe o projeto.');

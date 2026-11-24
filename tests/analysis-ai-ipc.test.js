@@ -533,3 +533,49 @@ test('guia de cortes pelo IPC: o padrão, guardar o do usuário (vai na mensagem
   assert.equal(reset.skill.source, 'default');
   assert.equal(fs.existsSync(file), false);
 });
+
+test('modo manual: copiar a transcrição, montar o pedido com IDs e ler a resposta colada (sem chave nem rede)', async (t) => {
+  const s = setup(t, { minutes: 6 });
+  // sem transcrição, os três canais explicam o que falta
+  for (const c of ['transcriptText', 'manualPrompt']) {
+    const none = await s.fe.call(`analysis:${c}`, { ...s.src, params: {} });
+    assert.equal(none.ok, false, c);
+    assert.equal(none.code, 'NO_TRANSCRIPT', c);
+  }
+  const srt = path.join(s.dir, 'live.srt');
+  fs.writeFileSync(srt, srtOf(s.tr.cues));
+  const imp = await s.fe.call('analysis:transcriptImport', { ...s.src, subtitlePath: srt });
+  assert.equal(imp.ok, true);
+
+  const txt = await s.fe.call('analysis:transcriptText', s.src);
+  assert.equal(txt.ok, true);
+  assert.equal(txt.cues, s.tr.cues.length);
+  assert.equal(txt.text.split('\n').length, s.tr.cues.length);
+  assert.match(txt.text.split('\n')[0], /^\[\d+:\d{2}\] \S/);
+
+  const req = await s.fe.call('analysis:manualPrompt', { ...s.src, params: {}, meta: { title: 'Live de teste' }, wordsPerPart: 1000 });
+  assert.equal(req.ok, true);
+  assert.equal(req.approx, true, 'legenda importada: tempo por palavra aproximado');
+  assert.ok(req.parts.length >= 1);
+  assert.match(req.parts[0].text, /start_id/);
+  assert.match(req.parts[0].text, /Live de teste/);
+  assert.match(req.parts[0].text, /\b1:\S+ 2:\S+/);
+  assert.equal(req.parts.at(-1).lastId, req.words);
+
+  const first = req.parts[0];
+  const reply = '```json\n' + JSON.stringify({ cuts: [{ start_id: first.firstId + 20, end_id: first.firstId + 90, title: 'Colado', category: 'Engraçado', relevance: 0.9, reasons: ['teste'] }, { start_id: 1, end_id: 999999 }] }) + '\n```';
+  const out = await s.fe.call('analysis:manualParse', { ...s.src, params: {}, text: reply, existingCuts: [] });
+  assert.equal(out.ok, true);
+  assert.equal(out.received, 2);
+  assert.ok(out.dropped.some((d) => d.reason === 'id'), 'ID inexistente volta com o motivo');
+  for (const sug of out.suggestions) {
+    assert.ok(sug.start >= 0 && sug.end > sug.start && sug.end <= s.src.duration);
+    assert.equal(sug.title, 'Colado');
+  }
+
+  const bad = await s.fe.call('analysis:manualParse', { ...s.src, params: {}, text: 'não é JSON' });
+  assert.equal(bad.ok, false);
+  assert.equal(bad.code, 'BAD_JSON');
+  const empty = await s.fe.call('analysis:manualParse', { ...s.src, params: {}, text: '   ' });
+  assert.equal(empty.ok, false);
+});

@@ -42,6 +42,7 @@
     tengine: null, // o motor de transcrição (Whisper) está pronto?
     tjob: null, // transcrição em andamento { id, p, message, doneUntil }
     tstarting: false,
+    manual: null, // pedido para a IA de chat montado { parts, approx, fps, words } (analysis:manualPrompt)
     estimate: null, // estimativa da análise por IA { label, calls, exceedsLimit, limit }
     hDirty: false, // o usuário editou o perfil de humor e ainda não salvou (a tela não sobrescreve o rascunho)
     hExamples: null, // exemplos do perfil que iriam à IA { approved, rejected, projects } (analysis:humorExamples); null = ainda não consultado
@@ -515,6 +516,7 @@
     ui.controlsRoot = buildControls();
     buildEngine();
     buildAi();
+    buildManual();
     buildHumor();
 
     ui.summary = el('p', { class: 'an-summary muted small', id: 'anSummary' });
@@ -560,7 +562,7 @@
     ui.intro = el('p', { class: 'muted small an-intro', id: 'anIntro' });
     return el('div', { class: 'an', id: 'analysis' },
       ui.intro,
-      el('section', { class: 'panel an-setup' }, ui.engineBar, ui.tCard, ui.hCard, ui.aiRoot, ui.controlsRoot, ui.runArea),
+      el('section', { class: 'panel an-setup' }, ui.engineBar, ui.tCard, ui.mCard, ui.hCard, ui.aiRoot, ui.controlsRoot, ui.runArea),
       ui.notice,
       ui.results);
   }
@@ -582,6 +584,9 @@
     importTranscript: (...args) => importTranscript(...args),
     removeTranscript: (...args) => removeTranscript(...args),
     renderTranscript: (...args) => renderTranscript(...args),
+    aiPayload: (...args) => aiPayload(...args),
+    copyTranscript: (...args) => copyTranscript(...args),
+    renderManual: (...args) => renderManual(...args),
     renderAll: (...args) => renderAll(...args),
     settings: (...args) => settings(...args),
     saveSettings: (...args) => saveSettings(...args),
@@ -607,6 +612,7 @@
   };
   const { HUMOR_KEY, humorProfile, humorLists, buildHumor, renderHumor, refreshHumorExamples } = P.humor(A);
   const { refreshTranscript, generateTranscript, cancelTranscript, installTranscription, importTranscript, removeTranscript, useAlgorithm, buildEngine, renderEngine, renderTranscript } = P.engine(A);
+  const { buildManual, renderManual, copyTranscript } = P.manual(A);
   const { renderResults, setListOrder, addAll, dismissAll, restoreAll } = P.results(A);
   const { scheduleResults, icon, field, switchRow, buildControls, fillControls, readControls, usableSignals, renderHints, renderRun, renderNotice } = P.controls(A);
   const { refreshAi, refreshEstimate, openModelList, renderSkill, buildAi, renderAi } = P.provider(A);
