@@ -330,6 +330,7 @@
       el('section', { class: 'exp-sec exp-qc-sec' },
         el('h3', { class: 'exp-h' }, 'Conferência'),
         u.qcStatus, u.qcError, u.qc),
+      window.BFExportEditor.build(),
       el('div', { class: 'exp-foot' }, u.msg, u.enqueueWhy, u.enqueue,
         el('p', { class: 'exp-note' }, 'Exportação gera arquivos locais; publique manualmente.')));
     return u;

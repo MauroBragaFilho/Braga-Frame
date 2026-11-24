@@ -148,3 +148,12 @@
 @media (max-width: 860px) {
   .exp-foot { position: static; margin: 0; padding: 0; background: none; border-top: 0; }
 }
+
+/* exportar para o editor de vídeo (export/editor.js) */
+.exp-editor { padding-top: 4px; border-top: 1px solid var(--line); }
+.exp-ed-opts { display: flex; flex-direction: column; gap: 8px; }
+.exp-ed-opt { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+.exp-ed-opt input { margin-top: 3px; }
+.exp-ed-scope { display: flex; flex-direction: column; gap: 4px; max-width: 320px; }
+.exp-ed-warn { margin: 0; padding-left: 20px; }
+.exp-msg-error { color: var(--status-bad, #e5484d); }
