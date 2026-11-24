@@ -494,7 +494,7 @@
       ui.aiLockables = [ui.cfgProvider, ui.cfgBaseUrl, ui.cfgModel, ui.cfgModelsBtn, ui.cfgModelPick, ui.cfgKey, ui.cfgKeySave, ui.cfgKeyClear, ui.cfgAccept, ui.hostFree, ...ui.orReserve, ...ui.fbSelects, ...Object.values(ui.limits)];
       ui.pCard = el('div', { class: 'an-card', id: 'anProviderCard' },
         el('div', { class: 'an-split' }, el('strong', {}, 'Provedor de IA'), ui.pChip),
-        ui.pLine, ui.orChipHost, ui.estLine, ui.estFree, ui.aiConfig, ui.skillBox);
+        ui.pLine, ui.orChipHost, ui.estLine, ui.estFree, ui.aiConfig); // o guia de cortes (ui.skillBox) fica no passo Ajustes, junto do perfil do canal
       ui.aiRoot = el('div', { class: 'an-ai', id: 'anAi', hidden: true }, ui.pCard);
     }
 

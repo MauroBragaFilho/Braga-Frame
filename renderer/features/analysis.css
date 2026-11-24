@@ -157,3 +157,19 @@
 .an-fb-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
 .an-fb-list:empty { display: none; }
 .an-fb-item { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+/* passos da tela (steps.js): Transcrição · Método · Ajustes · Sugestões. Só a seção do passo escolhido aparece (classe, não o atributo hidden). */
+.an-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.an-step { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 8px; min-height: 0; padding: 8px 8px; background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; }
+.an-step:hover:not(.active) { color: var(--text); background: var(--card-2); }
+.an-step.active, .an-step[aria-selected="true"] { color: var(--accent-text); background: var(--accent-light); border-color: transparent; }
+.an-step-num { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: color-mix(in srgb, currentColor 16%, transparent); font-size: 12px; }
+.an-step-badge { padding: 0 8px; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--text) 12%, transparent); color: var(--muted); font-size: 11px; font-weight: 600; line-height: 18px; white-space: nowrap; }
+.an-step-badge[hidden] { display: none; }
+.an-step-badge.an-step-ok { background: color-mix(in srgb, var(--status-ok) 14%, transparent); color: var(--status-ok); }
+.an-step-badge.an-step-warn { background: var(--warn-bg); color: var(--status-warn); }
+.an-step-badge.an-step-info { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent-text); }
+.an-section { display: none; flex-direction: column; gap: 20px; min-width: 0; }
+.an-section.an-section-on { display: flex; }
+.an-style-title { margin-top: 4px; }
+@media (max-width: 620px) { .an-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

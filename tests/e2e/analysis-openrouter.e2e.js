@@ -140,7 +140,7 @@ async function main() {
     assert.deepEqual(await page.eval('BF.state.loadErrors'), []);
     await page.eval(`BF.openSource(${q(video)})`);
     await waitFor(page, "!document.getElementById('app').classList.contains('no-project')", 20000, 'projeto aberto');
-    await page.eval("BF.ui.selectTab('analysis')");
+    await page.eval("BF.ui.selectTab('analysis'); document.getElementById('anStep-method').click()");
     await waitFor(page, "!document.getElementById('tabpanel-analysis').hidden", 5000, 'aba Análise visível');
     await waitFor(page, "document.getElementById('anProvider').textContent.length > 0 && !/Carregando/.test(document.getElementById('anProvider').textContent)", 10000, 'estado da IA carregado');
     await click(page, '#anEngine-ai');
@@ -148,7 +148,7 @@ async function main() {
     // transcrição importada (a IA só trabalha sobre o texto)
     await page.eval(`BF.api('analysis:transcriptImport', { projectId: BF.state.project.id, path: BF.state.project.source.path, size: BF.state.project.source.size, duration: BF.state.project.source.duration, subtitlePath: ${q(srt)} }).then((r) => { window.__imp = r; })`);
     assert.equal(await page.eval('window.__imp.ok'), true, JSON.stringify(await page.eval('window.__imp')));
-    await page.eval("BF.ui.selectTab('cuts'); BF.ui.selectTab('analysis')");
+    await page.eval("BF.ui.selectTab('cuts'); BF.ui.selectTab('analysis'); document.getElementById('anStep-method').click()");
     await waitFor(page, "document.getElementById('anTChip').textContent === 'Importada'", 10000, 'transcrição importada na tela');
 
     // ---- escolher o OpenRouter: lista, roteador primeiro, nada selecionado, interruptor ligado ----
@@ -276,7 +276,7 @@ async function main() {
     const before = chatCalls(mock).length;
     await page.eval("BF.api('analysis:aiSave', { model: 'vendor/pago-barato' }).then((r) => { window.__forced = r.ok; })");
     assert.equal(await page.eval('window.__forced'), true, 'o modelo digitado por fora da lista é gravado, mas o provedor deixa de ficar pronto');
-    await page.eval("BF.ui.selectTab('cuts'); BF.ui.selectTab('analysis')");
+    await page.eval("BF.ui.selectTab('cuts'); BF.ui.selectTab('analysis'); document.getElementById('anStep-method').click()");
     await waitFor(page, "/não é gratuito/.test(document.getElementById('anProvider').textContent)", 10000, 'recusa do modelo pago na tela');
     assert.match(await text(page, '#anProvider'), /OpenRouter: O modelo "vendor\/pago-barato" não é gratuito/);
     assert.match(await text(page, '#anProvider'), /nada foi enviado e nada foi cobrado/);
@@ -379,6 +379,7 @@ async function main() {
     assert.equal(st.provider.freeOnly, false, 'desligar é guardado');
     assert.ok(!st.provider.privacy.includes(FREE_PARAGRAPH), 'e o parágrafo dos modelos gratuitos sai do aviso');
     assert.equal(st.accepted, true, 'o aceite é do provedor: continua');
+    await page.eval("document.getElementById('anStep-method').click()");
     assert.equal(await visible(page, '#anOrPicker .bfor-cost'), true, 'aviso de custo visível');
     assert.match(await text(page, '#anOrPicker [data-model="vendor/pago-barato"]'), /Entrada US\$ 0,30 · saída US\$ 2,50 por milhão de tokens/);
     assert.equal((await optionIds(page))[0], 'openrouter/free', 'o roteador continua primeiro');
@@ -411,7 +412,7 @@ async function main() {
     await page.send('Emulation.setDeviceMetricsOverride', { width: 1360, height: 840, deviceScaleFactor: 1, mobile: false });
     await page.eval(`BF.openSource(${q(video)})`);
     await waitFor(page, "!document.getElementById('app').classList.contains('no-project')", 20000, 'projeto reaberto');
-    await page.eval("BF.ui.selectTab('analysis')");
+    await page.eval("BF.ui.selectTab('analysis'); document.getElementById('anStep-method').click()");
     await click(page, '#anEngine-ai');
     await waitFor(page, "!document.getElementById('anOrBlock').hidden", 10000, 'seletor do OpenRouter lembrado');
     await pickerReady(page);

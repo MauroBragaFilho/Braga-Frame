@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { healStrings } = require('../projects/mojibake');
 
 const VERSION = 1;
 const TRANSIENT = new Set(['EPERM', 'EBUSY', 'EACCES']); // antivírus/indexador segurando o arquivo por um instante (Windows)
@@ -53,7 +54,7 @@ class QueueStore {
     }
     let data;
     try {
-      data = JSON.parse(text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text);
+      data = healStrings(JSON.parse(text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text)).data; // texto estragado por outra ferramenta volta ao normal (mojibake.js)
     } catch {
       return this._preserve('corrupt', 'O arquivo da fila estava corrompido e foi guardado ao lado do original (.corrupt); a fila começou vazia.');
     }

@@ -306,16 +306,16 @@ async function main() {
       for (const theme of ['dark', 'light']) {
         await page.eval(`BF.ui.setTheme(${q(theme)})`);
         await sleep(400);
-        await page.eval('document.getElementById("anAiConfig").open = false; document.getElementById("tabpanel-analysis").scrollTop = 0');
+        await page.eval('document.getElementById("anStep-method").click(); document.getElementById("anAiConfig").open = false; document.getElementById("tabpanel-analysis").scrollTop = 0');
         await sleep(200);
         await shot(`analise-ia-${theme}-1-visao.png`);
-        await page.eval('document.getElementById("anResults").scrollIntoView()');
+        await page.eval('document.getElementById("anStep-results").click(); document.getElementById("anResults").scrollIntoView()');
         await sleep(300);
         await shot(`analise-ia-${theme}-2-resultado.png`);
-        await page.eval('document.getElementById("anAiConfig").open = true; document.getElementById("anAiConfig").scrollIntoView()');
+        await page.eval('document.getElementById("anStep-method").click(); document.getElementById("anAiConfig").open = true; document.getElementById("anAiConfig").scrollIntoView()');
         await sleep(300);
         await shot(`analise-ia-${theme}-3-config.png`);
-        await page.eval('document.getElementById("anAiConfig").open = false; document.getElementById("anHConfig").open = true; document.getElementById("anHumor").scrollIntoView()');
+        await page.eval('document.getElementById("anStep-settings").click(); document.getElementById("anAiConfig").open = false; document.getElementById("anHConfig").open = true; document.getElementById("anHumor").scrollIntoView()');
         await sleep(300);
         await shot(`analise-ia-${theme}-4-perfil.png`);
         await page.eval('document.getElementById("anHStatus").scrollIntoView({ block: "center" })');

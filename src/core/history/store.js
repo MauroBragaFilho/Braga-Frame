@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { healStrings } = require('../projects/mojibake');
 
 /** Mesmo limite de um id de projeto (hash hexadecimal), com folga; nada de separadores de pasta. */
 const ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
@@ -44,7 +45,7 @@ class HistoryStore {
     const file = this.fileFor(projectId);
     if (!fs.existsSync(file)) return { groups: [], dropped: 0 };
     try {
-      const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+      const data = healStrings(JSON.parse(fs.readFileSync(file, 'utf8'))).data; // texto estragado por outra ferramenta volta ao normal (mojibake.js)
       if (!data || typeof data !== 'object' || data.version > VERSION || !Array.isArray(data.groups)) throw new Error('formato desconhecido');
       return { groups: data.groups, dropped: Number(data.dropped) || 0 };
     } catch (err) {

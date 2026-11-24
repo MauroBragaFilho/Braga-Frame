@@ -54,7 +54,7 @@ async function main() {
     }
 
     // ---- rolagem por tela
-    await ev("BF.ui.selectTab('analysis')");
+    await ev("BF.ui.selectTab('analysis'); document.getElementById('anStep-settings').click()"); // o passo Ajustes é o mais longo
     await sleep(500);
     const room = await ev("(() => { const s = document.getElementById('tabPanels'); return s.scrollHeight - s.clientHeight; })()");
     assert.ok(room > 400, `a Análise precisa de rolagem para o teste (sobram ${room} px)`);

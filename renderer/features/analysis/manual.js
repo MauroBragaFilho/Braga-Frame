@@ -95,7 +95,7 @@
       for (const d of res.dropped) why[d.reason] = (why[d.reason] || 0) + 1;
       const reasons = Object.entries(why).map(([r, n]) => `${n} ${REASON_LABEL[r] || r}`).join(', ');
       setMsg(`${plural(res.received, 'corte', 'cortes')} na resposta: ${added} na lista de sugestões${lost ? `, ${lost} descartado(s) (${reasons})` : ''}.${res.salvaged ? ' A resposta veio cortada; só os itens completos foram aproveitados.' : ''}${added ? ' Confira e use Adicionar.' : ''}`, added ? 'info' : 'error');
-      if (added) ui.mReply.value = '';
+      if (added) { ui.mReply.value = ''; BF.ui.toast(`${plural(added, 'sugestão', 'sugestões')} da IA de chat na lista.`, 'ok'); A.showStep('results'); }
       BF.ui.log(`IA de chat: ${added} sugestão(ões) lida(s) da resposta colada, ${lost} descartada(s).`, added ? 'ok' : 'info');
     }
 
@@ -141,7 +141,7 @@
       ui.mBuild = el('button', { type: 'button', id: 'anMBuild', class: 'sm', onclick: buildRequest }, A.icon('content_copy'), 'Copiar pedido para a IA');
       ui.mParts = el('div', { class: 'an-card-actions', id: 'anMParts', hidden: true });
       ui.mReply = el('textarea', { id: 'anMReply', rows: '5', placeholder: 'Cole aqui a resposta da IA (o JSON com "cuts")', spellcheck: 'false', 'aria-label': 'Resposta da IA' });
-      ui.mRead = el('button', { type: 'button', id: 'anMRead', class: 'sm primary', onclick: readReply }, A.icon('input'), 'Ler resposta e criar sugestões');
+      ui.mRead = el('button', { type: 'button', id: 'anMRead', class: 'sm', onclick: readReply }, A.icon('input'), 'Ler resposta e criar sugestões');
       ui.mMsg = el('p', { class: 'small an-note', id: 'anMMsg', role: 'status', hidden: true });
       ui.mNote = el('p', { class: 'muted small', id: 'anMNote' });
       ui.mCard = el('details', { class: 'an-card', id: 'anManual' },
@@ -158,7 +158,7 @@
       const t = state.transcript;
       const has = Boolean(t && t.exists && !t.stale);
       const busy = Boolean(state.tjob) || state.tstarting || state.running;
-      ui.mCard.hidden = !has;
+      ui.mCard.hidden = false; // sempre à mostra: sem transcrição, os botões ficam parados e a nota diz o que fazer
       ui.mBuild.disabled = busy || !has;
       ui.mRead.disabled = busy || !has;
       const m = state.manual;
@@ -170,6 +170,7 @@
       ui.mNote.textContent = m && m.parts
         ? `${plural(m.words, 'palavra', 'palavras')} em ${plural(m.parts.length, 'parte', 'partes')}${m.fps ? ` · ${String(Math.round(m.fps * 100) / 100).replace('.', ',')} quadros/s` : ''}${m.approx ? ' · legenda importada: o tempo por palavra é aproximado' : ''}. Para vídeos longos, cole uma parte por vez (no mesmo chat ou em chats novos) e leia cada resposta.`
         : '';
+      if (!has) ui.mNote.textContent = 'Gere ou importe a transcrição no passo Transcrição para montar o pedido.';
       ui.mNote.hidden = !ui.mNote.textContent;
     }
 

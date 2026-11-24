@@ -400,11 +400,11 @@ test('"Analisar de novo, sem usar o guardado" pede fresh:true ao processo princi
   assert.ok(advanced.contains(env.q('#anFresh')) && advanced.contains(env.q('#anReset')));
 });
 
-test('poucos botões visíveis antes de analisar: o seletor de motor, Analisar, os dois da transcrição e os dois dos ajustes avançados (recolhidos)', () => {
+test('poucos botões antes de analisar: os 4 passos, o seletor de motor, Analisar, os da transcrição, os da IA de chat, os do guia de cortes e os dois dos ajustes avançados (as seções que não são do passo escolhido só ficam escondidas por CSS)', () => {
   const env = load();
   const shown = (node) => { for (let n = node; n; n = n.parent) if (n.hidden) return false; return true; };
   // a transcrição (opcional no algoritmo) tem "Transcrever" e "Importar"; remover, cancelar e o resto só aparecem quando fazem sentido
-  assert.deepEqual(env.all('button').filter(shown).map((b) => b.id).sort(), ['anEngine-ai', 'anEngine-algorithm', 'anEngine-both', 'anFresh', 'anReset', 'anRun', 'anTGenerate', 'anTImport']);
+  assert.deepEqual(env.all('button').filter(shown).map((b) => b.id).sort(), ['anEngine-ai', 'anEngine-algorithm', 'anEngine-both', 'anFresh', 'anMBuild', 'anMRead', 'anReset', 'anRun', 'anSkillReset', 'anSkillSave', 'anStep-method', 'anStep-results', 'anStep-settings', 'anStep-transcript', 'anTGenerate', 'anTImport']);
   assert.equal(env.q('.an-advanced').open, false);
   assert.equal(env.all('button').filter((b) => b.className.split(/\s+/).includes('primary') && shown(b)).length, 1, 'um destaque primário só');
 });
@@ -879,7 +879,7 @@ test('perfil de humor: cartão recolhido; sem perfil diz "Não definido"; com pe
   assert.equal(none.q('#anHScope').value, 'general');
   // poucos botões: só os de sempre continuam visíveis (Salvar e Limpar aparecem quando fazem sentido)
   const shown = (node) => { for (let n = node; n; n = n.parent) if (n.hidden) return false; return true; };
-  assert.deepEqual(none.all('button').filter(shown).map((b) => b.id).sort(), ['anEngine-ai', 'anEngine-algorithm', 'anEngine-both', 'anFresh', 'anReset', 'anRun', 'anTGenerate', 'anTImport']);
+  assert.deepEqual(none.all('button').filter(shown).map((b) => b.id).sort(), ['anEngine-ai', 'anEngine-algorithm', 'anEngine-both', 'anFresh', 'anMBuild', 'anMRead', 'anReset', 'anRun', 'anSkillReset', 'anSkillSave', 'anStep-method', 'anStep-results', 'anStep-settings', 'anStep-transcript', 'anTGenerate', 'anTImport']);
 });
 
 test('perfil de humor: editar mostra "Salvar"; salvar grava o perfil LIMPO nas Preferências do escopo escolhido; recusa o vazio; limpar pede confirmação', async () => {

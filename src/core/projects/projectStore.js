@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const model = require('./model');
+const { healStrings } = require('./mojibake');
 
 const { ProjectError, STATUSES } = model;
 const ID_RE = /^[0-9a-f]{16}$/;
@@ -119,6 +120,8 @@ class ProjectStore {
     } catch (err) {
       throw new ProjectError('INVALID_PROJECT', `Não foi possível ler o projeto: ${err.message}`);
     }
+    // texto que outra ferramenta (ex.: PowerShell 5.1) leu como Windows-1252 e regravou volta ao normal (mojibake.js); o arquivo só é regravado no próximo salvamento
+    data = healStrings(data).data;
     const project = model.normalizeProject(data, { idFor: projectIdFor });
     if (backup && (data.version === 1 || data.version === undefined) && !this.fs.existsSync(`${file}.v1.bak`)) {
       this.fs.copyFileSync(file, `${file}.v1.bak`);

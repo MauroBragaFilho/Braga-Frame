@@ -42,6 +42,9 @@
     tengine: null, // o motor de transcrição (Whisper) está pronto?
     tjob: null, // transcrição em andamento { id, p, message, doneUntil }
     tstarting: false,
+    step: 'method', // passo da tela (steps.js): transcript, method, settings ou results
+    stepSet: false, // o passo inicial deste vídeo já foi escolhido?
+    stepFor: null, // id do projeto a que o passo se refere
     manual: null, // pedido para a IA de chat montado { parts, approx, fps, words } (analysis:manualPrompt)
     estimate: null, // estimativa da análise por IA { label, calls, exceedsLimit, limit }
     hDirty: false, // o usuário editou o perfil de humor e ainda não salvou (a tela não sobrescreve o rascunho)
@@ -459,6 +462,7 @@
     BF.ui.log(`Análise concluída: ${result.suggestions.length} sugestão(ões)${shown !== result.suggestions.length ? `, ${shown} nova(s)` : ''}. Sugestão não é garantia: revise.`, 'ok');
     BF.ui.refreshTabs();
     renderRun();
+    showStep('results'); // a análise terminou: o resultado é o que a pessoa quer ver
     renderResults();
   }
 
@@ -492,6 +496,7 @@
     renderAi();
     renderHumor();
     renderRun();
+    renderSteps();
   }
 
   function buildRoot() {
@@ -560,11 +565,17 @@
       ui.summary, ui.models, ui.emptyBox, ui.orderBox, ui.list, ui.dismissedBox, ui.aiDropBox, ui.aiUnpickedBox, ui.aiReviewBox);
 
     ui.intro = el('p', { class: 'muted small an-intro', id: 'anIntro' });
+    // quatro passos (steps.js): só o escolhido aparece; o botão Analisar (rodapé fixo) vale em qualquer um
+    const stepsUi = buildSteps({
+      transcript: [ui.tCard],
+      method: [ui.engineBar, ui.aiRoot, ui.mCard],
+      settings: [ui.controlsRoot, el('h3', { class: 'panel-title an-style-title' }, 'Estilo do canal'), ui.hCard, ui.skillBox],
+      results: [ui.results]
+    });
+    ui.steps.addEventListener('keydown', onStepKey);
     return el('div', { class: 'an', id: 'analysis' },
       ui.intro,
-      el('section', { class: 'panel an-setup' }, ui.engineBar, ui.tCard, ui.mCard, ui.hCard, ui.aiRoot, ui.controlsRoot, ui.runArea),
-      ui.notice,
-      ui.results);
+      el('section', { class: 'panel an-setup' }, stepsUi.nav, ui.notice, ...stepsUi.sections, ui.runArea));
   }
 
   // ---------- partes (features/analysis/*.js): cada uma recebe `A` e devolve o que oferece ----------
@@ -584,6 +595,8 @@
     importTranscript: (...args) => importTranscript(...args),
     removeTranscript: (...args) => removeTranscript(...args),
     renderTranscript: (...args) => renderTranscript(...args),
+    showStep: (...args) => showStep(...args),
+    renderSteps: (...args) => renderSteps(...args),
     aiPayload: (...args) => aiPayload(...args),
     copyTranscript: (...args) => copyTranscript(...args),
     renderManual: (...args) => renderManual(...args),
@@ -613,7 +626,13 @@
   const { HUMOR_KEY, humorProfile, humorLists, buildHumor, renderHumor, refreshHumorExamples } = P.humor(A);
   const { refreshTranscript, generateTranscript, cancelTranscript, installTranscription, importTranscript, removeTranscript, useAlgorithm, buildEngine, renderEngine, renderTranscript } = P.engine(A);
   const { buildManual, renderManual, copyTranscript } = P.manual(A);
-  const { renderResults, setListOrder, addAll, dismissAll, restoreAll } = P.results(A);
+  const { buildSteps, renderSteps, showStep, onStepKey } = P.steps(A);
+  const { renderResults: renderResultsList, setListOrder, addAll, dismissAll, restoreAll } = P.results(A);
+  /** A lista de sugestões e o seletor de passos (a contagem do selo) se atualizam juntos. */
+  function renderResults() {
+    renderResultsList();
+    renderSteps();
+  }
   const { scheduleResults, icon, field, switchRow, buildControls, fillControls, readControls, usableSignals, renderHints, renderRun, renderNotice } = P.controls(A);
   const { refreshAi, refreshEstimate, openModelList, renderSkill, buildAi, renderAi } = P.provider(A);
 

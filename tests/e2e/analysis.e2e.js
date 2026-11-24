@@ -84,7 +84,7 @@ async function main() {
     assert.deepEqual(await page.eval("['audio','image','chat'].map((s) => document.getElementById('anSignal-' + s).disabled)"), [false, false, false]);
     assert.equal(await page.eval("document.getElementById('anSignal-text').disabled"), true, 'sem transcrição o sinal de texto fica desligado');
     assert.match(await text(page, '#anHint-text'), /sem transcrição deste vídeo/);
-    assert.equal(await page.eval("[...document.querySelectorAll('#analysis button')].filter((b) => !b.closest('[hidden]')).length <= 9"), true, 'poucos botões visíveis antes de analisar (os três motores, Analisar, Transcrever/Importar, os dois dos ajustes avançados e, com o perfil novo sem a transcrição instalada, o "Instalar a transcrição")');
+    assert.equal(await page.eval("[...document.querySelectorAll('#analysis button')].filter((b) => !b.closest('[hidden]') && !(b.closest('.an-section') && !b.closest('.an-section-on'))).length <= 12"), true, 'poucos botões visíveis antes de analisar (os 4 passos, os três motores, Analisar e os dois da IA de chat; as outras seções ficam escondidas)');
     assert.equal(await page.eval("[...document.querySelectorAll('#analysis button.primary')].filter((b) => !b.closest('[hidden]')).length"), 1, 'um destaque primário só');
     assert.equal(await page.eval("document.getElementById('anHints')"), null, 'não existe mais a opção "Dicas de volume"');
     assert.equal(await page.eval("['anWeight-text', 'anTextWeight-laugh', 'anTextWeight-exclaim', 'anTextWeight-pace', 'anTextWeight-repeat', 'anTextWeight-meta'].every((id) => document.querySelector('.an-advanced').contains(document.getElementById(id)))"), true, 'pesos do texto dentro dos ajustes avançados (recolhidos)');
