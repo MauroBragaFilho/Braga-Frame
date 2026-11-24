@@ -77,7 +77,7 @@ function load({ list = FIVE(), api = {}, project = null, appName = 'Braga Frame'
     util: { el: makeEl(doc) },
     ui: {
       registerTab: (def) => { tabs[def.id] = def; }, toast: (message, kind) => toasts.push([message, kind]), log() {},
-      selectTab: (id) => { selected.push(id); return true; }, confirm: async () => true, confirmCheck: async () => ({ checked: true })
+      selectTab: (id) => { selected.push(id); return true; }, selectWorkTab: () => { selected.push('work'); return true; }, confirm: async () => true, confirmCheck: async () => ({ checked: true })
     },
     bus: { on: (name, fn) => { handlers.set(name, [...(handlers.get(name) || []), fn]); return () => {}; }, emit() {} },
     api: async (channel, payload, opts = {}) => {
@@ -233,7 +233,7 @@ test('abrir: "Abrir" (e a miniatura) abre o projeto com a origem e segue para Co
   assert.equal(env.resume().disabled, true);
   finish({ ok: true });
   await idle();
-  assert.deepEqual(env.selected, ['cuts']);
+  assert.deepEqual(env.selected, ['work']);
   assert.ok(env.all('[data-act="open"]').every((b) => !b.disabled));
   assert.equal(env.resume().disabled, false);
 
@@ -270,7 +270,7 @@ test('"Continuar de onde parou" abre o projeto mais recente cujo vídeo existe e
   env.resume().click();
   await idle();
   assert.equal(env.openedWith[0][0], 'C:\\lives\\Minecraft.mp4');
-  assert.deepEqual(env.selected, ['cuts']);
+  assert.deepEqual(env.selected, ['work']);
 
   // o mais recente perdeu o vídeo: vale o próximo
   const second = load({ list: FIVE().map((p) => (p.id === 'a1' ? { ...p, fileMissing: true } : p)) });

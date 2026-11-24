@@ -77,7 +77,8 @@ function load({ api = {}, project = null, store = {}, storage = 'ok' } = {}) {
     state: { project, tools: {} },
     ui: {
       registerTab: (def) => { tab = def; }, refreshTabs() {}, log() {}, toast: (message, kind) => toasts.push([message, kind]), confirm: async () => true,
-      selectTab: (id) => { selected.push(id); return true; }
+      selectTab: (id) => { selected.push(id); return true; },
+      selectWorkTab: () => { selected.push('work'); return true; }
     },
     on: (channel, cb) => { listeners[channel] = cb; return () => {}; },
     bus: { on: (event, cb) => { busListeners[event] = cb; return () => {}; }, emit() {} },
@@ -168,7 +169,7 @@ test('clicar na área de soltar abre o diálogo do sistema, abre o projeto e seg
   const picks = env.calls.filter(([channel]) => channel === 'source:pick');
   assert.deepEqual(picks.map(([, payload, opts]) => [payload, opts]), [[{}, { toast: true }]], 'o erro do diálogo vira aviso na tela');
   assert.deepEqual(env.opened, [['D:\\Lives\\live.mp4', undefined]]);
-  assert.deepEqual(env.selected, ['cuts']);
+  assert.deepEqual(env.selected, ['work']);
 });
 
 test('escolher o arquivo: cancelar o diálogo, erro no diálogo ou vídeo que não abre não mexem na aba', async () => {
@@ -386,11 +387,11 @@ test('abrir um vídeo estando em Novo projeto leva para Cortes; estando em outra
   assert.deepEqual(env.selected, [], 'quem abriu pela aba Projetos fica onde está');
   env.busListeners['tab:changed']({ id: 'sources' });
   await env.hooks.afterOpen({ path: 'D:\\a.mp4' });
-  assert.deepEqual(env.selected, ['cuts'], 'soltar ou escolher o arquivo aqui segue para Cortes: o projeto já está pronto');
+  assert.deepEqual(env.selected, ['work'], 'soltar ou escolher o arquivo aqui segue para Cortes: o projeto já está pronto');
   env.busListeners['tab:changed']({ id: 'cuts' });
   await env.hooks.afterOpen({ path: 'D:\\b.mp4' });
-  assert.deepEqual(env.selected, ['cuts'], 'já em Cortes: nada a fazer');
+  assert.deepEqual(env.selected, ['work'], 'já em Cortes: nada a fazer');
   env.busListeners['tab:changed']();
   await env.hooks.afterOpen({ path: 'D:\\c.mp4' });
-  assert.deepEqual(env.selected, ['cuts'], 'evento sem dados não quebra nem leva a lugar nenhum');
+  assert.deepEqual(env.selected, ['work'], 'evento sem dados não quebra nem leva a lugar nenhum');
 });

@@ -30,7 +30,7 @@ function load({ project = null, api = {} } = {}) {
   const BF = {
     util: { el: () => ({}), nameOf: (p) => String(p).split(/[\\/]/).pop() },
     state: { project, tools: {} },
-    ui: { registerTab: (def) => { tab = def; }, refreshTabs() {}, log() {}, toast() {}, confirm: async () => true, selectTab: (id) => { selected.push(id); return true; } },
+    ui: { registerTab: (def) => { tab = def; }, refreshTabs() {}, log() {}, toast() {}, confirm: async () => true, selectTab: (id) => { selected.push(id); return true; }, selectWorkTab: () => { selected.push('work'); return true; } },
     on: (channel, cb) => { listeners[channel] = cb; return () => {}; },
     bus: { on: (event, cb) => { busListeners[event] = cb; return () => {}; }, emit() {} },
     hooks: { add: (name, fn) => { hooks[name] = fn; return () => {}; } },
@@ -236,7 +236,7 @@ test('pickFile: abre o arquivo escolhido e segue para Cortes só se o projeto ab
   await picked.sources.pickFile();
   assert.deepEqual(picked.calls, [['source:pick', {}]]);
   assert.deepEqual(plain(picked.opened), ['D:\\Lives\\live.mp4']);
-  assert.deepEqual(picked.selected, ['cuts']);
+  assert.deepEqual(picked.selected, ['work']);
 
   const canceled = load({ api: { 'source:pick': { ok: true, canceled: true } } });
   await canceled.sources.pickFile();

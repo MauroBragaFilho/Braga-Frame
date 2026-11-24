@@ -48,7 +48,7 @@ function load({ projects = [], api, current = null, confirm, confirmCheck, obser
     state: { project: current },
     util: { el },
     ui: {
-      registerTab: (def) => tabs.push(def), log: (msg, kind) => logs.push([msg, kind]), toast: (msg, kind) => toasts.push([msg, kind]), selectTab: (id) => { selected.push(id); return true; },
+      registerTab: (def) => tabs.push(def), log: (msg, kind) => logs.push([msg, kind]), toast: (msg, kind) => toasts.push([msg, kind]), selectTab: (id) => { selected.push(id); return true; }, selectWorkTab: () => { selected.push('work'); return true; },
       confirm: async (opts) => { events.push(['confirm', opts]); return confirm === undefined ? true : confirm; },
       confirmCheck: async (opts) => { events.push(['confirmCheck', opts]); return confirmCheck === undefined ? { checked: true } : confirmCheck; }
     },
