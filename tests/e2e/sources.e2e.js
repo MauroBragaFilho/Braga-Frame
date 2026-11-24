@@ -383,7 +383,7 @@ async function main() {
       await drag('drop', [clip, clip2]);
       await waitFor(page, `BF.state.project && BF.state.project.source.path.toLowerCase() === ${JSON.stringify(clip.toLowerCase())}`, 30000, 'o primeiro vídeo solto abre como projeto');
       assert.equal(await dragging(), false, 'soltou: o destaque some');
-      assert.equal(await activeTab(), 'cuts', 'abriu o vídeo estando em Novo projeto: segue para Cortes');
+      assert.equal(await activeTab(), 'analysis', 'abriu o vídeo estando em Novo projeto: segue para Análise');
       assert.match(await page.eval("document.getElementById('toasts').textContent"), /abri só o primeiro \(1 ficou de fora\)/);
       step('Novo projeto: soltar na janela acende a área; arquivo que não é vídeo avisa sem sair da tela; dois vídeos abrem o primeiro, avisam do outro e seguem para Cortes');
 
@@ -392,7 +392,7 @@ async function main() {
       await click(page, '.src-choice[data-source="files"]');
       await click(page, '.src-drop');
       await waitFor(page, `BF.state.project && BF.state.project.source.path.toLowerCase() === ${JSON.stringify(clip2.toLowerCase())}`, 30000, 'o arquivo escolhido abre como projeto');
-      assert.equal(await activeTab(), 'cuts', 'escolher o arquivo em Novo projeto também segue para Cortes');
+      assert.equal(await activeTab(), 'analysis', 'escolher o arquivo em Novo projeto também segue para Análise');
       await showSources(page);
       await page.eval('window.__pick = { ok: true, canceled: true }');
       await click(page, '.src-drop');
@@ -402,7 +402,7 @@ async function main() {
       await page.eval('BF.api = window.__realApi; delete window.__realApi; delete window.__pick;');
       h.assertNoConsoleErrors(page);
       await app.stop();
-      step('Novo projeto: escolher o arquivo pelo botão abre o projeto e segue para Cortes; cancelar o diálogo não muda nada');
+      step('Novo projeto: escolher o arquivo pelo botão abre o projeto e segue para Análise; cancelar o diálogo não muda nada');
     }
 
     // ================== 1) sem yt-dlp, sem projeto: OBS ==================
@@ -472,7 +472,7 @@ async function main() {
       const origin = await page.eval('BF.state.project.source.origin');
       assert.deepEqual(origin, { type: 'obs' });
       assert.ok(Math.abs((await page.eval('BF.state.info.duration')) - 5) < 0.6);
-      assert.equal(await page.eval("document.getElementById('tab-cuts').getAttribute('aria-selected')"), 'true');
+      assert.equal(await page.eval("document.getElementById('tab-analysis').getAttribute('aria-selected')"), 'true');
       await showSources(page);
       await waitFor(page, `/1 corte|0 cortes|Gravações do OBS não têm chat/.test(${q('[data-section="chat"]')}.textContent)`, 10000, 'seção do chat do projeto');
       assert.match(await text(page, '[data-section="chat"]'), /Gravações do OBS não têm chat para baixar/, 'honesto: sem chat em gravação do OBS');

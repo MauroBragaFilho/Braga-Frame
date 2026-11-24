@@ -224,7 +224,7 @@
     const res = await BF.api('source:pick', {}, { toast: true });
     if (!res.ok || res.canceled) return;
     const opened = await BF.openSource(res.path);
-    if (opened && opened.ok) BF.ui.selectTab('cuts');
+    if (opened && opened.ok) BF.ui.selectWorkTab();
   }
 
   function buildFilesSection() {
@@ -399,7 +399,7 @@
       if (!sure) return;
     }
     const res = await BF.openSource(file.path, { type: 'obs' });
-    if (res && res.ok) BF.ui.selectTab('cuts');
+    if (res && res.ok) BF.ui.selectWorkTab();
   }
 
   /** Cabeçalho do cartão: ícone, título e as duas ações (a pasta é a principal enquanto não há uma). */
@@ -695,7 +695,7 @@
     if (!r) return;
     known.set(norm(r.path), { kind: 'vod', origin: r.origin, chat: r.chat, meta: { game: r.meta.game, channel: r.meta.channel } });
     const res = await BF.openSource(r.path, r.origin);
-    if (res && res.ok) BF.ui.selectTab('cuts');
+    if (res && res.ok) BF.ui.selectWorkTab();
   }
 
   function metaLine(meta) {
@@ -1132,7 +1132,7 @@
 
   /** Abrir um vídeo estando nesta tela (arrastar, "Abrir vídeo", escolher o arquivo…) leva direto para a aba Cortes: o projeto já está pronto. */
   function leaveForCuts() {
-    if (activeTab === 'sources') BF.ui.selectTab('cuts');
+    if (activeTab === 'sources') BF.ui.selectWorkTab();
   }
 
   /** Depois de abrir: segue para Cortes (se estava aqui), preenche jogo/canal (só se vazios) e anexa o chat do VOD (se o arquivo existe). */

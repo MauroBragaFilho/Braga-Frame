@@ -410,7 +410,7 @@ async function step1(W) {
   await wf(`BF.state.project && BF.state.project.source.path.toLowerCase() === ${J(W.source.toLowerCase())} && document.getElementById('video').readyState >= 1`, 60000, 'a gravação aberta como projeto');
   assert.deepEqual(await ev('BF.state.project.source.origin'), { type: 'obs' });
   near(await ev('BF.state.info.duration'), VIDEO_SECONDS, 0.5, 'duração do projeto');
-  assert.equal(await ev("document.getElementById('tab-cuts').getAttribute('aria-selected')"), 'true', 'a aba Cortes abre sozinha');
+  assert.equal(await ev("document.getElementById('tab-analysis').getAttribute('aria-selected')"), 'true', 'a aba Análise abre sozinha (projeto sem cortes)');
   assert.equal(await ev("document.getElementById('app').classList.contains('no-project')"), false);
   assert.equal(await ev('BF.state.project.cuts.length'), 0);
   log('Novo projeto: a gravação da pasta do OBS foi listada e aberta como projeto (origin obs, 1080p, 2:00)');

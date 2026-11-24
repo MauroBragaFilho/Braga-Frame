@@ -439,6 +439,15 @@
   };
 
   /**
+   * Abre a tela de trabalho de um vídeo recém-aberto: a Análise (primeiro passo de quem começa) quando o projeto ainda não tem cortes,
+   * e os Cortes quando já tem (quem volta a um projeto quer ver o que já fez).
+   */
+  ui.selectWorkTab = function selectWorkTab() {
+    const project = BF.state && BF.state.project;
+    return ui.selectTab(project && Array.isArray(project.cuts) && project.cuts.length ? 'cuts' : 'analysis');
+  };
+
+  /**
    * Registra uma tela: { id, title, order, render(container), onShow?(), badge?(), icon?, view? }.
    * Onde ela aparece no menu vem de src/core/ui/menuLayout.js (item do menu ou aba interna); `title` é o texto do botão, `badge` o selo
    * (contagem, "…" ou "!"), `view` = 'wide' | 'work' força o tipo de tela (padrão: home/projects/sources/queue/prefs/tools são largas, as outras de

@@ -107,7 +107,7 @@
     const res = await BF.openSource(p.source.path, p.source.origin || null);
     S.busyId = null;
     if (res && res.ok === false && !res.canceled) BF.ui.toast(res.message || 'Não foi possível abrir o projeto.', 'error');
-    else if (res && res.ok !== false) BF.ui.selectTab('cuts');
+    else if (res && res.ok !== false) BF.ui.selectWorkTab();
     drawList();
   }
 

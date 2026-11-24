@@ -716,6 +716,6 @@ Pedido do plano de evolução (a Alice): não enviar a transcrição inteira à 
 
 **Copiar transcrição.** O botão do cartão **Transcrição do vídeo** copia a transcrição inteira (uma fala por linha, `[m:ss] texto`) para a área de transferência (`analysis:transcriptText`).
 
-**Aba Análise antes de Cortes.** No item **Cortes** do menu a ordem das abas passou a ser Análise · Cortes · Legendas · Áudio · Exportar (primeiro se analisa, depois se corta) e o item abre pela Análise. Abrir um vídeo continua levando à aba Cortes (decisão pendente: levar à Análise quando o projeto não tem cortes).
+**Aba Análise antes de Cortes.** No item **Cortes** do menu a ordem das abas passou a ser Análise · Cortes · Legendas · Áudio · Exportar (primeiro se analisa, depois se corta) e o item abre pela Análise. Abrir um vídeo leva à Análise quando o projeto ainda não tem cortes e aos Cortes quando já tem (`BF.ui.selectWorkTab`).
 
 **Não verificado**: o fluxo com um chat de verdade (GPT, Qwen) e com o Whisper real neste cartão; os testes usam transcrições sintéticas (`tests/analysis-manual.test.js`, `tests/analysis-ai-ipc.test.js`).

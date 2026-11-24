@@ -387,7 +387,7 @@ async function main() {
 
     // ---- 1.11 arrastar e soltar um arquivo no iframe (caminho resolvido pelo preload do hospedeiro)
     const rect = await host.eval('(() => { const r = document.querySelector("iframe").getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()');
-    await frame.eval("BF.ui.selectTab('sources')"); // a tela Novo projeto: abrir um vídeo estando nela leva para Cortes
+    await frame.eval("BF.ui.selectTab('sources')"); // a tela Novo projeto: abrir um vídeo estando nela leva para Análise
     const dragData = { items: [], files: [videoB, videoA], dragOperationsMask: 1 }; // dois arquivos: só o primeiro abre, e o aviso diz isso
     for (const type of ['dragEnter', 'dragOver', 'drop']) {
       const r = await host.send('Input.dispatchDragEvent', { type, x: rect.x, y: rect.y, data: dragData });
@@ -395,7 +395,7 @@ async function main() {
     }
     await frame.waitFor(`BF.state.project && BF.state.project.source.path === ${jq(videoB)}`, 20000, 'arquivo solto no iframe abre o projeto');
     assert.equal(await frame.eval("document.getElementById('app').classList.contains('drag')"), false, 'o destaque da área de soltar some');
-    await frame.waitFor("document.getElementById('app').dataset.activeTab === 'cuts'", 10000, 'soltar um vídeo estando em Novo projeto leva para Cortes');
+    await frame.waitFor("document.getElementById('app').dataset.activeTab === 'analysis'", 10000, 'soltar um vídeo estando em Novo projeto leva para Análise');
     assert.match(await frame.eval("document.getElementById('toasts').textContent"), /abri só o primeiro \(1 ficou de fora\)/, 'dois arquivos soltos: o aviso de que só o primeiro abriu');
     step('arrastar e soltar no iframe: o hospedeiro descobre o caminho (webUtils), o Braga Frame abre o primeiro vídeo (avisa do segundo) e segue de Novo projeto para Cortes');
 
