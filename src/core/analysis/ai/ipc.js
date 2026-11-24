@@ -19,7 +19,7 @@
  *   analysis:transcriptCancel { jobId? }  -> { cancelled }
  *   analysis:transcriptRemove { projectId } -> { removed }
  *   analysis:transcriptText { projectId, path, size, duration } -> { text, cues }   (a transcrição inteira, uma fala por linha com o tempo: botão "Copiar transcrição")
- *   analysis:manualPrompt { projectId, path, size, duration, params?, meta?, wordsPerPart? } -> { fps, approx, words, parts:[{ index, text, tokens, from, to, firstId, lastId }] }   (modo manual, manual.js)
+ *   analysis:manualPrompt { projectId, path, size, duration, params?, meta?, wordsPerPart? } -> { fps, approx, words, parts:[{ index, text, short, tokens, shortTokens, chars, shortChars, from, to, firstId, lastId }] }   (`text` = pedido completo; `short` = continuação para o mesmo chat)   (modo manual, manual.js)
  *   analysis:manualParse { projectId, path, size, duration, text, params?, existingCuts? } -> { suggestions, dropped, received, salvaged, fps, approx }   (lê a resposta colada)
  * Eventos: analysis:transcriptProgress { jobId, p, doneUntil, message }, analysis:transcriptDone { jobId, projectId, status, speed?, deviceNote? },
  *   analysis:transcriptFailed { jobId, projectId, code, message, resumable?, doneUntil? }.

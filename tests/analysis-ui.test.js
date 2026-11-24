@@ -400,11 +400,11 @@ test('"Analisar de novo, sem usar o guardado" pede fresh:true ao processo princi
   assert.ok(advanced.contains(env.q('#anFresh')) && advanced.contains(env.q('#anReset')));
 });
 
-test('poucos botões antes de analisar: os 4 passos, o seletor de motor, Analisar, os da transcrição, os da IA de chat, os do guia de cortes e os dois dos ajustes avançados (as seções que não são do passo escolhido só ficam escondidas por CSS)', () => {
+test('poucos botões antes de analisar: os 4 passos, o seletor de motor, Analisar, os da transcrição, os do guia de cortes (a IA de chat só aparece no motor "IA de chat") e os dois dos ajustes avançados (as seções que não são do passo escolhido só ficam escondidas por CSS)', () => {
   const env = load();
   const shown = (node) => { for (let n = node; n; n = n.parent) if (n.hidden) return false; return true; };
   // a transcrição (opcional no algoritmo) tem "Transcrever" e "Importar"; remover, cancelar e o resto só aparecem quando fazem sentido
-  assert.deepEqual(env.all('button').filter(shown).map((b) => b.id).sort(), ['anEngine-ai', 'anEngine-algorithm', 'anEngine-both', 'anFresh', 'anMBuild', 'anMRead', 'anReset', 'anRun', 'anSkillReset', 'anSkillSave', 'anStep-method', 'anStep-results', 'anStep-settings', 'anStep-transcript', 'anTGenerate', 'anTImport']);
+  assert.deepEqual(env.all('button').filter(shown).map((b) => b.id).sort(), ['anEngine-ai', 'anEngine-algorithm', 'anEngine-both', 'anEngine-chat', 'anFresh', 'anReset', 'anRun', 'anSkillReset', 'anSkillSave', 'anStep-method', 'anStep-results', 'anStep-settings', 'anStep-transcript', 'anTGenerate', 'anTImport']);
   assert.equal(env.q('.an-advanced').open, false);
   assert.equal(env.all('button').filter((b) => b.className.split(/\s+/).includes('primary') && shown(b)).length, 1, 'um destaque primário só');
 });
@@ -879,7 +879,7 @@ test('perfil de humor: cartão recolhido; sem perfil diz "Não definido"; com pe
   assert.equal(none.q('#anHScope').value, 'general');
   // poucos botões: só os de sempre continuam visíveis (Salvar e Limpar aparecem quando fazem sentido)
   const shown = (node) => { for (let n = node; n; n = n.parent) if (n.hidden) return false; return true; };
-  assert.deepEqual(none.all('button').filter(shown).map((b) => b.id).sort(), ['anEngine-ai', 'anEngine-algorithm', 'anEngine-both', 'anFresh', 'anMBuild', 'anMRead', 'anReset', 'anRun', 'anSkillReset', 'anSkillSave', 'anStep-method', 'anStep-results', 'anStep-settings', 'anStep-transcript', 'anTGenerate', 'anTImport']);
+  assert.deepEqual(none.all('button').filter(shown).map((b) => b.id).sort(), ['anEngine-ai', 'anEngine-algorithm', 'anEngine-both', 'anEngine-chat', 'anFresh', 'anReset', 'anRun', 'anSkillReset', 'anSkillSave', 'anStep-method', 'anStep-results', 'anStep-settings', 'anStep-transcript', 'anTGenerate', 'anTImport']);
 });
 
 test('perfil de humor: editar mostra "Salvar"; salvar grava o perfil LIMPO nas Preferências do escopo escolhido; recusa o vazio; limpar pede confirmação', async () => {
@@ -1557,4 +1557,53 @@ test('IA: provedores de reserva — as três escolhas, o que falta em cada um, o
   await tick();
   await tick();
   assert.equal(old.q('#anFallbackBox').hidden, true);
+});
+
+test('IA de chat: botão próprio no Método; só nele aparece o cartão de copiar e colar, sem Analisar; a resposta colada vira sugestões', async () => {
+  const part = (index, firstId, lastId) => ({ index, text: 'PEDIDO COMPLETO', short: 'CONTINUAÇÃO', tokens: 5000, shortTokens: 900, chars: 18000, shortChars: 3000, from: index * 300, to: index * 300 + 290, firstId, lastId });
+  const api = (channel) => {
+    if (channel === 'analysis:transcriptStatus') return transcriptApi(TRANSCRIPT)(channel);
+    if (channel === 'analysis:manualPrompt') return { ok: true, fps: 30, approx: false, words: 900, parts: [part(0, 1, 450), part(1, 451, 900)] };
+    if (channel === 'analysis:manualParse') return { ok: true, received: 2, salvaged: false, dropped: [{ reason: 'id' }], fps: 30, approx: false, suggestions: [{ id: '10_80', start: 1, end: 8, peak: 2, relevance: 0.9, reasons: ['piada'], title: 'Colado', category: 'Engraçado', layout: 'jogo' }] };
+    return undefined;
+  };
+  const env = load({ api });
+  await tick();
+  assert.ok(env.q('#anEngine-chat'), 'o quarto botão do Método');
+  assert.equal(text(env.q('#anEngine-chat')), 'IA de chat');
+  assert.equal(env.q('#anManual').hidden, true, 'nos outros motores o cartão não aparece');
+
+  env.q('#anEngine-chat').click();
+  await tick();
+  assert.equal(env.q('#anManual').hidden, false);
+  assert.equal(env.q('#anAi').hidden, true, 'o provedor com chave não se aplica');
+  assert.equal(env.q('#anSignals').hidden, true, 'os sinais do algoritmo também não');
+  assert.equal(env.q('#anRun').disabled, true, 'a IA de chat não tem Analisar');
+  assert.match(text(env.q('#anAiWarn')), /não há Analisar/);
+  assert.equal(env.q('#anAiWarn').hidden, false);
+  assert.equal(env.q('#anStepBadge-method').textContent, 'IA de chat');
+
+  env.q('#anMBuild').click();
+  await tick();
+  await tick();
+  const built = env.calls.find(([c]) => c === 'analysis:manualPrompt');
+  assert.equal(built[1].wordsPerPart, 800, 'o padrão é o tamanho que cabe em chats que recusam mensagem longa');
+  assert.equal(env.q('#anMParts').hidden, false, 'duas partes: um botão para cada');
+  assert.match(text(env.q('#anMParts')), /Copiar parte 1 .* 18 mil caracteres/);
+  assert.match(text(env.q('#anMParts')), /Copiar parte 2 .* 3 mil caracteres/, 'a continuação é curta');
+  env.q('#anMSeparate').checked = true;
+  env.q('#anMSeparate').dispatch('change');
+  assert.match(text(env.q('#anMParts')), /Copiar parte 2 .* 18 mil caracteres/, 'em chat novo cada parte leva o pedido completo');
+
+  env.q('#anMReply').value = '```json\n{"cuts":[]}\n```';
+  env.q('#anMRead').click();
+  await tick();
+  await tick();
+  const parsed = env.calls.find(([c]) => c === 'analysis:manualParse');
+  assert.match(parsed[1].text, /"cuts"/);
+  const saved = env.project.ext.analysis.suggestions;
+  assert.equal(saved.length, 1);
+  assert.equal(JSON.stringify([saved[0].title, saved[0].layout, saved[0].engines]), JSON.stringify(['Colado', 'jogo', ['ai']]));
+  assert.equal(env.q('#anMReply').value, '', 'a caixa esvazia depois de ler');
+  assert.match(text(env.q('#anMMsg')), /2 cortes na resposta: 1 na lista de sugestões, 1 descartado/);
 });

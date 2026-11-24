@@ -186,11 +186,13 @@
         button.disabled = state.running;
       }
       ui.engineHint.textContent = `${ENGINES.find((e) => e.id === eng).hint}${auto ? ' (escolhido automaticamente)' : ''}`;
-      ui.signalsBlock.hidden = eng === 'ai';
-      ui.sensRow.hidden = eng === 'ai';
-      ui.advanced.hidden = eng === 'ai';
+      ui.signalsBlock.hidden = eng === 'ai' || eng === 'chat';
+      ui.sensRow.hidden = eng === 'ai' || eng === 'chat';
+      ui.advanced.hidden = eng === 'ai' || eng === 'chat';
       ui.aiRoot.hidden = !usesAi(eng);
-      ui.intro.textContent = eng === 'ai'
+      ui.intro.textContent = eng === 'chat'
+        ? 'Sem chave de API: o app monta o pedido com a transcrição, você cola no GPT, no Qwen ou em outro chat e traz a resposta. O app confere cada trecho antes de virar sugestão. Sugestão não é garantia: revise cada trecho.'
+        : eng === 'ai'
         ? 'A IA lê a transcrição do vídeo e sugere os melhores momentos. O app confere cada horário e cada frase antes de virar sugestão. Sugestão não é garantia: revise cada trecho.'
         : eng === 'both'
           ? 'Roda o algoritmo (neste computador) e depois a IA (na nuvem, com a transcrição), e junta as duas listas: o momento que os dois acharam aparece uma vez só, no topo. Leva o tempo dos dois. Sugestão não é garantia: revise cada trecho.'

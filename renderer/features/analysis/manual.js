@@ -9,7 +9,7 @@
 (function () {
   const BF = window.BF;
   const { el } = BF.util;
-  const { sameSource, plural, hms } = window.BFAnalysisLogic;
+  const { sameSource, plural, hms, usesChat } = window.BFAnalysisLogic;
 
   window.BFAnalysisParts = window.BFAnalysisParts || {};
   window.BFAnalysisParts.manual = function (A) {
@@ -58,7 +58,7 @@
       ui.mBuild.disabled = true;
       setMsg('Montando o pedido…');
       const payload = A.aiPayload(project, A.readControls());
-      const res = await BF.api('analysis:manualPrompt', { ...payload, wordsPerPart: Number(ui.mSize.value) || 2000 });
+      const res = await BF.api('analysis:manualPrompt', { ...payload, wordsPerPart: Number(ui.mSize.value) || 800 });
       ui.mBuild.disabled = false;
       if (!res.ok) { state.manual = { parts: null }; setMsg(res.message, 'error'); renderManual(); return; }
       state.manual = { parts: res.parts, approx: res.approx, fps: res.fps, words: res.words };
@@ -67,14 +67,26 @@
       if (res.parts.length === 1) await copyPart(0);
     }
 
+    /** Acima disto alguns chats (o ChatGPT gratuito, por exemplo) recusam a mensagem: "A mensagem enviada era longa demais". */
+    const LONG_CHARS = 20000;
+    const kChars = (n) => `${Math.round(n / 1000)} mil caracteres`;
+
+    /** Parte 1 (ou qualquer parte, com "um chat novo para cada parte"): o pedido completo. As outras: só a continuação, para o MESMO chat. */
+    function textOf(part, index) {
+      const separate = Boolean(state.ui.mSeparate && state.ui.mSeparate.checked);
+      return index > 0 && !separate && part.short ? { text: part.short, chars: part.shortChars, follow: true } : { text: part.text, chars: part.chars, follow: false };
+    }
+
     async function copyPart(index) {
       const part = state.manual && state.manual.parts && state.manual.parts[index];
       if (!part) return;
-      const ok = await copyText(part.text);
+      const pick = textOf(part, index);
+      const ok = await copyText(pick.text);
       const total = state.manual.parts.length;
+      const long = pick.chars > LONG_CHARS ? ` Está grande (${kChars(pick.chars)}): se o chat recusar por tamanho, escolha partes menores.` : '';
       setMsg(ok
-        ? `Pedido${total > 1 ? ` da parte ${index + 1} de ${total}` : ''} copiado (~${Math.round(part.tokens / 1000)} mil tokens). Cole no chat da IA, espere a resposta e cole-a na caixa abaixo.`
-        : 'Não consegui copiar para a área de transferência. Tente de novo.', ok ? 'info' : 'error');
+        ? `${pick.follow ? 'Continuação' : 'Pedido'}${total > 1 ? ` da parte ${index + 1} de ${total}` : ''} copiado (${kChars(pick.chars)}).${pick.follow ? ' Cole no MESMO chat da parte anterior.' : ' Cole no chat da IA'}${pick.follow ? '' : ', espere a resposta'} e cole a resposta na caixa abaixo.${long}`
+        : 'Não consegui copiar para a área de transferência. Tente de novo.', ok ? (long ? 'error' : 'info') : 'error');
     }
 
     // ---------- resposta da IA ----------
@@ -134,21 +146,25 @@
     // ---------- desenho ----------
     function buildManual() {
       const ui = state.ui;
-      ui.mSize = el('select', { id: 'anMSize', 'aria-label': 'Tamanho de cada parte do pedido' },
-        el('option', { value: '1000' }, 'Partes pequenas (~1.000 palavras)'),
-        el('option', { value: '2000', selected: true }, 'Partes médias (~2.000 palavras)'),
-        el('option', { value: '4000' }, 'Partes grandes (~4.000 palavras)'));
+      ui.mSize = el('select', { id: 'anMSize', 'aria-label': 'Tamanho de cada parte do pedido', onchange: () => { state.manual = null; renderManual(); } },
+        el('option', { value: '400' }, 'Partes pequenas (~400 palavras, ~14 mil caracteres)'),
+        el('option', { value: '800', selected: true }, 'Partes médias (~800 palavras, ~18 mil caracteres)'),
+        el('option', { value: '1500' }, 'Partes grandes (~1.500 palavras, ~25 mil caracteres)'),
+        el('option', { value: '3000' }, 'Partes enormes (~3.000 palavras, ~40 mil caracteres)'));
+      ui.mSeparate = el('input', { type: 'checkbox', id: 'anMSeparate', class: 'bds-switch', role: 'switch', onchange: renderManual });
+      ui.mSeparateRow = el('label', { class: 'an-switch-row small', for: 'anMSeparate' }, ui.mSeparate,
+        el('span', {}, 'Cada parte em um chat novo (pedido completo em todas). Desligado, só a primeira leva o guia e as outras são curtas, para o mesmo chat.'));
       ui.mBuild = el('button', { type: 'button', id: 'anMBuild', class: 'sm', onclick: buildRequest }, A.icon('content_copy'), 'Copiar pedido para a IA');
       ui.mParts = el('div', { class: 'an-card-actions', id: 'anMParts', hidden: true });
       ui.mReply = el('textarea', { id: 'anMReply', rows: '5', placeholder: 'Cole aqui a resposta da IA (o JSON com "cuts")', spellcheck: 'false', 'aria-label': 'Resposta da IA' });
       ui.mRead = el('button', { type: 'button', id: 'anMRead', class: 'sm', onclick: readReply }, A.icon('input'), 'Ler resposta e criar sugestões');
       ui.mMsg = el('p', { class: 'small an-note', id: 'anMMsg', role: 'status', hidden: true });
       ui.mNote = el('p', { class: 'muted small', id: 'anMNote' });
-      ui.mCard = el('details', { class: 'an-card', id: 'anManual' },
-        el('summary', {}, el('strong', {}, 'Usar uma IA de chat (sem chave)')),
+      ui.mCard = el('div', { class: 'an-card', id: 'anManual', hidden: true },
+        el('strong', {}, 'IA de chat (sem chave)'),
         el('p', { class: 'muted small' }, 'Copie o pedido, cole no GPT, Qwen ou outro chat e traga a resposta de volta. A IA devolve só números de palavras: o horário vem da transcrição, no quadro exato do vídeo. Você é quem envia o texto, no chat que escolher.'),
         el('div', { class: 'an-card-actions' }, ui.mSize, ui.mBuild),
-        ui.mNote, ui.mParts, ui.mReply,
+        ui.mSeparateRow, ui.mNote, ui.mParts, ui.mReply,
         el('div', { class: 'an-card-actions' }, ui.mRead), ui.mMsg);
     }
 
@@ -158,17 +174,20 @@
       const t = state.transcript;
       const has = Boolean(t && t.exists && !t.stale);
       const busy = Boolean(state.tjob) || state.tstarting || state.running;
-      ui.mCard.hidden = false; // sempre à mostra: sem transcrição, os botões ficam parados e a nota diz o que fazer
+      ui.mCard.hidden = !usesChat(A.engineChoice()); // só no motor "IA de chat"; sem transcrição os botões ficam parados e a nota diz o que fazer
       ui.mBuild.disabled = busy || !has;
       ui.mRead.disabled = busy || !has;
+      ui.mSize.disabled = busy;
+      ui.mSeparate.disabled = busy; // durante a análise todos os campos da aba ficam travados
       const m = state.manual;
       ui.mParts.replaceChildren();
+      ui.mSeparateRow.hidden = !(m && m.parts && m.parts.length > 1);
       ui.mParts.hidden = !(m && m.parts && m.parts.length > 1);
       if (m && m.parts && m.parts.length > 1) {
-        m.parts.forEach((part, i) => ui.mParts.append(el('button', { type: 'button', class: 'sm', onclick: () => copyPart(i) }, `Copiar parte ${i + 1} (${hms(part.from)}–${hms(part.to)})`)));
+        m.parts.forEach((part, i) => ui.mParts.append(el('button', { type: 'button', class: 'sm', onclick: () => copyPart(i) }, `Copiar parte ${i + 1} (${hms(part.from)}–${hms(part.to)}) · ${kChars(textOf(part, i).chars)}`)));
       }
       ui.mNote.textContent = m && m.parts
-        ? `${plural(m.words, 'palavra', 'palavras')} em ${plural(m.parts.length, 'parte', 'partes')}${m.fps ? ` · ${String(Math.round(m.fps * 100) / 100).replace('.', ',')} quadros/s` : ''}${m.approx ? ' · legenda importada: o tempo por palavra é aproximado' : ''}. Para vídeos longos, cole uma parte por vez (no mesmo chat ou em chats novos) e leia cada resposta.`
+        ? `${plural(m.words, 'palavra', 'palavras')} em ${plural(m.parts.length, 'parte', 'partes')}${m.fps ? ` · ${String(Math.round(m.fps * 100) / 100).replace('.', ',')} quadros/s` : ''}${m.approx ? ' · legenda importada: o tempo por palavra é aproximado' : ''}. Para vídeos longos, cole uma parte por vez e leia cada resposta antes de colar a próxima.`
         : '';
       if (!has) ui.mNote.textContent = 'Gere ou importe a transcrição no passo Transcrição para montar o pedido.';
       ui.mNote.hidden = !ui.mNote.textContent;

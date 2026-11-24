@@ -294,7 +294,9 @@
       const ai = usesAi(eng);
       const algo = usesAlgorithm(eng);
       const blockers = ai ? aiBlockers() : null;
-      ui.run.disabled = state.running || noProject || (ai && !blockers.ok) || (algo && (ffmpegMissing || noSignal));
+      const chat = eng === 'chat';
+      ui.runArea.hidden = chat; // a IA de chat não tem Analisar: o cartão do passo Método faz o trabalho
+      ui.run.disabled = state.running || noProject || chat || (ai && !blockers.ok) || (algo && (ffmpegMissing || noSignal));
       ui.fresh.disabled = ui.run.disabled;
       ui.run.textContent = state.running ? 'Analisando…' : 'Analisar';
       ui.cancel.hidden = !state.running;
@@ -313,8 +315,9 @@
       ui.signalWarn.hidden = !algo || !noSignal || state.running;
       if (ui.aiWindowsRow) ui.aiWindowsRow.hidden = !ai;
       if (ui.aiReviewRow) ui.aiReviewRow.hidden = !(algo && ai); // a conferência só existe quando os dois motores rodam
-      ui.aiWarn.hidden = !ai || noProject || blockers.ok || state.running;
+      ui.aiWarn.hidden = !(ai || chat) || noProject || (ai && blockers.ok) || state.running;
       if (ai && !ui.aiWarn.hidden) ui.aiWarn.textContent = blockers.why.join(' ');
+      if (chat && !ui.aiWarn.hidden) ui.aiWarn.textContent = 'Modo IA de chat: não há Analisar. No passo Método, copie o pedido, cole no chat e leia a resposta.';
       // vídeo longo: avisa que a imagem demora e que existe o modo rápido (nos ajustes avançados)
       const long = algo && Boolean(BF.state.info) && BF.state.info.duration > 3600 && !(ui.fast && ui.fast.checked);
       ui.longWarn.hidden = !long || state.running;

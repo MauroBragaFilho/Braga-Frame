@@ -9,7 +9,7 @@
 (function () {
   const BF = window.BF;
   const { el } = BF.util;
-  const { ENGINES, usesAi } = window.BFAnalysisLogic;
+  const { ENGINES, usesAi, usesChat } = window.BFAnalysisLogic;
 
   window.BFAnalysisParts = window.BFAnalysisParts || {};
   window.BFAnalysisParts.steps = function (A) {
@@ -91,7 +91,7 @@
         b.className = `an-step-badge${kind ? ` an-step-${kind}` : ''}`;
         b.hidden = !text;
       };
-      badge('transcript', tRunning ? 'em andamento' : (hasT ? 'pronta' : (usesAi(engine) ? 'falta' : 'opcional')), tRunning ? 'info' : (hasT ? 'ok' : (usesAi(engine) ? 'warn' : '')));
+      badge('transcript', tRunning ? 'em andamento' : (hasT ? 'pronta' : (usesAi(engine) || usesChat(engine) ? 'falta' : 'opcional')), tRunning ? 'info' : (hasT ? 'ok' : (usesAi(engine) || usesChat(engine) ? 'warn' : '')));
       const eng = ENGINES.find((e) => e.id === engine);
       badge('method', eng ? eng.label : '', '');
       badge('settings', '', '');

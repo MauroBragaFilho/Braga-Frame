@@ -13,7 +13,7 @@ const { verifyCandidate, dedupe, REASONS } = require('./verify');
 const { snapWordsToFrames, exactFps } = require('../wordGrid');
 const { AiError } = require('../../ai/errors');
 
-const DEFAULT_WORDS_PER_PART = 2000;
+const DEFAULT_WORDS_PER_PART = 800; // ~17 mil caracteres com o guia: cabe em chats que recusam mensagem longa (o guia e as regras já ocupam ~8 mil)
 const MIN_WORDS_PER_PART = 300;
 const MAX_WORDS_PER_PART = 8000;
 const LINE_MAX_WORDS = 14;
@@ -121,7 +121,18 @@ function buildManualPrompt({ part, parts, meta, duration, prefs, skill = '', max
     `=== TRANSCRIÇÃO (parte ${part.index + 1} de ${parts}) ===`,
     formatPartLines(part.words).join('\n')
   ].join('\n');
-  return { text: body, tokens: estimateTokens(body), from: first.start, to: last.end, firstId: first.id, lastId: last.id };
+  // PARTES SEGUINTES, no MESMO chat: só a transcrição e um lembrete curto (o guia e o formato já foram dados na primeira mensagem)
+  const short = [
+    `=== CONTINUAÇÃO: parte ${part.index + 1} de ${parts} ===`,
+    `Continue a MESMA tarefa deste chat: o mesmo guia de cortes, o mesmo formato JSON e a mesma forma de entregar (UM único bloco de código json com {"cuts":[…]}, sem texto antes nem depois). Esta parte vai de ${clock(first.start)} até ${clock(last.end)}. Use SOMENTE IDs de ${first.id} a ${last.id} em "start_id" e "end_id"; até ${maxCuts} cortes, de ${Math.round(prefs.minDurationSec)} a ${Math.round(prefs.maxDurationSec)} segundos; não escreva horários.`,
+    '',
+    `=== TRANSCRIÇÃO (parte ${part.index + 1} de ${parts}) ===`,
+    formatPartLines(part.words).join('\n')
+  ].join('\n');
+  return {
+    text: body, short, tokens: estimateTokens(body), shortTokens: estimateTokens(short), chars: body.length, shortChars: short.length,
+    from: first.start, to: last.end, firstId: first.id, lastId: last.id
+  };
 }
 
 const idOf = (v) => {

@@ -20,7 +20,7 @@
   const { el } = BF.util;
 
   // ---------- funções puras: veja features/analysis/logic.js (window.BFAnalysisLogic) ----------
-  const { PROFILES, isCovered, clock, remainingSec, stageRemainingSec, pct, num, pendingSuggestions, dismissedSuggestions, sameSource, MAX_DISMISSED, ENGINE_IDS, usesAi, usesAlgorithm, applyBestOnly, splitKeywords, compactReview, compactAi } = window.BFAnalysisLogic;
+  const { PROFILES, isCovered, clock, remainingSec, stageRemainingSec, pct, num, pendingSuggestions, dismissedSuggestions, sameSource, MAX_DISMISSED, ENGINE_IDS, usesAi, usesAlgorithm, usesChat, applyBestOnly, splitKeywords, compactReview, compactAi } = window.BFAnalysisLogic;
 
   // ---------- estado ----------
   const state = {
@@ -331,7 +331,7 @@
   async function run({ fresh = false, engine = null } = {}) {
     const project = BF.state.project;
     const useEngine = engine || engineChoice();
-    if (!project || state.running || state.starting) return;
+    if (!project || state.running || state.starting || usesChat(useEngine)) return; // a IA de chat não tem Analisar: o pedido é copiado e a resposta colada
     if ((usesAi(useEngine) && !aiBlockers().ok) || (usesAlgorithm(useEngine) && !usableSignals().length)) return;
     const controls = readControls();
     const chosen = applyBestOnly(controls); // "Só os melhores" vira quantidade fixa no pedido; o ajuste guardado continua o da tela

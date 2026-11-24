@@ -167,3 +167,29 @@ test('resposta copiada de um chat renderizado (barra no fim da linha, &#x20; e a
   // aspas escapadas normais continuam valendo
   assert.equal(parseManualResponse(JSON.stringify({ cuts: [{ start_id: 9, end_id: 28, title: 'Ele disse "oi"' }] }), ctx).suggestions[0].title, 'Ele disse "oi"');
 });
+
+test('partes seguintes: a continuação é curta (sem guia nem regras) e o pedido completo continua completo', () => {
+  const ctx = ctxOf();
+  const parts = splitParts(Array.from({ length: 1200 }, (_, i) => ({ id: i + 1, start: i * 0.4, end: i * 0.4 + 0.3, text: `palavra${i}` })), 400);
+  assert.ok(parts.length >= 3);
+  const full = buildManualPrompt({ part: parts[1], parts: parts.length, meta: {}, duration: 600, prefs: PREFS });
+  assert.match(full.text, /GUIA DE CORTES/);
+  assert.ok(full.short.length < full.text.length * 0.6, `short ${full.short.length} x completo ${full.text.length}`);
+  assert.ok(!/GUIA DE CORTES/.test(full.short));
+  assert.match(full.short, /CONTINUAÇÃO: parte 2 de 3/);
+  assert.match(full.short, /MESMA tarefa deste chat/);
+  assert.match(full.short, new RegExp(`IDs de ${parts[1].words[0].id} a ${parts[1].words.at(-1).id}`));
+  assert.match(full.short, /start_id/);
+  assert.equal(full.chars, full.text.length);
+  assert.equal(full.shortChars, full.short.length);
+  assert.ok(ctx.words.length > 0);
+});
+
+test('o pedido completo padrão cabe em ~20 mil caracteres (chats que recusam mensagem longa)', () => {
+  const { DEFAULT_WORDS_PER_PART } = require('../src/core/analysis/ai/manual');
+  assert.equal(DEFAULT_WORDS_PER_PART, 800);
+  const words = Array.from({ length: 3000 }, (_, i) => ({ id: i + 1, start: i * 0.4, end: i * 0.4 + 0.3, text: ['então', 'engraçado', 'aconteceu', 'e', 'cara'][i % 5] }));
+  const [part] = splitParts(words, DEFAULT_WORDS_PER_PART);
+  const req = buildManualPrompt({ part, parts: 4, meta: { title: 'Live' }, duration: 1200, prefs: { ...PREFS, profile: 'gameplay' } });
+  assert.ok(req.chars < 22000, `${req.chars} caracteres`);
+});

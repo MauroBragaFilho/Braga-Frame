@@ -135,7 +135,8 @@
   const ENGINES = [
     { id: 'algorithm', label: 'Algoritmo', hint: 'regras simples sobre áudio, imagem, chat e a transcrição; roda neste computador' },
     { id: 'ai', label: 'IA na nuvem', hint: 'lê a transcrição e escolhe os melhores momentos' },
-    { id: 'both', label: 'Algoritmo + IA', hint: 'roda os dois e junta as listas: o que os dois acharam vem primeiro (mais cortes; leva o tempo dos dois)' }
+    { id: 'both', label: 'Algoritmo + IA', hint: 'roda os dois e junta as listas: o que os dois acharam vem primeiro (mais cortes; leva o tempo dos dois)' },
+    { id: 'chat', label: 'IA de chat', hint: 'sem chave: você copia o pedido, cola no GPT, Qwen ou outro chat e traz a resposta de volta' }
   ];
   const ENGINE_IDS = ENGINES.map((e) => e.id);
 
@@ -143,6 +144,8 @@
   const usesAi = (eng) => eng === 'ai' || eng === 'both';
   /** O motor usa o algoritmo? ('algorithm' e 'both') */
   const usesAlgorithm = (eng) => eng === 'algorithm' || eng === 'both';
+  /** O motor é a IA de chat (copiar e colar, sem Analisar)? */
+  const usesChat = (eng) => eng === 'chat';
 
   /** Duração em texto curto: 3:04:10 (ou 4:10). */
   const hms = (sec) => clock(sec);
@@ -325,6 +328,7 @@
     ENGINE_IDS,
     usesAi,
     usesAlgorithm,
+    usesChat,
     hms,
     plural,
     BEST_ONLY_PER_HOUR,
